@@ -17,7 +17,13 @@ jobs:
         with:
           node-version: lts/*
           check-latest: true
+      - uses: oven-sh/setup-bun@v2
       - run: npm ci --ignore-scripts
+      - name: Build .nx-devkit submodule plugins
+        working-directory: .nx-devkit
+        run: |
+          bun install --frozen-lockfile
+          bun run build
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
