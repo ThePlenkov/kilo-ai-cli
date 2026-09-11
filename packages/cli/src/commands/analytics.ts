@@ -22,7 +22,12 @@ function parseFilters(args: { from?: string; to?: string; granularity?: string }
   const toIso = (s: string): string => {
     // If just a date (YYYY-MM-DD), convert to ISO datetime
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00Z').toISOString()
-    return new Date(s).toISOString()
+    const d = new Date(s)
+    if (Number.isNaN(d.getTime())) {
+      console.error(`Invalid date: ${s}`)
+      process.exit(1)
+    }
+    return d.toISOString()
   }
   const filters: UsageAnalyticsFilters = {
     startDate: args.from ? toIso(args.from) : defaultStart,
@@ -101,7 +106,7 @@ export const analyticsBreakdownCommand = defineCommand({
       entries.map((e) => ({
         label: String(e.label ?? e.key ?? '-'),
         value: e.value ?? 0,
-        percentage: `${(e.percentage ?? 0).toFixed(1)}%`,
+        percentage: `${Number(e.percentage ?? 0).toFixed(1)}%`,
       })),
       [
         { key: 'label', label: 'Label', width: 30 },
