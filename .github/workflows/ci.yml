@@ -9,16 +9,16 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v4
         with:
           submodules: true
           persist-credentials: false
-      - uses: actions/setup-node@v7.0.0
+      - uses: actions/setup-node@v4
         with:
           node-version: lts/*
           check-latest: true
-      - run: npm ci
-      - run: npx nx typecheck kilo-ai-cli
-      - run: npx nx lint kilo-ai-cli
-      - run: npx nx test kilo-ai-cli
-      - run: npx nx build kilo-ai-cli
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
