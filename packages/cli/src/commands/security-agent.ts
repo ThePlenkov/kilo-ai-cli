@@ -211,27 +211,31 @@ export const securityDashboardCommand = defineCommand({
     if (args.to) input.endDate = args.to
     const stats = await getDashboardStats(token, input)
     console.log('Dashboard stats:\n')
-    for (const [key, value] of Object.entries(stats)) {
-      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-        console.log(`\n  ${key}:`)
-        const cols = Object.keys(value[0] as Record<string, unknown>)
-        printTable(
-          value as Record<string, unknown>[],
-          cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
-        )
-      } else if (Array.isArray(value)) {
-        console.log(`  ${key}: ${value.join(', ')}`)
-      } else if (typeof value === 'object' && value !== null) {
-        console.log(`  ${key}:`)
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          console.log(`    ${k}: ${v}`)
-        }
-      } else {
-        console.log(`  ${key.padEnd(16)} ${value}`)
-      }
-    }
+    printDashboardSection(stats, 0)
   },
 })
+
+function printDashboardSection(data: Record<string, unknown>, indent: number): void {
+  const prefix = '  '.repeat(indent)
+  for (const [key, value] of Object.entries(data)) {
+    if (value === null || value === undefined) continue
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+      console.log(`\n${prefix}${key}:`)
+      const cols = Object.keys(value[0] as Record<string, unknown>)
+      printTable(
+        value as Record<string, unknown>[],
+        cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
+      )
+    } else if (Array.isArray(value)) {
+      console.log(`${prefix}${key}: ${value.join(', ')}`)
+    } else if (typeof value === 'object' && value !== null) {
+      console.log(`${prefix}${key}:`)
+      printDashboardSection(value as Record<string, unknown>, indent + 1)
+    } else {
+      console.log(`${prefix}${key.padEnd(16)} ${value}`)
+    }
+  }
+}
 
 export const securitySyncCommand = defineCommand({
   meta: { name: 'sync', description: 'Trigger a security sync' },

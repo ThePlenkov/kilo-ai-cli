@@ -53,13 +53,13 @@ describe('kiloclaw API', () => {
       fetchMock.mockResolvedValue(mockResponse([{ version: '1.0', date: '2024-01-01', changes: ['fix'] }]))
       const result = await getChangelog('tok')
       expect(result).toHaveLength(1)
-      expect(result[0]!.version).toBe('1.0')
-      expect(fetchMock.mock.calls[0]![0]).toBe(`${KILO_API_BASE}/api/trpc/kiloclaw.getChangelog`)
+      expect((result[0] as Record<string, unknown>).version).toBe('1.0')
+      expect(fetchMock.mock.calls[0]![0]).toContain(`${KILO_API_BASE}/api/trpc/kiloclaw.getChangelog`)
     })
 
     it('getBillingStatus calls kiloclaw.getBillingStatus', async () => {
       fetchMock.mockResolvedValue(mockResponse({ balance: 50, activeSubscriptions: 2, currentPeriodUsageUsd: 10 }))
-      const result = await getBillingStatus('tok')
+      const result = await getBillingStatus('tok') as Record<string, unknown>
       expect(result.balance).toBe(50)
       expect(fetchMock.mock.calls[0]![0]).toContain('kiloclaw.getBillingStatus')
     })
@@ -104,22 +104,23 @@ describe('kiloclaw API', () => {
     })
 
     it('listPersonalSubscriptions calls kiloclaw.listPersonalSubscriptions', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 's1', planName: 'pro', status: 'active', providerName: 'stripe', providerId: 'p1', cancelAtPeriodEnd: false }]))
+      fetchMock.mockResolvedValue(mockResponse({ subscriptions: [{ id: 's1', planName: 'pro', status: 'active', providerName: 'stripe', providerId: 'p1', cancelAtPeriodEnd: false }] }))
       const result = await listPersonalSubscriptions('tok')
       expect(result).toHaveLength(1)
     })
 
     it('getSubscriptionDetail passes instanceId', async () => {
       fetchMock.mockResolvedValue(mockResponse({ id: 's1', planName: 'pro', status: 'active', providerName: 'stripe', providerId: 'p1', cancelAtPeriodEnd: false }))
-      const result = await getSubscriptionDetail('tok', 'inst1')
+      const result = await getSubscriptionDetail('tok', 'inst1') as Record<string, unknown>
       expect(result.id).toBe('s1')
     })
 
-    it('getBillingHistory passes period when provided', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'b1', date: '2024-01-01', amount: 10, description: 'charge', type: 'payment' }]))
-      await getBillingHistory('tok', '2024-01')
+    it('getBillingHistory passes instanceId', async () => {
+      fetchMock.mockResolvedValue(mockResponse({ entries: [{ id: 'b1', date: '2024-01-01', amount: 10, description: 'charge', type: 'payment' }], hasMore: false, cursor: null }))
+      const result = await getBillingHistory('tok', 'inst1')
+      expect(result).toHaveLength(1)
       const url = fetchMock.mock.calls[0]![0] as string
-      expect(decodeURIComponent(url.split('input=')[1]!)).toContain('2024-01')
+      expect(decodeURIComponent(url.split('input=')[1]!)).toContain('inst1')
     })
   })
 

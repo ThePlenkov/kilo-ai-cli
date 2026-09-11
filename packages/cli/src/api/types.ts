@@ -350,6 +350,10 @@ export interface UsageAnalyticsFilters {
   startDate?: string
   endDate?: string
   organizationId?: string
+  granularity?: 'hour' | 'day' | 'week' | 'month'
+  metric?: 'cost' | 'requests' | 'tokens' | 'inputTokens' | 'outputTokens' | 'errorRate' | 'avgLatencyMs' | 'avgGenerationTimeMs' | 'costPerRequest' | 'tokensPerRequest' | 'cacheHitRatio' | 'outputInputRatio'
+  dimension?: 'feature' | 'model' | 'mode' | 'user' | 'provider' | 'project' | 'organization'
+  groupBy?: string[]
 }
 
 // ============================================================================
