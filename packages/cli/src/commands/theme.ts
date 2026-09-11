@@ -1,5 +1,10 @@
 /** Shared color scheme and formatting — used by both TUI and console output. */
 
+import chalk from 'chalk'
+
+// Force color output even when piped (e.g. through node | cat)
+chalk.level = Math.max(chalk.level, 1)
+
 /** Severity → chalk color name. Red is reserved for critical only. */
 export const SEVERITY_COLORS: Record<string, string> = {
   critical: 'red',
@@ -30,6 +35,34 @@ export const ANALYSIS_COLORS: Record<string, string> = {
   pending: 'yellow',
   running: 'yellow',
   queued: 'gray',
+}
+
+/** Map color name → chalk function. */
+function chalkColor(name: string): ((s: string) => string) | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fn = (chalk as any)[name]
+  return typeof fn === 'function' ? (s: string) => fn.call(chalk, s) : null
+}
+
+/** Apply severity color to a string (for console output). */
+export function colorSeverity(s: string): string {
+  const c = SEVERITY_COLORS[s]
+  const fn = c ? chalkColor(c) : null
+  return fn ? fn(s) : s
+}
+
+/** Apply status color to a string (for console output). */
+export function colorStatus(s: string): string {
+  const c = STATUS_COLORS[s]
+  const fn = c ? chalkColor(c) : null
+  return fn ? fn(s) : s
+}
+
+/** Apply analysis status color to a string (for console output). */
+export function colorAnalysis(s: string): string {
+  const c = ANALYSIS_COLORS[s]
+  const fn = c ? chalkColor(c) : null
+  return fn ? fn(s) : s
 }
 
 /**
