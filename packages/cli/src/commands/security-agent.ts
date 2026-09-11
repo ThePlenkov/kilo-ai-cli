@@ -25,6 +25,7 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
+import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const securityStatusCommand = defineCommand({
@@ -32,9 +33,11 @@ export const securityStatusCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const status = await getPermissionStatus(token)
-    console.log(`Granted: ${status.granted ? 'yes' : 'no'}`)
-    console.log(`Permissions: ${status.permissions?.join(', ') || '(none)'}`)
-    console.log(`Pending requests: ${status.pendingRequests ?? 0}`)
+    printSummary([
+      { label: 'Granted', value: status.granted ? 'yes' : 'no' },
+      { label: 'Permissions', value: status.permissions?.join(', ') || '(none)' },
+      { label: 'Pending', value: status.pendingRequests ?? 0 },
+    ])
   },
 })
 
@@ -46,10 +49,12 @@ export const securityConfigCommand = defineCommand({
     const enabled = config.isEnabled ?? config.is_enabled
     const freq = config.scanFrequency ?? config.scan_frequency
     const auto = config.autoRemediate ?? config.auto_remediate
-    console.log(`Enabled: ${enabled ? 'yes' : 'no'}`)
-    console.log(`Repositories: ${config.repositories?.length ? config.repositories.join(', ') : '(none)'}`)
-    if (freq) console.log(`Scan frequency: ${freq}`)
-    if (auto !== undefined) console.log(`Auto-remediate: ${auto ? 'yes' : 'no'}`)
+    printSummary([
+      { label: 'Enabled', value: enabled ? 'yes' : 'no' },
+      { label: 'Repos', value: config.repositories?.length ?? 0 },
+    ])
+    if (freq) console.log(`  Scan frequency: ${freq}`)
+    if (auto !== undefined) console.log(`  Auto-remediate: ${auto ? 'yes' : 'no'}`)
   },
 })
 
@@ -80,13 +85,23 @@ export const securityReposCommand = defineCommand({
       console.log('No repositories found.')
       return
     }
-    console.table(repos.map((r) => ({
-      ID: r.id ?? '-',
-      Name: r.fullName ?? r.full_name ?? r.name ?? '-',
-      Private: r.private ? 'yes' : 'no',
-      Findings: r.findingsCount ?? r.findings_count ?? '-',
-      'Last synced': r.lastSyncedAt ?? r.last_synced_at ?? '-',
-    })))
+    console.log(`Repositories (${repos.length}):\n`)
+    printTable(
+      repos.map((r) => ({
+        id: String(r.id ?? '-'),
+        name: r.fullName ?? r.full_name ?? r.name ?? '-',
+        private: r.private ? 'yes' : 'no',
+        findings: r.findingsCount ?? r.findings_count ?? '-',
+        synced: (r.lastSyncedAt ?? r.last_synced_at ?? '-').slice(0, 10),
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 7 },
+        { key: 'findings', label: 'Findings', width: 8, align: 'right' },
+        { key: 'synced', label: 'Last Sync', width: 10 },
+      ],
+    )
   },
 })
 
@@ -110,20 +125,34 @@ export const securityFindingsCommand = defineCommand({
     if (args.limit) input.limit = Math.min(100, Math.max(1, Number.parseInt(args.limit, 10)))
     if (args.offset) input.offset = Math.max(0, Number.parseInt(args.offset, 10))
     const result = await listFindings(token, input)
-    console.log(`Total: ${result.totalCount} | Running: ${result.runningCount} | Concurrency limit: ${result.concurrencyLimit}`)
+    printSummary([
+      { label: 'Total', value: result.totalCount ?? result.total_count ?? '?' },
+      { label: 'Running', value: result.runningCount ?? result.running_count ?? 0 },
+      { label: 'Concurrency', value: result.concurrencyLimit ?? result.concurrency_limit ?? '?' },
+    ])
     if (result.findings.length === 0) {
       console.log('No findings found.')
       return
     }
-    console.table(result.findings.map((f) => ({
-      ID: f.id,
-      Severity: f.severity,
-      Title: f.title,
-      Repo: f.repoFullName ?? f.repo_full_name ?? '-',
-      Status: f.status,
-      Package: f.packageName ?? f.package_name ?? '-',
-      Source: f.source ?? '-',
-    })))
+    console.log('')
+    printTable(
+      result.findings.map((f) => ({
+        id: f.id.slice(0, 8),
+        sev: f.severity.slice(0, 8),
+        title: f.title,
+        repo: f.repoFullName ?? f.repo_full_name ?? '-',
+        status: f.status,
+        pkg: f.packageName ?? f.package_name ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 8 },
+        { key: 'sev', label: 'Severity', width: 8 },
+        { key: 'title', label: 'Title', width: 50 },
+        { key: 'repo', label: 'Repository', width: 30 },
+        { key: 'status', label: 'Status', width: 8 },
+        { key: 'pkg', label: 'Package', width: 20 },
+      ],
+    )
   },
 })
 
@@ -146,24 +175,24 @@ export const securityFindingCommand = defineCommand({
     const remediation = f.remediationSummary ?? f.remediation_summary
     const created = f.createdAt ?? f.created_at
     const updated = f.updatedAt ?? f.updated_at
-    console.log(`ID: ${f.id}`)
-    console.log(`Severity: ${f.severity}`)
-    console.log(`Title: ${f.title}`)
-    if (repo) console.log(`Repository: ${repo}`)
-    console.log(`Status: ${f.status}`)
-    if (f.source) console.log(`Source: ${f.source}`)
-    if (f.description) console.log(`Description: ${f.description}`)
-    if (pkg) console.log(`Package: ${pkg} (${ecosystem ?? '?'})`)
-    if (vuln) console.log(`Vulnerable: ${vuln}`)
-    if (patched) console.log(`Patched: ${patched}`)
-    if (cve) console.log(`CVE: ${cve}`)
-    if (ghsa) console.log(`GHSA: ${ghsa}`)
-    if (cvss) console.log(`CVSS: ${cvss}`)
-    if (sla) console.log(`SLA due: ${sla}`)
-    if (analysisStatus) console.log(`Analysis: ${analysisStatus}`)
-    if (remediation) console.log(`Remediation: ${remediation}`)
-    if (created) console.log(`Created: ${created}`)
-    if (updated) console.log(`Updated: ${updated}`)
+    console.log(`  ID:         ${f.id}`)
+    console.log(`  Severity:   ${f.severity}`)
+    console.log(`  Title:      ${f.title}`)
+    if (repo) console.log(`  Repository: ${repo}`)
+    console.log(`  Status:     ${f.status}`)
+    if (f.source) console.log(`  Source:     ${f.source}`)
+    if (f.description) console.log(`  Description: ${f.description}`)
+    if (pkg) console.log(`  Package:    ${pkg} (${ecosystem ?? '?'})`)
+    if (vuln) console.log(`  Vulnerable: ${vuln}`)
+    if (patched) console.log(`  Patched:    ${patched}`)
+    if (cve) console.log(`  CVE:        ${cve}`)
+    if (ghsa) console.log(`  GHSA:       ${ghsa}`)
+    if (cvss) console.log(`  CVSS:       ${cvss}`)
+    if (sla) console.log(`  SLA due:    ${sla}`)
+    if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
+    if (remediation) console.log(`  Remediation: ${remediation}`)
+    if (created) console.log(`  Created:    ${created}`)
+    if (updated) console.log(`  Updated:    ${updated}`)
   },
 })
 
@@ -172,9 +201,9 @@ export const securityStatsCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const stats = await getSecurityStats(token)
-    console.log('Security stats:')
+    console.log('Security stats:\n')
     for (const [key, value] of Object.entries(stats)) {
-      console.log(`  ${key}: ${value}`)
+      console.log(`  ${key.padEnd(16)} ${value}`)
     }
   },
 })
@@ -191,13 +220,24 @@ export const securityDashboardCommand = defineCommand({
     if (args.from) input.startDate = args.from
     if (args.to) input.endDate = args.to
     const stats = await getDashboardStats(token, input)
-    console.log('Dashboard stats:')
+    console.log('Dashboard stats:\n')
     for (const [key, value] of Object.entries(stats)) {
-      if (Array.isArray(value)) {
-        console.log(`\n${key}:`)
-        console.table(value)
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+        console.log(`\n  ${key}:`)
+        const cols = Object.keys(value[0] as Record<string, unknown>)
+        printTable(
+          value as Record<string, unknown>[],
+          cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
+        )
+      } else if (Array.isArray(value)) {
+        console.log(`  ${key}: ${value.join(', ')}`)
+      } else if (typeof value === 'object' && value !== null) {
+        console.log(`  ${key}:`)
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          console.log(`    ${k}: ${v}`)
+        }
       } else {
-        console.log(`  ${key}: ${value}`)
+        console.log(`  ${key.padEnd(16)} ${value}`)
       }
     }
   },
@@ -275,13 +315,23 @@ export const securityCommandsCommand = defineCommand({
       console.log('No active commands.')
       return
     }
-    console.table(commands.map((c) => ({
-      ID: c.id ?? '-',
-      Type: c.type ?? '-',
-      Status: c.status ?? '-',
-      Repo: c.repositoryId ?? c.repository_id ?? '-',
-      Started: c.startedAt ?? c.started_at ?? '-',
-    })))
+    console.log(`Active commands (${commands.length}):\n`)
+    printTable(
+      commands.map((c) => ({
+        id: String(c.id ?? '-'),
+        type: c.type ?? '-',
+        status: c.status ?? '-',
+        repo: String(c.repositoryId ?? c.repository_id ?? '-'),
+        started: c.startedAt ?? c.started_at ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'type', label: 'Type', width: 12 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'repo', label: 'Repository', width: 20 },
+        { key: 'started', label: 'Started', width: 20 },
+      ],
+    )
   },
 })
 
@@ -291,13 +341,13 @@ export const securityCommandStatusCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const cmd = await getCommandStatus(token, args.id)
-    console.log(`ID: ${cmd.id ?? '-'}`)
-    console.log(`Type: ${cmd.type ?? '-'}`)
-    console.log(`Status: ${cmd.status ?? '-'}`)
-    console.log(`Repository: ${cmd.repositoryId ?? cmd.repository_id ?? '-'}`)
-    console.log(`Started: ${cmd.startedAt ?? cmd.started_at ?? '-'}`)
-    if (cmd.completedAt) console.log(`Completed: ${cmd.completedAt}`)
-    if (cmd.output) console.log(`Output: ${cmd.output}`)
+    console.log(`  ID:          ${cmd.id ?? '-'}`)
+    console.log(`  Type:        ${cmd.type ?? '-'}`)
+    console.log(`  Status:      ${cmd.status ?? '-'}`)
+    console.log(`  Repository:  ${cmd.repositoryId ?? cmd.repository_id ?? '-'}`)
+    console.log(`  Started:     ${cmd.startedAt ?? cmd.started_at ?? '-'}`)
+    if (cmd.completedAt) console.log(`  Completed:   ${cmd.completedAt}`)
+    if (cmd.output) console.log(`  Output:      ${cmd.output}`)
   },
 })
 
@@ -310,7 +360,19 @@ export const securityOrphanedReposCommand = defineCommand({
       console.log('No orphaned repositories.')
       return
     }
-    console.table(repos.map((r) => ({ ID: r.id ?? '-', Name: r.fullName ?? r.full_name ?? r.name ?? '-', Private: r.private ? 'yes' : 'no' })))
+    console.log(`Orphaned repositories (${repos.length}):\n`)
+    printTable(
+      repos.map((r) => ({
+        id: String(r.id ?? '-'),
+        name: r.fullName ?? r.full_name ?? r.name ?? '-',
+        private: r.private ? 'yes' : 'no',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 7 },
+      ],
+    )
   },
 })
 

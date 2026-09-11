@@ -18,6 +18,7 @@ import {
   startKiloCliRun,
   cancelKiloCliRun,
 } from '../api/kiloclaw.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const kiloclawInstancesCommand = defineCommand({
@@ -29,7 +30,15 @@ export const kiloclawInstancesCommand = defineCommand({
       console.log('No instances found.')
       return
     }
-    console.table(instances.map((i) => ({ ID: i.id, Name: i.name, Status: i.status, Plan: i.planName ?? '-' })))
+    printTable(
+      instances.map((i) => ({ id: i.id, name: i.name, status: i.status, plan: i.planName ?? '-' })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Name', width: 30 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'plan', label: 'Plan', width: 20 },
+      ],
+    )
   },
 })
 
@@ -54,7 +63,22 @@ export const kiloclawBillingHistoryCommand = defineCommand({
       console.log('No billing history found.')
       return
     }
-    console.table(history.map((h) => ({ ID: h.id, Date: h.date, Amount: h.amount, Description: h.description, Type: h.type })))
+    printTable(
+      history.map((h) => ({
+        id: h.id,
+        date: h.date,
+        amount: h.amount,
+        description: h.description,
+        type: h.type,
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'date', label: 'Date', width: 12 },
+        { key: 'amount', label: 'Amount', width: 10, align: 'right' },
+        { key: 'description', label: 'Description', width: 40 },
+        { key: 'type', label: 'Type', width: 10 },
+      ],
+    )
   },
 })
 
@@ -67,7 +91,22 @@ export const kiloclawSubscriptionsCommand = defineCommand({
       console.log('No subscriptions found.')
       return
     }
-    console.table(subs.map((s) => ({ ID: s.id, Plan: s.planName, Status: s.status, Provider: s.providerName, 'Cancel at period end': s.cancelAtPeriodEnd ? 'yes' : 'no' })))
+    printTable(
+      subs.map((s) => ({
+        id: s.id,
+        plan: s.planName,
+        status: s.status,
+        provider: s.providerName,
+        cancel: s.cancelAtPeriodEnd ? 'yes' : 'no',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'plan', label: 'Plan', width: 20 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'provider', label: 'Provider', width: 14 },
+        { key: 'cancel', label: 'Cancel at EOP', width: 14 },
+      ],
+    )
   },
 })
 
@@ -118,7 +157,14 @@ export const kiloclawFileTreeCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const tree = await getFileTree(token, args.path)
-    console.table(tree.map((n) => ({ Name: n.name, Path: n.path, Type: n.type })))
+    printTable(
+      tree.map((n) => ({ name: n.name, path: n.path, type: n.type })),
+      [
+        { key: 'name', label: 'Name', width: 30 },
+        { key: 'path', label: 'Path', width: 50 },
+        { key: 'type', label: 'Type', width: 8 },
+      ],
+    )
   },
 })
 
