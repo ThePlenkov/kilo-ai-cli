@@ -101,7 +101,14 @@ export const securityFindingsCommand = defineCommand({
     if (args.repo) input.repositoryId = args.repo
     if (args.severity) input.severity = args.severity
     if (args.status) input.status = args.status
-    if (args.limit) input.limit = Number.parseInt(args.limit, 10)
+    if (args.limit) {
+      const parsed = Number.parseInt(args.limit, 10)
+      if (Number.isNaN(parsed) || parsed < 1) {
+        console.error(`Invalid limit: ${args.limit}`)
+        process.exit(1)
+      }
+      input.limit = parsed
+    }
     const findings = await listFindings(token, input)
     if (findings.length === 0) {
       console.log('No findings found.')
