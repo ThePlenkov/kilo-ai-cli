@@ -1,0 +1,28 @@
+{
+  "name": "kilo-ai-cli-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "nx build",
+    "test": "nx test",
+    "lint": "nx lint",
+    "format": "nx format",
+    "format:check": "nx format-check",
+    "typecheck": "nx typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.13",
+    "@nx/devkit": "22.7.1",
+    "@types/node": "22.20.2",
+    "memfs": "^4.50.0",
+    "nx": "22.7.1",
+    "oxlint": "1.82.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  }
+}

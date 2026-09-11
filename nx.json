@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "plugins": [
+    "./.nx-devkit/packages/tsdown/dist/plugin.mjs",
+    "./.nx-devkit/packages/oxlint/dist/plugin.mjs",
+    "./.nx-devkit/packages/biome/dist/plugin.mjs",
+    "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs"
+  ]
+}
