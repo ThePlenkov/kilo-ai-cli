@@ -9,6 +9,7 @@ import {
   deployAppBuilderProject,
   listAppBuilderProjects,
 } from '../api/app-builder.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const appBuilderListCommand = defineCommand({
@@ -20,12 +21,20 @@ export const appBuilderListCommand = defineCommand({
       console.log('No projects found.')
       return
     }
-    console.table(projects.map((p) => ({
-      ID: p.id,
-      Name: p.name,
-      Status: p.status,
-      URL: p.url ?? '-',
-    })))
+    printTable(
+      projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        url: p.url ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Name', width: 30 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'url', label: 'URL', width: 50 },
+      ],
+    )
   },
 })
 

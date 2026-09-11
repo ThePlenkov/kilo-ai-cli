@@ -5,6 +5,7 @@
 import { defineCommand } from 'citty'
 
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const sessionsListCommand = defineCommand({
@@ -25,13 +26,19 @@ export const sessionsListCommand = defineCommand({
       console.log('No sessions found.')
       return
     }
-    console.table(
+    printTable(
       result.cliSessions.map((s) => ({
-        ID: s.session_id,
-        Title: s.title ?? '(untitled)',
-        Updated: s.updated_at,
-        Version: s.version,
+        id: s.session_id,
+        title: s.title ?? '(untitled)',
+        updated: s.updated_at,
+        version: s.version,
       })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'title', label: 'Title', width: 40 },
+        { key: 'updated', label: 'Updated', width: 24 },
+        { key: 'version', label: 'Version', width: 10 },
+      ],
     )
     if (result.nextCursor) {
       console.log(`More sessions available (cursor: ${result.nextCursor})`)

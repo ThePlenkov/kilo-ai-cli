@@ -47,24 +47,33 @@ describe('security-agent API (personal level)', () => {
     })
 
     it('getSecurityRepositories calls securityAgent.getRepositories', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'r1', name: 'repo', fullName: 'user/repo', url: 'https://github.com/user/repo', private: false }]))
+      fetchMock.mockResolvedValue(mockResponse([{ id: 'r1', name: 'repo', full_name: 'user/repo', url: 'https://github.com/user/repo', private: false }]))
       const result = await getSecurityRepositories('tok')
       expect(result).toHaveLength(1)
     })
 
-    it('listFindings passes filters', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'f1', repositoryId: 'r1', repositoryName: 'repo', severity: 'critical', title: 'SQL injection', description: 'bad', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }]))
+    it('listFindings passes filters and returns paginated result', async () => {
+      fetchMock.mockResolvedValue(mockResponse({
+        findings: [{ id: 'f1', repoFullName: 'user/repo', source: 'dependabot', sourceId: 's1', severity: 'critical', title: 'SQL injection', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }],
+        totalCount: 1,
+        runningCount: 0,
+        concurrencyLimit: 5,
+      }))
       const result = await listFindings('tok', { severity: 'critical', limit: 10 })
-      expect(result).toHaveLength(1)
-      expect(result[0]!.severity).toBe('critical')
+      expect(result.findings).toHaveLength(1)
+      expect(result.findings[0]!.severity).toBe('critical')
+      expect(result.findings[0]!.repoFullName).toBe('user/repo')
+      expect(result.totalCount).toBe(1)
+      expect(result.concurrencyLimit).toBe(5)
       const url = fetchMock.mock.calls[0]![0] as string
       expect(decodeURIComponent(url.split('input=')[1]!)).toContain('critical')
     })
 
     it('getFinding passes findingId', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ id: 'f1', repositoryId: 'r1', repositoryName: 'repo', severity: 'high', title: 'XSS', description: 'bad', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
+      fetchMock.mockResolvedValue(mockResponse({ id: 'f1', repoFullName: 'user/repo', source: 'dependabot', sourceId: 's1', severity: 'high', title: 'XSS', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
       const result = await getFinding('tok', 'f1')
       expect(result.id).toBe('f1')
+      expect(result.repoFullName).toBe('user/repo')
     })
 
     it('getSecurityStats calls securityAgent.getStats', async () => {

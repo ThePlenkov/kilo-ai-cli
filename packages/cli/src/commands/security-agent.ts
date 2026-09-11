@@ -25,6 +25,7 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
+import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const securityStatusCommand = defineCommand({
@@ -32,9 +33,11 @@ export const securityStatusCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const status = await getPermissionStatus(token)
-    console.log(`Granted: ${status.granted ? 'yes' : 'no'}`)
-    console.log(`Permissions: ${status.permissions.join(', ') || '(none)'}`)
-    console.log(`Pending requests: ${status.pendingRequests}`)
+    printSummary([
+      { label: 'Granted', value: status.granted ? 'yes' : 'no' },
+      { label: 'Permissions', value: status.permissions?.join(', ') || '(none)' },
+      { label: 'Pending', value: status.pendingRequests ?? 0 },
+    ])
   },
 })
 
@@ -43,10 +46,15 @@ export const securityConfigCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const config = await getSecurityConfig(token)
-    console.log(`Enabled: ${config.isEnabled ? 'yes' : 'no'}`)
-    console.log(`Repositories: ${config.repositories.length > 0 ? config.repositories.join(', ') : '(none)'}`)
-    if (config.scanFrequency) console.log(`Scan frequency: ${config.scanFrequency}`)
-    if (config.autoRemediate !== undefined) console.log(`Auto-remediate: ${config.autoRemediate ? 'yes' : 'no'}`)
+    const enabled = config.isEnabled ?? config.is_enabled
+    const freq = config.scanFrequency ?? config.scan_frequency
+    const auto = config.autoRemediate ?? config.auto_remediate
+    printSummary([
+      { label: 'Enabled', value: enabled ? 'yes' : 'no' },
+      { label: 'Repos', value: config.repositories?.length ?? 0 },
+    ])
+    if (freq) console.log(`  Scan frequency: ${freq}`)
+    if (auto !== undefined) console.log(`  Auto-remediate: ${auto ? 'yes' : 'no'}`)
   },
 })
 
@@ -77,51 +85,88 @@ export const securityReposCommand = defineCommand({
       console.log('No repositories found.')
       return
     }
-    console.table(repos.map((r) => ({
-      ID: r.id,
-      Name: r.fullName,
-      Private: r.private ? 'yes' : 'no',
-      Findings: r.findingsCount ?? '-',
-      'Last synced': r.lastSyncedAt ?? '-',
-    })))
+    console.log(`Repositories (${repos.length}):\n`)
+    printTable(
+      repos.map((r) => ({
+        id: String(r.id ?? '-'),
+        name: r.fullName ?? r.full_name ?? r.name ?? '-',
+        private: r.private ? 'yes' : 'no',
+        findings: r.findingsCount ?? r.findings_count ?? '-',
+        synced: String(r.lastSyncedAt ?? r.last_synced_at ?? '-').slice(0, 10),
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 7 },
+        { key: 'findings', label: 'Findings', width: 8, align: 'right' },
+        { key: 'synced', label: 'Last Sync', width: 10 },
+      ],
+    )
   },
 })
 
 export const securityFindingsCommand = defineCommand({
   meta: { name: 'findings', description: 'List security findings' },
   args: {
-    repo: { type: 'string', description: 'Filter by repository ID' },
+    repo: { type: 'string', description: 'Filter by repository full name (e.g. user/repo)' },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
     status: { type: 'string', description: 'Filter by status (open/dismissed/remediated/in_progress)' },
-    limit: { type: 'string', description: 'Max findings to show', default: '50' },
+    overdue: { type: 'boolean', description: 'Only overdue findings' },
+    limit: { type: 'string', description: 'Max findings to show (1-100)', default: '50' },
+    offset: { type: 'string', description: 'Pagination offset', default: '0' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const input: { repositoryId?: string; severity?: string; status?: string; limit?: number } = {}
-    if (args.repo) input.repositoryId = args.repo
+    const input: { repoFullName?: string; severity?: string; status?: string; overdue?: boolean; limit?: number; offset?: number } = {}
+    if (args.repo) input.repoFullName = args.repo
     if (args.severity) input.severity = args.severity
     if (args.status) input.status = args.status
+    if (args.overdue) input.overdue = true
     if (args.limit) {
       const parsed = Number.parseInt(args.limit, 10)
       if (Number.isNaN(parsed) || parsed < 1) {
         console.error(`Invalid limit: ${args.limit}`)
         process.exit(1)
       }
-      input.limit = parsed
+      input.limit = Math.min(100, parsed)
     }
-    const findings = await listFindings(token, input)
-    if (findings.length === 0) {
+    if (args.offset) {
+      const parsed = Number.parseInt(args.offset, 10)
+      if (Number.isNaN(parsed) || parsed < 0) {
+        console.error(`Invalid offset: ${args.offset}`)
+        process.exit(1)
+      }
+      input.offset = parsed
+    }
+    const result = await listFindings(token, input)
+    printSummary([
+      { label: 'Total', value: result.totalCount ?? result.total_count ?? '?' },
+      { label: 'Running', value: result.runningCount ?? result.running_count ?? 0 },
+      { label: 'Concurrency', value: result.concurrencyLimit ?? result.concurrency_limit ?? '?' },
+    ])
+    if (result.findings.length === 0) {
       console.log('No findings found.')
       return
     }
-    console.table(findings.map((f) => ({
-      ID: f.id,
-      Severity: f.severity,
-      Title: f.title,
-      Repo: f.repositoryName,
-      Status: f.status,
-      File: f.file ? `${f.file}:${f.line ?? '?'}` : '-',
-    })))
+    console.log('')
+    printTable(
+      result.findings.map((f) => ({
+        id: (f.id ?? '-').slice(0, 8),
+        sev: (f.severity ?? '-').slice(0, 8),
+        title: f.title ?? '-',
+        repo: f.repoFullName ?? f.repo_full_name ?? '-',
+        status: f.status ?? '-',
+        pkg: f.packageName ?? f.package_name ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 8 },
+        { key: 'sev', label: 'Severity', width: 8 },
+        { key: 'title', label: 'Title', width: 50 },
+        { key: 'repo', label: 'Repository', width: 30 },
+        { key: 'status', label: 'Status', width: 8 },
+        { key: 'pkg', label: 'Package', width: 20 },
+      ],
+    )
   },
 })
 
@@ -130,16 +175,38 @@ export const securityFindingCommand = defineCommand({
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const finding = await getFinding(token, args.id)
-    console.log(`ID: ${finding.id}`)
-    console.log(`Severity: ${finding.severity}`)
-    console.log(`Title: ${finding.title}`)
-    console.log(`Repository: ${finding.repositoryName}`)
-    console.log(`Status: ${finding.status}`)
-    console.log(`Description: ${finding.description}`)
-    if (finding.file) console.log(`File: ${finding.file}:${finding.line ?? '?'}`)
-    console.log(`Created: ${finding.createdAt}`)
-    console.log(`Updated: ${finding.updatedAt}`)
+    const f = await getFinding(token, args.id)
+    const repo = f.repoFullName ?? f.repo_full_name
+    const pkg = f.packageName ?? f.package_name
+    const ecosystem = f.packageEcosystem ?? f.package_ecosystem
+    const vuln = f.vulnerableVersionRange ?? f.vulnerable_version_range
+    const patched = f.patchedVersion ?? f.patched_version
+    const cve = f.cveId ?? f.cve_id
+    const ghsa = f.ghsaId ?? f.ghsa_id
+    const cvss = f.cvssScore ?? f.cvss_score
+    const sla = f.slaDueAt ?? f.sla_due_at
+    const analysisStatus = f.analysisStatus ?? f.analysis_status
+    const remediation = f.remediationSummary ?? f.remediation_summary
+    const created = f.createdAt ?? f.created_at
+    const updated = f.updatedAt ?? f.updated_at
+    console.log(`  ID:         ${f.id}`)
+    console.log(`  Severity:   ${f.severity}`)
+    console.log(`  Title:      ${f.title}`)
+    if (repo) console.log(`  Repository: ${repo}`)
+    console.log(`  Status:     ${f.status}`)
+    if (f.source) console.log(`  Source:     ${f.source}`)
+    if (f.description) console.log(`  Description: ${f.description}`)
+    if (pkg) console.log(`  Package:    ${pkg} (${ecosystem ?? '?'})`)
+    if (vuln) console.log(`  Vulnerable: ${vuln}`)
+    if (patched) console.log(`  Patched:    ${patched}`)
+    if (cve) console.log(`  CVE:        ${cve}`)
+    if (ghsa) console.log(`  GHSA:       ${ghsa}`)
+    if (cvss) console.log(`  CVSS:       ${cvss}`)
+    if (sla) console.log(`  SLA due:    ${sla}`)
+    if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
+    if (remediation) console.log(`  Remediation: ${remediation}`)
+    if (created) console.log(`  Created:    ${created}`)
+    if (updated) console.log(`  Updated:    ${updated}`)
   },
 })
 
@@ -148,14 +215,10 @@ export const securityStatsCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const stats = await getSecurityStats(token)
-    console.log(`Total findings: ${stats.totalFindings}`)
-    console.log(`  Critical: ${stats.criticalFindings}`)
-    console.log(`  High: ${stats.highFindings}`)
-    console.log(`  Medium: ${stats.mediumFindings}`)
-    console.log(`  Low: ${stats.lowFindings}`)
-    console.log(`Open: ${stats.openFindings}`)
-    console.log(`Remediated: ${stats.remediatedFindings}`)
-    console.log(`Dismissed: ${stats.dismissedFindings}`)
+    console.log('Security stats:\n')
+    for (const [key, value] of Object.entries(stats)) {
+      console.log(`  ${key.padEnd(16)} ${value}`)
+    }
   },
 })
 
@@ -171,15 +234,25 @@ export const securityDashboardCommand = defineCommand({
     if (args.from) input.startDate = args.from
     if (args.to) input.endDate = args.to
     const stats = await getDashboardStats(token, input)
-    console.log(`Total repositories: ${stats.totalRepositories}`)
-    console.log(`Total findings: ${stats.totalFindings}`)
-    if (stats.findingsTrend.length > 0) {
-      console.log('\nFindings trend:')
-      console.table(stats.findingsTrend.map((t) => ({ Date: t.date, Findings: t.count })))
-    }
-    if (stats.topRepositories.length > 0) {
-      console.log('\nTop repositories by findings:')
-      console.table(stats.topRepositories.map((r) => ({ Repository: r.name, Findings: r.findings })))
+    console.log('Dashboard stats:\n')
+    for (const [key, value] of Object.entries(stats)) {
+      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+        console.log(`\n  ${key}:`)
+        const cols = Object.keys(value[0] as Record<string, unknown>)
+        printTable(
+          value as Record<string, unknown>[],
+          cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
+        )
+      } else if (Array.isArray(value)) {
+        console.log(`  ${key}: ${value.join(', ')}`)
+      } else if (typeof value === 'object' && value !== null) {
+        console.log(`  ${key}:`)
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          console.log(`    ${k}: ${v}`)
+        }
+      } else {
+        console.log(`  ${key.padEnd(16)} ${value}`)
+      }
     }
   },
 })
@@ -256,13 +329,23 @@ export const securityCommandsCommand = defineCommand({
       console.log('No active commands.')
       return
     }
-    console.table(commands.map((c) => ({
-      ID: c.id,
-      Type: c.type,
-      Status: c.status,
-      Repo: c.repositoryId,
-      Started: c.startedAt,
-    })))
+    console.log(`Active commands (${commands.length}):\n`)
+    printTable(
+      commands.map((c) => ({
+        id: String(c.id ?? '-'),
+        type: c.type ?? '-',
+        status: c.status ?? '-',
+        repo: String(c.repositoryId ?? c.repository_id ?? '-'),
+        started: c.startedAt ?? c.started_at ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'type', label: 'Type', width: 12 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'repo', label: 'Repository', width: 20 },
+        { key: 'started', label: 'Started', width: 20 },
+      ],
+    )
   },
 })
 
@@ -272,13 +355,13 @@ export const securityCommandStatusCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const cmd = await getCommandStatus(token, args.id)
-    console.log(`ID: ${cmd.id}`)
-    console.log(`Type: ${cmd.type}`)
-    console.log(`Status: ${cmd.status}`)
-    console.log(`Repository: ${cmd.repositoryId}`)
-    console.log(`Started: ${cmd.startedAt}`)
-    if (cmd.completedAt) console.log(`Completed: ${cmd.completedAt}`)
-    if (cmd.output) console.log(`Output: ${cmd.output}`)
+    console.log(`  ID:          ${cmd.id ?? '-'}`)
+    console.log(`  Type:        ${cmd.type ?? '-'}`)
+    console.log(`  Status:      ${cmd.status ?? '-'}`)
+    console.log(`  Repository:  ${cmd.repositoryId ?? cmd.repository_id ?? '-'}`)
+    console.log(`  Started:     ${cmd.startedAt ?? cmd.started_at ?? '-'}`)
+    if (cmd.completedAt) console.log(`  Completed:   ${cmd.completedAt}`)
+    if (cmd.output) console.log(`  Output:      ${cmd.output}`)
   },
 })
 
@@ -291,7 +374,19 @@ export const securityOrphanedReposCommand = defineCommand({
       console.log('No orphaned repositories.')
       return
     }
-    console.table(repos.map((r) => ({ ID: r.id, Name: r.fullName, Private: r.private ? 'yes' : 'no' })))
+    console.log(`Orphaned repositories (${repos.length}):\n`)
+    printTable(
+      repos.map((r) => ({
+        id: String(r.id ?? '-'),
+        name: r.fullName ?? r.full_name ?? r.name ?? '-',
+        private: r.private ? 'yes' : 'no',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 7 },
+      ],
+    )
   },
 })
 
@@ -301,7 +396,8 @@ export const securityLastSyncCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const result = await getLastSyncTime(token, args.repo ? { repositoryId: args.repo } : undefined)
-    console.log(`Last sync: ${result.lastSyncTime ?? 'never'}`)
+    const lastSync = result.lastSyncTime ?? result.last_sync_time
+    console.log(`Last sync: ${lastSync ?? 'never'}`)
   },
 })
 

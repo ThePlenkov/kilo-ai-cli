@@ -15,6 +15,7 @@ import {
   listAvailableModels,
   updateOrganization,
 } from '../api/organizations.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const orgMembersCommand = defineCommand({
@@ -24,7 +25,15 @@ export const orgMembersCommand = defineCommand({
     const { token } = await getToken()
     const org = await getOrganizationWithMembers(token, args.id)
     console.log(`Organization: ${org.name}`)
-    console.table(org.members.map((m) => ({ ID: m.id, Email: m.email, Name: m.name ?? '-', Role: m.role })))
+    printTable(
+      org.members.map((m) => ({ id: m.id, email: m.email, name: m.name ?? '-', role: m.role })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'email', label: 'Email', width: 30 },
+        { key: 'name', label: 'Name', width: 24 },
+        { key: 'role', label: 'Role', width: 12 },
+      ],
+    )
   },
 })
 
@@ -51,13 +60,22 @@ export const orgCreditsCommand = defineCommand({
       console.log('No credit transactions found.')
       return
     }
-    console.table(transactions.map((t) => ({
-      ID: t.id,
-      Date: t.createdAt,
-      Amount: t.amount,
-      Type: t.type,
-      Description: t.description,
-    })))
+    printTable(
+      transactions.map((t) => ({
+        id: t.id,
+        date: t.createdAt,
+        amount: t.amount,
+        type: t.type,
+        description: t.description,
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'date', label: 'Date', width: 12 },
+        { key: 'amount', label: 'Amount', width: 10, align: 'right' },
+        { key: 'type', label: 'Type', width: 10 },
+        { key: 'description', label: 'Description', width: 40 },
+      ],
+    )
   },
 })
 
@@ -86,12 +104,20 @@ export const orgInvoicesCommand = defineCommand({
       console.log('No invoices found.')
       return
     }
-    console.table(invoices.map((i) => ({
-      ID: i.id,
-      Date: i.date,
-      Amount: i.amount,
-      Status: i.status,
-    })))
+    printTable(
+      invoices.map((i) => ({
+        id: i.id,
+        date: i.date,
+        amount: i.amount,
+        status: i.status,
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'date', label: 'Date', width: 12 },
+        { key: 'amount', label: 'Amount', width: 10, align: 'right' },
+        { key: 'status', label: 'Status', width: 10 },
+      ],
+    )
   },
 })
 
@@ -131,12 +157,20 @@ export const orgModelsCommand = defineCommand({
       console.log('No models available.')
       return
     }
-    console.table(models.map((m) => ({
-      ID: m.id,
-      Name: m.name,
-      Provider: m.provider,
-      Enabled: m.isEnabled ? 'yes' : 'no',
-    })))
+    printTable(
+      models.map((m) => ({
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+        enabled: m.isEnabled ? 'yes' : 'no',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Name', width: 30 },
+        { key: 'provider', label: 'Provider', width: 14 },
+        { key: 'enabled', label: 'Enabled', width: 8 },
+      ],
+    )
   },
 })
 
@@ -147,7 +181,7 @@ export const orgSecurityCommand = defineCommand({
     const { token } = await getToken()
     const status = await getSecurityAgentPermissionStatus(token, args.id)
     console.log(`Granted: ${status.granted ? 'yes' : 'no'}`)
-    console.log(`Permissions: ${status.permissions.join(', ') || '(none)'}`)
-    console.log(`Pending requests: ${status.pendingRequests}`)
+    console.log(`Permissions: ${status.permissions?.join(', ') || '(none)'}`)
+    console.log(`Pending requests: ${status.pendingRequests ?? 0}`)
   },
 })
