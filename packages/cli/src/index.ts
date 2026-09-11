@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
-import { runMain } from 'citty'
+import { runMain, showUsage } from 'citty'
 
 import { mainCommand } from './cli.ts'
 
-await runMain(mainCommand)
+const args = process.argv.slice(2)
+if (args.length === 0) {
+  showUsage(mainCommand)
+} else {
+  await runMain(mainCommand)
+}
