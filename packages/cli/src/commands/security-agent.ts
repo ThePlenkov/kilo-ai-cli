@@ -29,7 +29,7 @@ import {
 import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
-import { repoShort, repoUrl, truncate } from './theme.ts'
+import { repoLink, repoUrl, truncate } from './theme.ts'
 
 export const securityStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show security agent permission status' },
@@ -157,7 +157,7 @@ export const securityFindingsCommand = defineCommand({
         id: (f.id ?? '-').slice(0, 8),
         sev: (f.severity ?? '-').slice(0, 8),
         title: truncate(f.title ?? '-', 50),
-        repo: repoShort(f.repoFullName ?? f.repo_full_name),
+        repo: repoLink(f.repoFullName ?? f.repo_full_name),
         status: f.status ?? '-',
         analysis: f.analysisStatus ?? f.analysis_status ?? '-',
       })),
@@ -445,7 +445,7 @@ export const securityCloseCommand = defineCommand({
             id: f.id.slice(0, 8),
             sev: f.severity,
             title: truncate(f.title, 50),
-            repo: repoShort(f.repoFullName ?? f.repo_full_name),
+            repo: repoLink(f.repoFullName ?? f.repo_full_name),
             status: f.status,
             analysis: f.analysisStatus ?? f.analysis_status ?? '-',
           })),
