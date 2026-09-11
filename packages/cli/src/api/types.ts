@@ -133,6 +133,254 @@ export interface CloudSessionsInput {
 }
 
 // ============================================================================
+// tRPC Types — KiloClaw (Managed Instance System)
+// ============================================================================
+
+export interface KiloclawInstance {
+  id: string
+  name: string
+  status: string
+  planName?: string
+  imageTag?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface KiloclawChangelogEntry {
+  version: string
+  date: string
+  changes: string[]
+}
+
+export interface KiloclawAgent {
+  id: string
+  name: string
+  status: string
+  type?: string
+}
+
+export interface KiloclawFileTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  children?: KiloclawFileTreeNode[]
+}
+
+export interface KiloclawBillingStatus {
+  balance: number
+  activeSubscriptions: number
+  currentPeriodUsageUsd: number
+}
+
+export interface KiloclawBillingHistoryEntry {
+  id: string
+  date: string
+  amount: number
+  description: string
+  type: string
+}
+
+export interface KiloclawSubscriptionDetail {
+  id: string
+  planName: string
+  status: string
+  providerName: string
+  providerId: string
+  cancelAtPeriodEnd: boolean
+  currentPeriodStart?: string
+  currentPeriodEnd?: string
+}
+
+export interface KiloclawKiloCliRun {
+  runId: string
+  status: string
+  prompt: string
+  startedAt: string
+  completedAt?: string
+  output?: string
+}
+
+// ============================================================================
+// tRPC Types — Cloud Agent Next
+// ============================================================================
+
+export interface CloudAgentSession {
+  sessionId: string
+  status: string
+  gitUrl?: string
+  branch?: string
+  createdAt: string
+  updatedAt: string
+  cloudAgentSessionId?: string
+}
+
+export interface CloudAgentRepository {
+  id: string
+  name: string
+  fullName: string
+  url: string
+  private: boolean
+  defaultBranch?: string
+}
+
+export interface CloudAgentTerminal {
+  terminalId: string
+  ticket: string
+}
+
+// ============================================================================
+// tRPC Types — Code Reviews
+// ============================================================================
+
+export interface CodeReview {
+  id: string
+  title: string
+  status: string
+  platform: string
+  repositoryName?: string
+  pullRequestNumber?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CodeReviewConfig {
+  isEnabled: boolean
+  platform: string
+  repositoryName?: string
+}
+
+// ============================================================================
+// tRPC Types — Organizations (extended)
+// ============================================================================
+
+export interface OrganizationMember {
+  id: string
+  email: string
+  name?: string
+  role: string
+}
+
+export interface OrganizationWithMembers extends Organization {
+  members: OrganizationMember[]
+}
+
+export interface OrganizationUsageStats {
+  totalCreditsUsed: number
+  creditsUsedThisPeriod: number
+  activeSessions: number
+  totalMembers: number
+}
+
+export interface CreditTransaction {
+  id: string
+  amount: number
+  type: string
+  description: string
+  createdAt: string
+}
+
+export interface OrganizationSeats {
+  total: number
+  used: number
+}
+
+export interface OrganizationInvoice {
+  id: string
+  date: string
+  amount: number
+  status: string
+  url?: string
+}
+
+export interface OrganizationCreateInput {
+  name: string
+  companyDomain?: string | null
+}
+
+export interface OrganizationUpdateInput {
+  organizationId: string
+  name?: string
+}
+
+// ============================================================================
+// tRPC Types — Organization Settings
+// ============================================================================
+
+export interface AvailableModel {
+  id: string
+  name: string
+  provider: string
+  isEnabled: boolean
+}
+
+// ============================================================================
+// tRPC Types — Usage Analytics
+// ============================================================================
+
+export interface UsageAnalyticsSummary {
+  totalCreditsUsd: number
+  totalRequests: number
+  totalTokens: number
+  averageLatencyMs: number
+}
+
+export interface UsageAnalyticsTimeseriesPoint {
+  timestamp: string
+  creditsUsd: number
+  requests: number
+  tokens: number
+}
+
+export interface UsageAnalyticsBreakdownEntry {
+  label: string
+  value: number
+  percentage: number
+}
+
+export interface UsageAnalyticsTableRow {
+  date: string
+  model: string
+  provider: string
+  creditsUsd: number
+  requests: number
+  tokens: number
+}
+
+export interface UsageAnalyticsFilters {
+  startDate?: string
+  endDate?: string
+  organizationId?: string
+}
+
+// ============================================================================
+// tRPC Types — App Builder
+// ============================================================================
+
+export interface AppBuilderProject {
+  id: string
+  name: string
+  status: string
+  url?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AppBuilderEligibility {
+  eligible: boolean
+  reason?: string
+}
+
+// ============================================================================
+// tRPC Types — Security Agent
+// ============================================================================
+
+export interface SecurityAgentPermissionStatus {
+  granted: boolean
+  permissions: string[]
+  pendingRequests: number
+}
+
+// ============================================================================
 // Error Types
 // ============================================================================
 
