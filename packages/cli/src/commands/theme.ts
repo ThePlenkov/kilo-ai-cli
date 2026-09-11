@@ -33,13 +33,15 @@ export const ANALYSIS_COLORS: Record<string, string> = {
 }
 
 /**
- * Format a repo full name as a short display name.
- * e.g. "ThePlenkov/gitpod" → "gitpod"
- * In detail views, the full GitHub URL is shown (terminals auto-link it).
+ * Format a repo full name as a clickable terminal hyperlink (OSC 8).
+ * Uses ST terminator (\x1b\\) which is the standard.
+ * Shows just the repo name (short), links to the full GitHub URL.
  */
-export function repoShort(repoFullName: string | undefined): string {
+export function repoLink(repoFullName: string | undefined): string {
   if (!repoFullName || repoFullName === '-') return '-'
-  return repoFullName.split('/').pop() ?? repoFullName
+  const short = repoFullName.split('/').pop() ?? repoFullName
+  const url = `https://github.com/${repoFullName}`
+  return `\x1b]8;;${url}\x1b\\${short}\x1b]8;;\x1b\\`
 }
 
 /** Get the full GitHub URL for a repo full name. */

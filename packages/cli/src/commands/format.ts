@@ -2,16 +2,28 @@
  * Clean terminal output formatting — no ugly console.table borders.
  */
 
-/** Strip ANSI escape sequences to get visible string length. */
+/** Strip ANSI/OSC escape sequences to get visible string length. */
 function visibleLen(str: string): number {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, '').length
+  return str
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\]8;;.*?\x1b\\/g, '')   // OSC 8 hyperlinks (ST-terminated)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\]8;;[^\x07]*\x07[^\x07]*\x07/g, '') // OSC 8 (BEL-terminated)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\][^\x07]*\x07/g, '')               // other OSC (BEL)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\[[0-9;]*m/g, '')                   // SGR color codes
+    .length
 }
 
-/** Pad or truncate a string to a fixed width. */
+/** Pad or truncate a string to a fixed width (handles escape sequences). */
 function pad(str: string, width: number): string {
   const vlen = visibleLen(str)
-  if (vlen > width) return str.slice(0, width - 1) + '…'
+  if (vlen > width) {
+    // Don't truncate strings with escape sequences — let them overflow
+    if (str.includes('\x1b')) return str
+    return str.slice(0, width - 1) + '…'
+  }
   return str + ' '.repeat(width - vlen)
 }
 
