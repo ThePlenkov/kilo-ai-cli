@@ -17,14 +17,17 @@ CLI for interacting with the [kilo.ai](https://kilo.ai) cloud tRPC API.
 # Install
 npm install
 
-# Authenticate
+# Build
 npx nx build kilo-ai-cli
-node packages/cli/dist/index.mjs auth login
+
+# Authenticate (executable form)
+npx kilo-ai-cli auth login
+# or: node packages/cli/dist/index.mjs auth login
 
 # Use
-node packages/cli/dist/index.mjs sessions list
-node packages/cli/dist/index.mjs profile
-node packages/cli/dist/index.mjs plans list
+npx kilo-ai-cli sessions list
+npx kilo-ai-cli profile
+npx kilo-ai-cli plans list
 ```
 
 ## Commands
