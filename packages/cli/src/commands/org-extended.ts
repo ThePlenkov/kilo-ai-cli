@@ -147,7 +147,7 @@ export const orgSecurityCommand = defineCommand({
     const { token } = await getToken()
     const status = await getSecurityAgentPermissionStatus(token, args.id)
     console.log(`Granted: ${status.granted ? 'yes' : 'no'}`)
-    console.log(`Permissions: ${status.permissions.join(', ') || '(none)'}`)
-    console.log(`Pending requests: ${status.pendingRequests}`)
+    console.log(`Permissions: ${status.permissions?.join(', ') || '(none)'}`)
+    console.log(`Pending requests: ${status.pendingRequests ?? 0}`)
   },
 })
