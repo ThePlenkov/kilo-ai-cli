@@ -59,7 +59,6 @@ export function FindingDetailView({ token, findingId, onBack }: FindingDetailVie
   const sev = finding.severity
   const sevColor = SEVERITY_COLORS[sev] ?? 'white'
   const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
-  const repoShort = repo.split('/').pop() ?? repo
   const sla = finding.slaDueAt ?? finding.sla_due_at
   const analysisStatus = finding.analysisStatus ?? finding.analysis_status ?? '-'
   const analysisColor = ANALYSIS_COLORS[analysisStatus] ?? 'gray'
@@ -82,7 +81,7 @@ export function FindingDetailView({ token, findingId, onBack }: FindingDetailVie
       {/* Basic info */}
       <Box flexDirection="column" marginBottom={1}>
         <Field label="ID" value={finding.id} />
-        <Field label="Repo" value={repoShort} />
+        <Field label="Repo" value={repo} />
         <Field label="Status" value={finding.status} color={statusColor} />
         {finding.source ? <Field label="Source" value={finding.source} /> : null}
         {finding.description ? <Field label="Description" value={finding.description} /> : null}

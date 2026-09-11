@@ -251,7 +251,6 @@ function FindingRow({ finding, selected }: { finding: SecurityFinding; selected:
   const sev = finding.severity
   const sevColor = SEVERITY_COLORS[sev] ?? 'white'
   const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
-  const repoShort = repo.split('/').pop() ?? repo
   const title = truncate(finding.title, 50)
   const statusColor = STATUS_COLORS[finding.status] ?? 'white'
   const analysis = finding.analysisStatus ?? finding.analysis_status ?? '-'
@@ -265,7 +264,7 @@ function FindingRow({ finding, selected }: { finding: SecurityFinding; selected:
       <Text> </Text>
       <Text>{title.padEnd(50).slice(0, 50)}</Text>
       <Text> </Text>
-      <Text dimColor>{repoShort.slice(0, 20).padEnd(20)}</Text>
+      <Text dimColor>{repo.slice(0, 30).padEnd(30)}</Text>
       <Text> </Text>
       <Text color={statusColor}>{finding.status.slice(0, 8).padEnd(8)}</Text>
       <Text> </Text>

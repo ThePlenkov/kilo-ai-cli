@@ -73,9 +73,8 @@ export function colorAnalysis(s: string): string {
  */
 export function repoLink(repoFullName: string | undefined): string {
   if (!repoFullName || repoFullName === '-') return '-'
-  const short = repoFullName.split('/').pop() ?? repoFullName
   const url = `https://github.com/${repoFullName}`
-  return `\x1b]8;;${url}\x1b\\${short}\x1b]8;;\x1b\\`
+  return `\x1b]8;;${url}\x1b\\${repoFullName}\x1b]8;;\x1b\\`
 }
 
 /** Get the full GitHub URL for a repo full name. */
