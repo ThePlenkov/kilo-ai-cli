@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: lts/*
+          check-latest: true
+      - run: npm ci
+      - run: node scripts/patch-nx-release.mjs
+      - run: npx nx typecheck kilo-ai-cli
+      - run: npx nx lint kilo-ai-cli
+      - run: npx nx test kilo-ai-cli
+      - run: npx nx build kilo-ai-cli
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx nx release --first-release --yes

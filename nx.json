@@ -5,5 +5,22 @@
     "./.nx-devkit/packages/oxlint/dist/plugin.mjs",
     "./.nx-devkit/packages/biome/dist/plugin.mjs",
     "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs"
-  ]
+  ],
+  "release": {
+    "projects": ["kilo-ai-cli"],
+    "version": {
+      "conventionalCommits": true
+    },
+    "changelog": {
+      "workspaceChangelog": {
+        "createRelease": "github"
+      }
+    },
+    "git": {
+      "commit": true,
+      "tag": true,
+      "commitArgs": "--no-verify",
+      "tagArgs": "--no-verify"
+    }
+  }
 }

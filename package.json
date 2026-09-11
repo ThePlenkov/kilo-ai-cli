@@ -14,11 +14,13 @@
     "format:check": "nx format-check kilo-ai-cli",
     "typecheck": "nx typecheck kilo-ai-cli",
     "cli": "node packages/cli/dist/index.mjs",
-    "dev": "node packages/cli/src/index.ts"
+    "dev": "node packages/cli/src/index.ts",
+    "postinstall": "node scripts/patch-nx-release.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
     "@nx/devkit": "22.7.1",
+    "@nx/js": "^22.7.1",
     "@types/node": "22.20.2",
     "@types/react": "^18.3.31",
     "memfs": "^4.50.0",
