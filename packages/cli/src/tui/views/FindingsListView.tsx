@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
 import SelectInput from 'ink-select-input'
 
@@ -24,8 +24,8 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 type FilterMode = 'none' | 'severity' | 'status'
 
-/** Lines reserved for header, filters, help bar, etc. */
-const RESERVED_LINES = 8
+/** Lines reserved for header, filters, help bar, scroll indicators, etc. */
+const RESERVED_LINES = 10
 
 export function FindingsListView({ token, filter, onFilterChange, onSelectFinding, onBack }: FindingsListViewProps) {
   const { stdout } = useStdout()
@@ -38,19 +38,23 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
   const [filterMode, setFilterMode] = useState<FilterMode>('none')
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [scrollOffset, setScrollOffset] = useState(0)
+  const loadSeqRef = useRef(0)
 
   const loadFindings = async () => {
+    const seq = ++loadSeqRef.current
     setLoading(true)
     setError(null)
     try {
       const result = await listFindings(token, filter)
+      if (seq !== loadSeqRef.current) return  // stale response, discard
       setData(result)
       setSelectedIdx(0)
       setScrollOffset(0)
     } catch (e) {
+      if (seq !== loadSeqRef.current) return
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
   }
 
@@ -90,7 +94,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
       loadFindings()
       return
     }
-    if (input === 'n' && data && filter.offset + filter.limit < (data.totalCount ?? 0)) {
+    if (input === 'n' && data && filter.offset + filter.limit < (data.totalCount ?? data.total_count ?? 0)) {
       onFilterChange({ ...filter, offset: filter.offset + filter.limit })
       return
     }
@@ -109,7 +113,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     }
     if (key.return) {
       const finding = data.findings[selectedIdx]
-      if (finding) onSelectFinding(finding.id)
+      if (finding && finding.id) onSelectFinding(finding.id)
     }
   })
 
@@ -218,7 +222,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
           {'  '}
           {filter.status ? <Text color="green">status={filter.status}</Text> : <Text>status=all</Text>}
           {'  '}
-          <Text>page {Math.floor(filter.offset / filter.limit) + 1}</Text>
+          <Text>page {filter.limit > 0 ? Math.floor(filter.offset / filter.limit) + 1 : 1}</Text>
         </Text>
       </Box>
 
