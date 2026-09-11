@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput, useStdout } from 'ink'
 import SelectInput from 'ink-select-input'
 
 import { listFindings } from '../../api/security-agent.ts'
@@ -24,12 +24,20 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 type FilterMode = 'none' | 'severity' | 'status'
 
+/** Lines reserved for header, filters, help bar, etc. */
+const RESERVED_LINES = 8
+
 export function FindingsListView({ token, filter, onFilterChange, onSelectFinding, onBack }: FindingsListViewProps) {
+  const { stdout } = useStdout()
+  const terminalHeight = stdout?.rows ?? 24
+  const maxVisible = Math.max(3, terminalHeight - RESERVED_LINES)
+
   const [data, setData] = useState<SecurityFindingsResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [filterMode, setFilterMode] = useState<FilterMode>('none')
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const [scrollOffset, setScrollOffset] = useState(0)
 
   const loadFindings = async () => {
     setLoading(true)
@@ -38,6 +46,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
       const result = await listFindings(token, filter)
       setData(result)
       setSelectedIdx(0)
+      setScrollOffset(0)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -49,6 +58,19 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     loadFindings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
+
+  // Adjust scroll offset when selection changes
+  useEffect(() => {
+    if (!data) return
+    const findings = data.findings
+    if (findings.length === 0) return
+
+    if (selectedIdx < scrollOffset) {
+      setScrollOffset(selectedIdx)
+    } else if (selectedIdx >= scrollOffset + maxVisible) {
+      setScrollOffset(selectedIdx - maxVisible + 1)
+    }
+  }, [selectedIdx, scrollOffset, maxVisible, data])
 
   useInput((input, key) => {
     if (filterMode !== 'none') return
@@ -173,6 +195,11 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
   const running = data.runningCount ?? data.running_count ?? 0
   const concurrency = data.concurrencyLimit ?? data.concurrency_limit ?? '?'
 
+  // Calculate visible slice
+  const visibleFindings = findings.slice(scrollOffset, scrollOffset + maxVisible)
+  const hasMoreAbove = scrollOffset > 0
+  const hasMoreBelow = scrollOffset + maxVisible < findings.length
+
   return (
     <Box flexDirection="column">
       {/* Summary bar */}
@@ -195,21 +222,30 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
         </Text>
       </Box>
 
-      {/* Findings list */}
+      {/* Scroll indicator above */}
+      {hasMoreAbove ? <Text dimColor>  ↑ {scrollOffset} more above</Text> : null}
+
+      {/* Findings list — only visible slice */}
       <Box flexDirection="column">
-        {findings.map((f, i) => (
-          <FindingRow
-            key={f.id}
-            finding={f}
-            selected={i === selectedIdx}
-          />
-        ))}
+        {visibleFindings.map((f, i) => {
+          const idx = scrollOffset + i
+          return (
+            <FindingRow
+              key={f.id}
+              finding={f}
+              selected={idx === selectedIdx}
+            />
+          )
+        })}
       </Box>
 
-      {/* Help bar */}
+      {/* Scroll indicator below */}
+      {hasMoreBelow ? <Text dimColor>  ↓ {findings.length - scrollOffset - maxVisible} more below</Text> : null}
+
+      {/* Position indicator */}
       <Box marginTop={1}>
         <Text dimColor>
-          Up/Down navigate  Enter=details  f=filter severity  s=filter status  n=next page  p=prev page  r=refresh  Esc=back
+          [{selectedIdx + 1}/{findings.length}]  Up/Down navigate  Enter=details  f=severity  s=status  n=next page  p=prev  r=refresh  Esc=back
         </Text>
       </Box>
 
