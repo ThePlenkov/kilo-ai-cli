@@ -112,7 +112,7 @@ const FindingSchema: z.ZodType<SecurityFinding> = z.object({
 }).passthrough() as z.ZodType<SecurityFinding>
 
 const FindingsResultSchema = z.object({
-  findings: z.array(z.unknown()),
+  findings: z.array(FindingSchema),
   totalCount: z.number().optional(),
   total_count: z.number().optional(),
   runningCount: z.number().optional(),

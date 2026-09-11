@@ -92,7 +92,7 @@ export const securityReposCommand = defineCommand({
         name: r.fullName ?? r.full_name ?? r.name ?? '-',
         private: r.private ? 'yes' : 'no',
         findings: r.findingsCount ?? r.findings_count ?? '-',
-        synced: (r.lastSyncedAt ?? r.last_synced_at ?? '-').slice(0, 10),
+        synced: String(r.lastSyncedAt ?? r.last_synced_at ?? '-').slice(0, 10),
       })),
       [
         { key: 'id', label: 'ID', width: 12 },
@@ -151,11 +151,11 @@ export const securityFindingsCommand = defineCommand({
     console.log('')
     printTable(
       result.findings.map((f) => ({
-        id: f.id.slice(0, 8),
-        sev: f.severity.slice(0, 8),
-        title: f.title,
+        id: (f.id ?? '-').slice(0, 8),
+        sev: (f.severity ?? '-').slice(0, 8),
+        title: f.title ?? '-',
         repo: f.repoFullName ?? f.repo_full_name ?? '-',
-        status: f.status,
+        status: f.status ?? '-',
         pkg: f.packageName ?? f.package_name ?? '-',
       })),
       [

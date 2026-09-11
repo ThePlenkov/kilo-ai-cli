@@ -8,6 +8,12 @@ function pad(str: string, width: number): string {
   return str.padEnd(width)
 }
 
+/** Pad or truncate a string, right-aligned. */
+function padRight(str: string, width: number): string {
+  if (str.length > width) return str.slice(0, width - 1) + '…'
+  return str.padStart(width)
+}
+
 /** Column definition for table output. */
 export interface Column {
   key: string
@@ -22,7 +28,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
 
   // Header
   const header = columns
-    .map((c) => c.align === 'right' ? pad(c.label, c.width).padStart(c.width) : pad(c.label, c.width))
+    .map((c) => c.align === 'right' ? padRight(c.label, c.width) : pad(c.label, c.width))
     .join('  ')
   console.log(header)
   console.log(columns.map((c) => '─'.repeat(c.width)).join('  '))
@@ -32,7 +38,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
     const line = columns
       .map((c) => {
         const val = String(row[c.key] ?? '-')
-        return c.align === 'right' ? pad(val, c.width).padStart(c.width) : pad(val, c.width)
+        return c.align === 'right' ? padRight(val, c.width) : pad(val, c.width)
       })
       .join('  ')
     console.log(line)
