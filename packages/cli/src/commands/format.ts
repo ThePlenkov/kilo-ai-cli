@@ -1,6 +1,9 @@
 /**
  * Clean terminal output formatting — no ugly console.table borders.
+ * Supports colored cells via per-column color function.
  */
+
+import chalk from 'chalk'
 
 /** Strip ANSI/OSC escape sequences to get visible string length. */
 function visibleLen(str: string): number {
@@ -20,7 +23,6 @@ function visibleLen(str: string): number {
 function pad(str: string, width: number): string {
   const vlen = visibleLen(str)
   if (vlen > width) {
-    // Don't truncate strings with escape sequences — let them overflow
     if (str.includes('\x1b')) return str
     return str.slice(0, width - 1) + '…'
   }
@@ -33,6 +35,8 @@ export interface Column {
   label: string
   width: number
   align?: 'left' | 'right'
+  /** Optional color function — returns chalk-colored string. */
+  color?: (value: string, row: Record<string, unknown>) => string
 }
 
 /** Print rows as a clean aligned table — no borders, no index column. */
@@ -50,8 +54,9 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
   for (const row of rows) {
     const line = columns
       .map((c) => {
-        const val = String(row[c.key] ?? '-')
-        return c.align === 'right' ? pad(val, c.width).padStart(c.width) : pad(val, c.width)
+        const raw = String(row[c.key] ?? '-')
+        const colored = c.color ? c.color(raw, row) : raw
+        return c.align === 'right' ? pad(colored, c.width).padStart(c.width) : pad(colored, c.width)
       })
       .join('  ')
     console.log(line)
@@ -71,3 +76,6 @@ export function printRecord(record: Record<string, unknown>, labels?: Record<str
 export function printSummary(items: { label: string; value: string | number }[]): void {
   console.log(items.map((i) => `${i.label}: ${i.value}`).join('  |  '))
 }
+
+/** Re-export chalk for color functions in commands. */
+export { chalk }

@@ -29,7 +29,7 @@ import {
 import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
-import { repoLink, repoUrl, truncate } from './theme.ts'
+import { colorAnalysis, colorSeverity, colorStatus, repoLink, repoUrl, truncate } from './theme.ts'
 
 export const securityStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show security agent permission status' },
@@ -149,11 +149,11 @@ export const securityFindingsCommand = defineCommand({
       })),
       [
         { key: 'id', label: 'ID', width: 8 },
-        { key: 'sev', label: 'Severity', width: 8 },
+        { key: 'sev', label: 'Severity', width: 8, color: (v) => colorSeverity(v) },
         { key: 'title', label: 'Title', width: 50 },
         { key: 'repo', label: 'Repo', width: 20 },
-        { key: 'status', label: 'Status', width: 8 },
-        { key: 'analysis', label: 'Analysis', width: 10 },
+        { key: 'status', label: 'Status', width: 8, color: (v) => colorStatus(v) },
+        { key: 'analysis', label: 'Analysis', width: 10, color: (v) => colorAnalysis(v) },
       ],
     )
   },
@@ -172,14 +172,14 @@ export const securityFindingCommand = defineCommand({
     const created = f.createdAt ?? f.created_at
     const updated = f.updatedAt ?? f.updated_at
     console.log(`  ID:         ${f.id}`)
-    console.log(`  Severity:   ${f.severity}`)
+    console.log(`  Severity:   ${colorSeverity(f.severity)}`)
     console.log(`  Title:      ${f.title}`)
     if (repo) console.log(`  Repo:       ${repoUrl(repo)}`)
-    console.log(`  Status:     ${f.status}`)
+    console.log(`  Status:     ${colorStatus(f.status)}`)
     if (f.source) console.log(`  Source:     ${f.source}`)
     if (f.description) console.log(`  Description: ${f.description}`)
     if (sla) console.log(`  SLA due:    ${sla}`)
-    if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
+    if (analysisStatus) console.log(`  Analysis:   ${colorAnalysis(analysisStatus)}`)
     if (remediation) console.log(`  Remediation: ${remediation}`)
     if (created) console.log(`  Created:    ${created}`)
     if (updated) console.log(`  Updated:    ${updated}`)
@@ -437,11 +437,11 @@ export const securityCloseCommand = defineCommand({
           })),
           [
             { key: 'id', label: 'ID', width: 8 },
-            { key: 'sev', label: 'Severity', width: 8 },
+            { key: 'sev', label: 'Severity', width: 8, color: (v) => colorSeverity(v) },
             { key: 'title', label: 'Title', width: 50 },
             { key: 'repo', label: 'Repo', width: 20 },
-            { key: 'status', label: 'Status', width: 8 },
-            { key: 'analysis', label: 'Analysis', width: 10 },
+            { key: 'status', label: 'Status', width: 8, color: (v) => colorStatus(v) },
+            { key: 'analysis', label: 'Analysis', width: 10, color: (v) => colorAnalysis(v) },
           ],
         )
         if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
