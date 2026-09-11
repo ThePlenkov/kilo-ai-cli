@@ -247,19 +247,6 @@ export const securitySyncCommand = defineCommand({
   },
 })
 
-export const securityFindingsDismissCommand = defineCommand({
-  meta: { name: 'dismiss', description: 'Dismiss a single security finding' },
-  args: {
-    id: { type: 'positional', description: 'Finding ID', required: true },
-    reason: { type: 'string', description: 'Reason for dismissal' },
-  },
-  async run({ args }) {
-    const { token } = await getToken()
-    await dismissFinding(token, args.id, args.reason)
-    console.log(`Finding ${args.id} dismissed.`)
-  },
-})
-
 export const securityAnalyzeCommand = defineCommand({
   meta: { name: 'analyze', description: 'Start security analysis for a repository' },
   args: { repo: { type: 'positional', description: 'Repository ID', required: true } },
@@ -382,20 +369,36 @@ export const securityLastSyncCommand = defineCommand({
 })
 
 export const securityFindingsCloseCommand = defineCommand({
-  meta: { name: 'close', description: 'Dismiss (close/ignore) security findings matching filters' },
+  meta: { name: 'close', description: 'Close (dismiss/ignore) one finding by ID, or many by filters' },
   args: {
-    repo: { type: 'string', description: 'Repository full name (e.g. user/repo)' },
+    id: { type: 'positional', description: 'Finding ID (if omitted, bulk mode by filters)', required: false },
+    repo: { type: 'string', description: 'Filter by repository full name (e.g. user/repo)' },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
     status: { type: 'string', description: 'Filter by status (default: open)', default: 'open' },
     from: { type: 'string', description: 'Only findings created after this date (ISO, e.g. 2025-01-01)' },
     to: { type: 'string', description: 'Only findings created before this date (ISO)' },
-    reason: { type: 'string', description: 'Reason for dismissal', default: 'Bulk closed via CLI' },
+    reason: { type: 'string', description: 'Reason for dismissal', default: 'Closed via CLI' },
     dryRun: { type: 'boolean', description: 'Show what would be closed without actually dismissing' },
     yes: { type: 'boolean', description: 'Skip confirmation prompt' },
   },
   async run({ args }) {
     const { token } = await getToken()
 
+    // Single finding mode — close one by ID
+    if (args.id) {
+      if (!args.yes) {
+        const ok = await confirm(`Close finding ${args.id}?`)
+        if (!ok) {
+          console.log('Aborted.')
+          return
+        }
+      }
+      await dismissFinding(token, args.id, args.reason)
+      console.log(`Finding ${args.id} closed.`)
+      return
+    }
+
+    // Bulk mode — close by filters
     const filters = {
       repoFullName: args.repo,
       severity: args.severity,
@@ -462,6 +465,11 @@ export const securityFindingsCloseCommand = defineCommand({
       filters.createdBefore && `to=${filters.createdBefore}`,
     ].filter(Boolean).join(', ')
 
+    if (!filterDesc || filterDesc === 'status=open') {
+      console.log('Error: specify a finding ID or at least one filter (e.g. --repo, --severity).')
+      return
+    }
+
     if (!args.yes) {
       const ok = await confirm(`Close all findings matching: ${filterDesc}?`)
       if (!ok) {
@@ -471,7 +479,7 @@ export const securityFindingsCloseCommand = defineCommand({
     }
 
     console.log(`Closing findings (${filterDesc})…`)
-    const result = await dismissFindingsBulk(token, filters, args.reason ?? 'Bulk closed via CLI')
+    const result = await dismissFindingsBulk(token, filters, args.reason ?? 'Closed via CLI')
     console.log('\nDone.')
     printSummary([
       { label: 'Dismissed', value: result.dismissed },
@@ -511,12 +519,11 @@ export const securityFindingsDeleteCommand = defineCommand({
 })
 
 export const securityFindingsCommand = defineCommand({
-  meta: { name: 'findings', description: 'Security findings — list, detail, close, delete, dismiss' },
+  meta: { name: 'findings', description: 'Security findings — list, detail, close, delete' },
   subCommands: {
     list: securityFindingsListCommand,
     detail: securityFindingsDetailCommand,
     close: securityFindingsCloseCommand,
     delete: securityFindingsDeleteCommand,
-    dismiss: securityFindingsDismissCommand,
   },
 })
