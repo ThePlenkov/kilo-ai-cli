@@ -1,0 +1,55 @@
+/**
+ * Cloud Agent CLI command handlers.
+ */
+
+import { defineCommand } from 'citty'
+
+import {
+  getCloudAgentSession,
+  listGitHubRepositories,
+  listGitLabRepositories,
+} from '../api/cloud-agent.ts'
+import { getToken } from './helpers.ts'
+
+export const cloudAgentSessionCommand = defineCommand({
+  meta: { name: 'session', description: 'Get cloud agent session details' },
+  args: { id: { type: 'positional', description: 'Session ID', required: true } },
+  async run({ args }) {
+    const { token } = await getToken()
+    const session = await getCloudAgentSession(token, args.id)
+    console.log(`Session ID: ${session.sessionId}`)
+    console.log(`Status: ${session.status}`)
+    if (session.gitUrl) console.log(`Git URL: ${session.gitUrl}`)
+    if (session.branch) console.log(`Branch: ${session.branch}`)
+    console.log(`Created: ${session.createdAt}`)
+    console.log(`Updated: ${session.updatedAt}`)
+  },
+})
+
+export const cloudAgentGithubReposCommand = defineCommand({
+  meta: { name: 'github-repos', description: 'List GitHub repositories for cloud agent' },
+  args: { refresh: { type: 'boolean', description: 'Force refresh', alias: 'f' } },
+  async run({ args }) {
+    const { token } = await getToken()
+    const repos = await listGitHubRepositories(token, args.refresh)
+    if (repos.length === 0) {
+      console.log('No repositories found.')
+      return
+    }
+    console.table(repos.map((r) => ({ Name: r.fullName, Private: r.private ? 'yes' : 'no', Default: r.defaultBranch ?? '-' })))
+  },
+})
+
+export const cloudAgentGitlabReposCommand = defineCommand({
+  meta: { name: 'gitlab-repos', description: 'List GitLab repositories for cloud agent' },
+  args: { refresh: { type: 'boolean', description: 'Force refresh', alias: 'f' } },
+  async run({ args }) {
+    const { token } = await getToken()
+    const repos = await listGitLabRepositories(token, args.refresh)
+    if (repos.length === 0) {
+      console.log('No repositories found.')
+      return
+    }
+    console.table(repos.map((r) => ({ Name: r.fullName, Private: r.private ? 'yes' : 'no', Default: r.defaultBranch ?? '-' })))
+  },
+})
