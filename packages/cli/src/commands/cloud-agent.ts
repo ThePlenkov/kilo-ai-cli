@@ -9,6 +9,7 @@ import {
   listGitHubRepositories,
   listGitLabRepositories,
 } from '../api/cloud-agent.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const cloudAgentSessionCommand = defineCommand({
@@ -36,7 +37,14 @@ export const cloudAgentGithubReposCommand = defineCommand({
       console.log('No repositories found.')
       return
     }
-    console.table(repos.map((r) => ({ Name: r.fullName, Private: r.private ? 'yes' : 'no', Default: r.defaultBranch ?? '-' })))
+    printTable(
+      repos.map((r) => ({ name: r.fullName, private: r.private ? 'yes' : 'no', default: r.defaultBranch ?? '-' })),
+      [
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 8 },
+        { key: 'default', label: 'Default Branch', width: 20 },
+      ],
+    )
   },
 })
 
@@ -50,6 +58,13 @@ export const cloudAgentGitlabReposCommand = defineCommand({
       console.log('No repositories found.')
       return
     }
-    console.table(repos.map((r) => ({ Name: r.fullName, Private: r.private ? 'yes' : 'no', Default: r.defaultBranch ?? '-' })))
+    printTable(
+      repos.map((r) => ({ name: r.fullName, private: r.private ? 'yes' : 'no', default: r.defaultBranch ?? '-' })),
+      [
+        { key: 'name', label: 'Repository', width: 40 },
+        { key: 'private', label: 'Private', width: 8 },
+        { key: 'default', label: 'Default Branch', width: 20 },
+      ],
+    )
   },
 })
