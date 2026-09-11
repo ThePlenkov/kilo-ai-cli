@@ -108,8 +108,8 @@ export const securityReposCommand = defineCommand({
   },
 })
 
-export const securityFindingsCommand = defineCommand({
-  meta: { name: 'findings', description: 'List security findings' },
+export const securityFindingsListCommand = defineCommand({
+  meta: { name: 'list', description: 'List security findings' },
   args: {
     repo: { type: 'string', description: 'Filter by repository full name (e.g. user/repo)' },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
@@ -159,8 +159,8 @@ export const securityFindingsCommand = defineCommand({
   },
 })
 
-export const securityFindingCommand = defineCommand({
-  meta: { name: 'finding', description: 'Get details of a security finding' },
+export const securityFindingsDetailCommand = defineCommand({
+  meta: { name: 'detail', description: 'Get details of a security finding' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
@@ -247,8 +247,8 @@ export const securitySyncCommand = defineCommand({
   },
 })
 
-export const securityDismissCommand = defineCommand({
-  meta: { name: 'dismiss', description: 'Dismiss a security finding' },
+export const securityFindingsDismissCommand = defineCommand({
+  meta: { name: 'dismiss', description: 'Dismiss a single security finding' },
   args: {
     id: { type: 'positional', description: 'Finding ID', required: true },
     reason: { type: 'string', description: 'Reason for dismissal' },
@@ -381,7 +381,7 @@ export const securityLastSyncCommand = defineCommand({
   },
 })
 
-export const securityCloseCommand = defineCommand({
+export const securityFindingsCloseCommand = defineCommand({
   meta: { name: 'close', description: 'Dismiss (close/ignore) security findings matching filters' },
   args: {
     repo: { type: 'string', description: 'Repository full name (e.g. user/repo)' },
@@ -488,7 +488,7 @@ export const securityCloseCommand = defineCommand({
   },
 })
 
-export const securityDeleteCommand = defineCommand({
+export const securityFindingsDeleteCommand = defineCommand({
   meta: { name: 'delete', description: 'Permanently delete ALL findings for a repository' },
   args: {
     repo: { type: 'string', description: 'Repository full name (e.g. user/repo)', required: true },
@@ -507,5 +507,16 @@ export const securityDeleteCommand = defineCommand({
 
     await deleteFindingsByRepository(token, args.repo)
     console.log(`Deleted all findings for repository: ${args.repo}`)
+  },
+})
+
+export const securityFindingsCommand = defineCommand({
+  meta: { name: 'findings', description: 'Security findings — list, detail, close, delete, dismiss' },
+  subCommands: {
+    list: securityFindingsListCommand,
+    detail: securityFindingsDetailCommand,
+    close: securityFindingsCloseCommand,
+    delete: securityFindingsDeleteCommand,
+    dismiss: securityFindingsDismissCommand,
   },
 })
