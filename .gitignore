@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.nx/
+.nx-cache/
+*.tsbuildinfo
+.DS_Store
+*.log
+.env
+.env.local

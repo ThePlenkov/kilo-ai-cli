@@ -1,0 +1,3 @@
+[submodule ".nx-devkit"]
+	path = .nx-devkit
+	url = https://github.com/nx-devkit/nx.ts.git
