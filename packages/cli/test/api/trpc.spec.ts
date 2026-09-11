@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KILO_API_BASE } from '../../src/api/constants.ts'
-import { CloudTrpcError } from '../../src/api/types.ts'
 import {
   fetchByokEntries,
   fetchCloudSession,
