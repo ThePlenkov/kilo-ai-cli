@@ -46,30 +46,39 @@ export const kiloclawBillingCommand = defineCommand({
   meta: { name: 'billing', description: 'Show KiloClaw billing status' },
   async run() {
     const { token } = await getToken()
-    const status = await getBillingStatus(token)
-    console.log(`Balance: $${status.balance.toFixed(2)}`)
-    console.log(`Active subscriptions: ${status.activeSubscriptions}`)
-    console.log(`Current period usage: $${status.currentPeriodUsageUsd.toFixed(2)}`)
+    const status = await getBillingStatus(token) as Record<string, unknown>
+    console.log('Billing status:\n')
+    for (const [key, value] of Object.entries(status)) {
+      if (value === null || value === undefined) continue
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        console.log(`  ${key}:`)
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          console.log(`    ${k}: ${v}`)
+        }
+      } else {
+        console.log(`  ${key.padEnd(32)} ${value}`)
+      }
+    }
   },
 })
 
 export const kiloclawBillingHistoryCommand = defineCommand({
-  meta: { name: 'billing-history', description: 'Show KiloClaw billing history' },
-  args: { period: { type: 'string', description: 'Billing period' } },
+  meta: { name: 'billing-history', description: 'Show KiloClaw billing history for an instance' },
+  args: { id: { type: 'positional', description: 'Instance ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const history = await getBillingHistory(token, args.period)
+    const history = await getBillingHistory(token, args.id) as Array<Record<string, unknown>>
     if (history.length === 0) {
       console.log('No billing history found.')
       return
     }
     printTable(
       history.map((h) => ({
-        id: h.id,
-        date: h.date,
-        amount: h.amount,
-        description: h.description,
-        type: h.type,
+        id: String(h.id ?? '-'),
+        date: String(h.date ?? '-'),
+        amount: h.amount ?? 0,
+        description: String(h.description ?? '-'),
+        type: String(h.type ?? '-'),
       })),
       [
         { key: 'id', label: 'ID', width: 12 },
@@ -86,25 +95,25 @@ export const kiloclawSubscriptionsCommand = defineCommand({
   meta: { name: 'subscriptions', description: 'List personal KiloClaw subscriptions' },
   async run() {
     const { token } = await getToken()
-    const subs = await listPersonalSubscriptions(token)
+    const subs = await listPersonalSubscriptions(token) as Array<Record<string, unknown>>
     if (subs.length === 0) {
       console.log('No subscriptions found.')
       return
     }
     printTable(
       subs.map((s) => ({
-        id: s.id,
-        plan: s.planName,
-        status: s.status,
-        provider: s.providerName,
+        id: String(s.instanceId ?? s.id ?? '-').slice(0, 12),
+        name: String(s.instanceName ?? '-'),
+        plan: String(s.plan ?? s.planName ?? '-'),
+        status: String(s.status ?? '-'),
         cancel: s.cancelAtPeriodEnd ? 'yes' : 'no',
       })),
       [
         { key: 'id', label: 'ID', width: 12 },
-        { key: 'plan', label: 'Plan', width: 20 },
+        { key: 'name', label: 'Name', width: 20 },
+        { key: 'plan', label: 'Plan', width: 10 },
         { key: 'status', label: 'Status', width: 10 },
-        { key: 'provider', label: 'Provider', width: 14 },
-        { key: 'cancel', label: 'Cancel at EOP', width: 14 },
+        { key: 'cancel', label: 'Cancel EOP', width: 10 },
       ],
     )
   },
@@ -115,11 +124,11 @@ export const kiloclawSubscriptionDetailCommand = defineCommand({
   args: { id: { type: 'positional', description: 'Instance ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const detail = await getSubscriptionDetail(token, args.id)
-    console.log(`ID: ${detail.id}`)
-    console.log(`Plan: ${detail.planName}`)
-    console.log(`Status: ${detail.status}`)
-    console.log(`Provider: ${detail.providerName}`)
+    const detail = await getSubscriptionDetail(token, args.id) as Record<string, unknown>
+    console.log(`Instance ID: ${detail.instanceId ?? detail.id ?? '-'}`)
+    console.log(`Name: ${detail.instanceName ?? '-'}`)
+    console.log(`Plan: ${detail.plan ?? detail.planName ?? '-'}`)
+    console.log(`Status: ${detail.status ?? '-'}`)
     console.log(`Cancel at period end: ${detail.cancelAtPeriodEnd ? 'yes' : 'no'}`)
     if (detail.currentPeriodStart) console.log(`Current period start: ${detail.currentPeriodStart}`)
     if (detail.currentPeriodEnd) console.log(`Current period end: ${detail.currentPeriodEnd}`)
@@ -130,12 +139,14 @@ export const kiloclawChangelogCommand = defineCommand({
   meta: { name: 'changelog', description: 'Show KiloClaw changelog' },
   async run() {
     const { token } = await getToken()
-    const entries = await getChangelog(token)
+    const entries = await getChangelog(token) as Array<Record<string, unknown>>
     for (const entry of entries) {
-      console.log(`\n## ${entry.version} (${entry.date})`)
-      for (const change of entry.changes) {
-        console.log(`  - ${change}`)
-      }
+      const date = String(entry.date ?? '')
+      const category = String(entry.category ?? '')
+      const description = String(entry.description ?? '')
+      const deployHint = String(entry.deployHint ?? '')
+      console.log(`\n${date} [${category}]${deployHint ? ` (${deployHint})` : ''}`)
+      console.log(`  ${description}`)
     }
   },
 })

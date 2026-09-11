@@ -7,13 +7,9 @@ import { z } from 'zod'
 import { trpcMutate, trpcQuery } from './client.ts'
 import type {
   KiloclawAgent,
-  KiloclawBillingHistoryEntry,
-  KiloclawBillingStatus,
-  KiloclawChangelogEntry,
   KiloclawFileTreeNode,
   KiloclawInstance,
   KiloclawKiloCliRun,
-  KiloclawSubscriptionDetail,
 } from './types.ts'
 
 // --- Schemas ---
@@ -28,11 +24,14 @@ const KiloclawInstanceSchema: z.ZodType<KiloclawInstance> = z.object({
   updatedAt: z.string(),
 })
 
-const ChangelogEntrySchema: z.ZodType<KiloclawChangelogEntry> = z.object({
-  version: z.string(),
-  date: z.string(),
-  changes: z.array(z.string()),
-})
+const ChangelogEntrySchema = z.object({
+  date: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  deployHint: z.string().nullable().optional(),
+  version: z.string().optional(),
+  changes: z.array(z.string()).optional(),
+}).passthrough()
 
 const AgentSchema: z.ZodType<KiloclawAgent> = z.object({
   id: z.string(),
@@ -50,30 +49,40 @@ const FileTreeNodeSchema: z.ZodType<KiloclawFileTreeNode> = z.lazy(() =>
   }),
 )
 
-const BillingStatusSchema: z.ZodType<KiloclawBillingStatus> = z.object({
-  balance: z.number(),
-  activeSubscriptions: z.number(),
-  currentPeriodUsageUsd: z.number(),
-})
+const BillingStatusSchema = z.object({
+  hasAccess: z.boolean().optional(),
+  accessReason: z.string().nullable().optional(),
+  hasExistingPersonalSubscription: z.boolean().optional(),
+  hasCurrentPersonalSubscription: z.boolean().optional(),
+  commitPlanAvailable: z.boolean().optional(),
+  trialEligible: z.boolean().optional(),
+  creditBalanceMicrodollars: z.number().optional(),
+  creditIntroEligible: z.boolean().optional(),
+  hasActiveKiloPass: z.boolean().optional(),
+  balance: z.number().optional(),
+  activeSubscriptions: z.number().optional(),
+  currentPeriodUsageUsd: z.number().optional(),
+}).passthrough()
 
-const BillingHistoryEntrySchema: z.ZodType<KiloclawBillingHistoryEntry> = z.object({
-  id: z.string(),
-  date: z.string(),
-  amount: z.number(),
-  description: z.string(),
-  type: z.string(),
-})
-
-const SubscriptionDetailSchema: z.ZodType<KiloclawSubscriptionDetail> = z.object({
-  id: z.string(),
-  planName: z.string(),
-  status: z.string(),
-  providerName: z.string(),
-  providerId: z.string(),
-  cancelAtPeriodEnd: z.boolean(),
-  currentPeriodStart: z.string().optional(),
-  currentPeriodEnd: z.string().optional(),
-})
+const SubscriptionDetailSchema = z.object({
+  instanceId: z.string().optional(),
+  sandboxId: z.string().optional(),
+  instanceName: z.string().optional(),
+  destroyedAt: z.string().nullable().optional(),
+  plan: z.string().optional(),
+  status: z.string().optional(),
+  activationState: z.string().optional(),
+  priceVersion: z.string().optional(),
+  selfServiceInstanceType: z.string().optional(),
+  cancelAtPeriodEnd: z.boolean().optional(),
+  pendingConversion: z.boolean().optional(),
+  id: z.string().optional(),
+  planName: z.string().optional(),
+  providerName: z.string().optional(),
+  providerId: z.string().optional(),
+  currentPeriodStart: z.string().nullable().optional(),
+  currentPeriodEnd: z.string().nullable().optional(),
+}).passthrough()
 
 const KiloCliRunSchema: z.ZodType<KiloclawKiloCliRun> = z.object({
   runId: z.string(),
@@ -87,8 +96,8 @@ const KiloCliRunSchema: z.ZodType<KiloclawKiloCliRun> = z.object({
 // --- Queries ---
 
 /** kiloclaw.getChangelog */
-export async function getChangelog(token: string): Promise<KiloclawChangelogEntry[]> {
-  return trpcQuery('kiloclaw.getChangelog', token, z.array(ChangelogEntrySchema))
+export async function getChangelog(token: string): Promise<unknown[]> {
+  return trpcQuery('kiloclaw.getChangelog', token, z.array(ChangelogEntrySchema), {})
 }
 
 /** kiloclaw.serviceDegraded */
@@ -132,18 +141,18 @@ export async function getKiloCliRunStatus(token: string, runId: string): Promise
 }
 
 /** kiloclaw.getBillingStatus */
-export async function getBillingStatus(token: string): Promise<KiloclawBillingStatus> {
-  return trpcQuery('kiloclaw.getBillingStatus', token, BillingStatusSchema)
+export async function getBillingStatus(token: string): Promise<unknown> {
+  return trpcQuery('kiloclaw.getBillingStatus', token, BillingStatusSchema, {})
 }
 
 /** kiloclaw.getActivePersonalBillingStatus */
-export async function getActivePersonalBillingStatus(token: string): Promise<KiloclawBillingStatus> {
-  return trpcQuery('kiloclaw.getActivePersonalBillingStatus', token, BillingStatusSchema)
+export async function getActivePersonalBillingStatus(token: string): Promise<unknown> {
+  return trpcQuery('kiloclaw.getActivePersonalBillingStatus', token, BillingStatusSchema, {})
 }
 
 /** kiloclaw.getPersonalBillingSummary */
-export async function getPersonalBillingSummary(token: string): Promise<KiloclawBillingStatus> {
-  return trpcQuery('kiloclaw.getPersonalBillingSummary', token, BillingStatusSchema)
+export async function getPersonalBillingSummary(token: string): Promise<unknown> {
+  return trpcQuery('kiloclaw.getPersonalBillingSummary', token, BillingStatusSchema, {})
 }
 
 /** kiloclaw.getReferralRewardSummary */
@@ -152,18 +161,20 @@ export async function getReferralRewardSummary(token: string): Promise<{ totalRe
 }
 
 /** kiloclaw.listPersonalSubscriptions */
-export async function listPersonalSubscriptions(token: string): Promise<KiloclawSubscriptionDetail[]> {
-  return trpcQuery('kiloclaw.listPersonalSubscriptions', token, z.array(SubscriptionDetailSchema))
+export async function listPersonalSubscriptions(token: string): Promise<unknown[]> {
+  const result = await trpcQuery('kiloclaw.listPersonalSubscriptions', token, z.object({ subscriptions: z.array(SubscriptionDetailSchema).optional() }).passthrough(), {})
+  return result.subscriptions ?? []
 }
 
 /** kiloclaw.getSubscriptionDetail */
-export async function getSubscriptionDetail(token: string, instanceId: string): Promise<KiloclawSubscriptionDetail> {
+export async function getSubscriptionDetail(token: string, instanceId: string): Promise<unknown> {
   return trpcQuery('kiloclaw.getSubscriptionDetail', token, SubscriptionDetailSchema, { instanceId })
 }
 
 /** kiloclaw.getBillingHistory */
-export async function getBillingHistory(token: string, period?: string): Promise<KiloclawBillingHistoryEntry[]> {
-  return trpcQuery('kiloclaw.getBillingHistory', token, z.array(BillingHistoryEntrySchema), period ? { period } : undefined)
+export async function getBillingHistory(token: string, instanceId: string): Promise<unknown[]> {
+  const result = await trpcQuery('kiloclaw.getBillingHistory', token, z.object({ entries: z.array(z.unknown()).optional(), hasMore: z.boolean().optional(), cursor: z.unknown().nullable().optional() }).passthrough(), { instanceId })
+  return result.entries ?? []
 }
 
 // --- Mutations ---
