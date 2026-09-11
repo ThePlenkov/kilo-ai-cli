@@ -5,6 +5,7 @@ import SelectInput from 'ink-select-input'
 import { listFindings } from '../../api/security-agent.ts'
 import type { SecurityFinding, SecurityFindingsResult } from '../../api/types.ts'
 import type { FindingsFilter } from '../types.ts'
+import { SEVERITY_COLORS, STATUS_COLORS, ANALYSIS_COLORS, truncate } from '../../commands/theme.ts'
 
 export interface FindingsListViewProps {
   token: string
@@ -12,14 +13,6 @@ export interface FindingsListViewProps {
   onFilterChange: (f: FindingsFilter) => void
   onSelectFinding: (id: string) => void
   onBack: () => void
-}
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'red',
-  high: 'yellow',
-  medium: 'blue',
-  low: 'gray',
-  info: 'gray',
 }
 
 type FilterMode = 'none' | 'severity' | 'status'
@@ -221,14 +214,14 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
           Filters: {' '}
           {filter.severity ? <Text color={SEVERITY_COLORS[filter.severity] ?? 'white'}>severity={filter.severity}</Text> : <Text>severity=all</Text>}
           {'  '}
-          {filter.status ? <Text color="green">status={filter.status}</Text> : <Text>status=all</Text>}
+          {filter.status ? <Text color={STATUS_COLORS[filter.status] ?? 'white'}>status={filter.status}</Text> : <Text>status=all</Text>}
           {'  '}
           <Text>page {filter.limit > 0 ? Math.floor(filter.offset / filter.limit) + 1 : 1}</Text>
         </Text>
       </Box>
 
       {/* Scroll indicator above */}
-      {hasMoreAbove ? <Text dimColor>  ↑ {scrollOffset} more above</Text> : null}
+      {hasMoreAbove ? <Text dimColor>  ^ {scrollOffset} more above</Text> : null}
 
       {/* Findings list — only visible slice */}
       <Box flexDirection="column">
@@ -245,7 +238,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
       </Box>
 
       {/* Scroll indicator below */}
-      {hasMoreBelow ? <Text dimColor>  ↓ {findings.length - scrollOffset - maxVisible} more below</Text> : null}
+      {hasMoreBelow ? <Text dimColor>  v {findings.length - scrollOffset - maxVisible} more below</Text> : null}
 
       {/* Position indicator */}
       <Box marginTop={1}>
@@ -261,24 +254,27 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
 
 function FindingRow({ finding, selected }: { finding: SecurityFinding; selected: boolean }) {
   const sev = finding.severity
-  const color = SEVERITY_COLORS[sev] ?? 'white'
+  const sevColor = SEVERITY_COLORS[sev] ?? 'white'
   const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
-  const pkg = finding.packageName ?? finding.package_name ?? ''
-  const title = finding.title.length > 55 ? finding.title.slice(0, 54) + '…' : finding.title
-  const statusColor = finding.status === 'open' ? 'red' : finding.status === 'fixed' ? 'green' : 'gray'
+  const repoShort = repo.split('/').pop() ?? repo
+  const title = truncate(finding.title, 50)
+  const statusColor = STATUS_COLORS[finding.status] ?? 'white'
+  const analysis = finding.analysisStatus ?? finding.analysis_status ?? '-'
+  const analysisColor = ANALYSIS_COLORS[analysis] ?? 'gray'
 
   return (
     <Box>
       <Text color={selected ? 'cyan' : undefined}>{selected ? '>' : ' '}</Text>
       <Text> </Text>
-      <Text color={color} bold>{sev.padEnd(8)}</Text>
+      <Text color={sevColor} bold>{sev.padEnd(8)}</Text>
       <Text> </Text>
-      <Text>{title.padEnd(55).slice(0, 55)}</Text>
+      <Text>{title.padEnd(50).slice(0, 50)}</Text>
       <Text> </Text>
-      <Text dimColor>{repo.slice(0, 28).padEnd(28)}</Text>
+      <Text dimColor>{repoShort.slice(0, 20).padEnd(20)}</Text>
       <Text> </Text>
       <Text color={statusColor}>{finding.status.slice(0, 8).padEnd(8)}</Text>
-      {pkg ? <Text dimColor> {pkg}</Text> : null}
+      <Text> </Text>
+      <Text color={analysisColor}>{analysis.slice(0, 10).padEnd(10)}</Text>
     </Box>
   )
 }

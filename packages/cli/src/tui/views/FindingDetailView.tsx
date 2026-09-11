@@ -3,19 +3,12 @@ import { Box, Text, useInput } from 'ink'
 
 import { getFinding } from '../../api/security-agent.ts'
 import type { SecurityFinding } from '../../api/types.ts'
+import { SEVERITY_COLORS, STATUS_COLORS, ANALYSIS_COLORS } from '../../commands/theme.ts'
 
 export interface FindingDetailViewProps {
   token: string
   findingId: string
   onBack: () => void
-}
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'red',
-  high: 'yellow',
-  medium: 'blue',
-  low: 'gray',
-  info: 'gray',
 }
 
 export function FindingDetailView({ token, findingId, onBack }: FindingDetailViewProps) {
@@ -64,29 +57,24 @@ export function FindingDetailView({ token, findingId, onBack }: FindingDetailVie
   if (!finding) return null
 
   const sev = finding.severity
-  const color = SEVERITY_COLORS[sev] ?? 'white'
+  const sevColor = SEVERITY_COLORS[sev] ?? 'white'
   const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
-  const pkg = finding.packageName ?? finding.package_name
-  const ecosystem = finding.packageEcosystem ?? finding.package_ecosystem
-  const vuln = finding.vulnerableVersionRange ?? finding.vulnerable_version_range
-  const patched = finding.patchedVersion ?? finding.patched_version
-  const cve = finding.cveId ?? finding.cve_id
-  const ghsa = finding.ghsaId ?? finding.ghsa_id
-  const cvss = finding.cvssScore ?? finding.cvss_score
+  const repoShort = repo.split('/').pop() ?? repo
   const sla = finding.slaDueAt ?? finding.sla_due_at
-  const analysisStatus = finding.analysisStatus ?? finding.analysis_status
+  const analysisStatus = finding.analysisStatus ?? finding.analysis_status ?? '-'
+  const analysisColor = ANALYSIS_COLORS[analysisStatus] ?? 'gray'
   const analysisError = finding.analysisError ?? finding.analysis_error
   const remediation = finding.remediationSummary ?? finding.remediation_summary
   const remediationCap = finding.remediationCapability ?? finding.remediation_capability
   const created = finding.createdAt ?? finding.created_at
   const updated = finding.updatedAt ?? finding.updated_at
-  const statusColor = finding.status === 'open' ? 'red' : finding.status === 'fixed' ? 'green' : 'gray'
+  const statusColor = STATUS_COLORS[finding.status] ?? 'white'
 
   return (
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold color={color}>{sev.toUpperCase()}</Text>
+        <Text bold color={sevColor}>{sev.toUpperCase()}</Text>
         <Text>  </Text>
         <Text bold>{finding.title}</Text>
       </Box>
@@ -94,42 +82,24 @@ export function FindingDetailView({ token, findingId, onBack }: FindingDetailVie
       {/* Basic info */}
       <Box flexDirection="column" marginBottom={1}>
         <Field label="ID" value={finding.id} />
-        <Field label="Repository" value={repo} />
+        <Field label="Repo" value={repoShort} />
         <Field label="Status" value={finding.status} color={statusColor} />
         {finding.source ? <Field label="Source" value={finding.source} /> : null}
         {finding.description ? <Field label="Description" value={finding.description} /> : null}
       </Box>
 
-      {/* Package info */}
-      {pkg ? (
-        <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Text bold color="cyan">Package</Text>
-          <Field label="Name" value={pkg} />
-          {ecosystem ? <Field label="Ecosystem" value={ecosystem} /> : null}
-          {vuln ? <Field label="Vulnerable" value={vuln} color="red" /> : null}
-          {patched ? <Field label="Patched" value={patched} color="green" /> : null}
-          {cve ? <Field label="CVE" value={cve} /> : null}
-          {ghsa ? <Field label="GHSA" value={ghsa} /> : null}
-          {cvss !== undefined ? <Field label="CVSS" value={String(cvss)} /> : null}
-        </Box>
-      ) : null}
-
-      {/* SLA */}
+      {/* SLA deadline */}
       {sla ? (
-        <Box marginBottom={1}>
-          <Text bold color="yellow">! SLA due: </Text>
-          <Text>{sla}</Text>
+        <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="yellow" paddingX={1}>
+          <Text bold color="yellow">SLA Deadline</Text>
+          <Field label="Due" value={sla} color="yellow" />
         </Box>
       ) : null}
 
       {/* Analysis section */}
       <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="magenta" paddingX={1}>
         <Text bold color="magenta">Analysis</Text>
-        {analysisStatus ? (
-          <Field label="Status" value={analysisStatus} color={analysisStatus === 'completed' ? 'green' : analysisStatus === 'failed' ? 'red' : 'yellow'} />
-        ) : (
-          <Text dimColor>No analysis run yet</Text>
-        )}
+        <Field label="Status" value={analysisStatus} color={analysisColor} />
         {analysisError ? <Field label="Error" value={analysisError} color="red" /> : null}
       </Box>
 
