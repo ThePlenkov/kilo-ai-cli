@@ -24,8 +24,17 @@ jobs:
       - name: Build .nx-devkit submodule plugins
         working-directory: .nx-devkit
         run: |
+<<<<<<< ours
           bun install --frozen-lockfile --ignore-scripts
+=======
+<<<<<<< ours
+          bun install --frozen-lockfile
+>>>>>>> theirs
           bun run build
+=======
+          npm install --ignore-scripts
+          npm run build
+>>>>>>> theirs
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test

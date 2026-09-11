@@ -5,7 +5,11 @@ import { runMain, showUsage } from 'citty'
 import { mainCommand } from './cli.ts'
 
 /** Parent commands that require a subcommand. */
-const PARENT_COMMANDS = new Set(['auth', 'sessions', 'org', 'plans', 'byok'])
+const PARENT_COMMANDS = new Set([
+  'auth', 'sessions', 'org', 'plans', 'byok',
+  'kiloclaw', 'cloud-agent', 'reviews', 'analytics', 'app-builder',
+  'security',
+])
 
 const args = process.argv.slice(2)
 
