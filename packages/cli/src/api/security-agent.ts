@@ -324,8 +324,11 @@ export async function dismissFindingsBulk(
       }
     }
 
+    // Don't advance offset after dismissing — dismissed findings are removed
+    // from the server, so the next page of results shifts down.
+    // Only advance if we dismissed nothing (date filter excluded all).
     if (result.findings.length < limit) break
-    offset += limit
+    if (dismissed === 0) offset += limit
   }
 
   return { dismissed, totalMatched, errors }
