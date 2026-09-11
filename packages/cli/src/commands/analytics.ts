@@ -101,7 +101,7 @@ export const analyticsBreakdownCommand = defineCommand({
       entries.map((e) => ({
         label: String(e.label ?? e.key ?? '-'),
         value: e.value ?? 0,
-        percentage: `${(e.percentage ?? 0).toFixed(1)}%`,
+        percentage: `${Number(e.percentage ?? 0).toFixed(1)}%`,
       })),
       [
         { key: 'label', label: 'Label', width: 30 },

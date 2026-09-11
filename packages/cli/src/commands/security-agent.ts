@@ -505,8 +505,22 @@ export const securityFindingsDeleteCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
 
+    // Count findings before deletion
+    let before = 0
+    try {
+      const result = await listFindings(token, { repoFullName: args.repo, limit: 1 })
+      before = result.totalCount ?? result.total_count ?? 0
+    } catch {
+      // ignore
+    }
+
+    if (before === 0) {
+      console.log(`No findings found for ${args.repo}. Nothing to delete.`)
+      return
+    }
+
     if (!args.yes) {
-      const ok = await confirm(`Permanently DELETE all findings for ${args.repo}? This cannot be undone.`)
+      const ok = await confirm(`Permanently DELETE ${before} findings for ${args.repo}? This cannot be undone.`)
       if (!ok) {
         console.log('Aborted.')
         return
@@ -514,7 +528,23 @@ export const securityFindingsDeleteCommand = defineCommand({
     }
 
     await deleteFindingsByRepository(token, args.repo)
-    console.log(`Deleted all findings for repository: ${args.repo}`)
+
+    // Verify deletion
+    let after = -1
+    try {
+      const result = await listFindings(token, { repoFullName: args.repo, limit: 1 })
+      after = result.totalCount ?? result.total_count ?? 0
+    } catch {
+      // ignore
+    }
+
+    if (after === 0) {
+      console.log(`Deleted ${before} findings for ${args.repo}`)
+    } else if (after > 0) {
+      console.log(`Partial: deleted ${before - after} of ${before} findings (${after} remaining)`)
+    } else {
+      console.log(`Delete request sent for ${args.repo} (${before} findings)`)
+    }
   },
 })
 
