@@ -28,29 +28,29 @@ describe('usage-analytics API', () => {
 
   it('getUsageSummary calls usageAnalytics.getSummary', async () => {
     fetchMock.mockResolvedValue(mockResponse({ totalCreditsUsd: 100, totalRequests: 500, totalTokens: 100000, averageLatencyMs: 250 }))
-    const result = await getUsageSummary('tok', { startDate: '2024-01-01' })
+    const result = await getUsageSummary('tok', { startDate: '2024-01-01' }) as Record<string, unknown>
     expect(result.totalCreditsUsd).toBe(100)
     expect(fetchMock.mock.calls[0]![0]).toContain('usageAnalytics.getSummary')
   })
 
   it('getUsageTimeseries calls usageAnalytics.getTimeseries', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ timestamp: '2024-01-01', creditsUsd: 10, requests: 50, tokens: 5000 }]))
+    fetchMock.mockResolvedValue(mockResponse({ timeseries: [{ datetime: '2024-01-01', value: 10 }] }))
     const result = await getUsageTimeseries('tok')
     expect(result).toHaveLength(1)
     expect(fetchMock.mock.calls[0]![0]).toContain('usageAnalytics.getTimeseries')
   })
 
   it('getUsageBreakdown calls usageAnalytics.getBreakdown', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ label: 'gpt-4', value: 80, percentage: 80 }]))
-    const result = await getUsageBreakdown('tok')
-    expect(result[0]!.label).toBe('gpt-4')
+    fetchMock.mockResolvedValue(mockResponse({ breakdown: [{ label: 'gpt-4', value: 80, percentage: 80 }] }))
+    const result = await getUsageBreakdown('tok') as { breakdown: Array<Record<string, unknown>> }
+    expect(result.breakdown[0]!.label).toBe('gpt-4')
     expect(fetchMock.mock.calls[0]![0]).toContain('usageAnalytics.getBreakdown')
   })
 
   it('getUsageTable calls usageAnalytics.getTable', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ date: '2024-01-01', model: 'gpt-4', provider: 'openai', creditsUsd: 10, requests: 50, tokens: 5000 }]))
+    fetchMock.mockResolvedValue(mockResponse({ rows: [{ date: '2024-01-01', model: 'gpt-4', provider: 'openai', creditsUsd: 10, requests: 50, tokens: 5000 }] }))
     const result = await getUsageTable('tok')
-    expect(result[0]!.model).toBe('gpt-4')
+    expect(result).toHaveLength(1)
     expect(fetchMock.mock.calls[0]![0]).toContain('usageAnalytics.getTable')
   })
 

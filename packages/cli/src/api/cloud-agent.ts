@@ -5,7 +5,7 @@
 
 import { z } from 'zod'
 import { trpcMutate, trpcQuery } from './client.ts'
-import type { CloudAgentRepository, CloudAgentSession, CloudAgentTerminal } from './types.ts'
+import type { CloudAgentSession, CloudAgentTerminal } from './types.ts'
 
 // --- Schemas ---
 
@@ -19,14 +19,14 @@ const SessionSchema: z.ZodType<CloudAgentSession> = z.object({
   cloudAgentSessionId: z.string().optional(),
 })
 
-const RepositorySchema: z.ZodType<CloudAgentRepository> = z.object({
-  id: z.string(),
-  name: z.string(),
-  fullName: z.string(),
-  url: z.string(),
-  private: z.boolean(),
+const RepositorySchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  name: z.string().optional(),
+  fullName: z.string().optional(),
+  url: z.string().optional(),
+  private: z.boolean().optional(),
   defaultBranch: z.string().optional(),
-})
+}).passthrough()
 
 const TerminalSchema: z.ZodType<CloudAgentTerminal> = z.object({
   terminalId: z.string(),
@@ -41,13 +41,15 @@ export async function getCloudAgentSession(token: string, sessionId: string): Pr
 }
 
 /** cloudAgentNext.listGitHubRepositories */
-export async function listGitHubRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  return trpcQuery('cloudAgentNext.listGitHubRepositories', token, z.array(RepositorySchema), { forceRefresh: forceRefresh ?? false })
+export async function listGitHubRepositories(token: string, forceRefresh?: boolean): Promise<unknown[]> {
+  const result = await trpcQuery('cloudAgentNext.listGitHubRepositories', token, z.object({ repositories: z.array(RepositorySchema).optional() }).passthrough(), { forceRefresh: forceRefresh ?? false })
+  return result.repositories ?? []
 }
 
 /** cloudAgentNext.listGitLabRepositories */
-export async function listGitLabRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  return trpcQuery('cloudAgentNext.listGitLabRepositories', token, z.array(RepositorySchema), { forceRefresh: forceRefresh ?? false })
+export async function listGitLabRepositories(token: string, forceRefresh?: boolean): Promise<unknown[]> {
+  const result = await trpcQuery('cloudAgentNext.listGitLabRepositories', token, z.object({ repositories: z.array(RepositorySchema).optional() }).passthrough(), { forceRefresh: forceRefresh ?? false })
+  return result.repositories ?? []
 }
 
 // --- Mutations ---

@@ -5,39 +5,42 @@
 
 import { z } from 'zod'
 import { trpcMutate, trpcQuery } from './client.ts'
-import type { AppBuilderEligibility, AppBuilderProject } from './types.ts'
 
 // --- Schemas ---
 
-const ProjectSchema: z.ZodType<AppBuilderProject> = z.object({
-  id: z.string(),
-  name: z.string(),
-  status: z.string(),
+const ProjectSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  status: z.string().optional(),
   url: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+}).passthrough()
 
-const EligibilitySchema: z.ZodType<AppBuilderEligibility> = z.object({
-  eligible: z.boolean(),
+const EligibilitySchema = z.object({
+  balance: z.number().optional(),
+  minBalance: z.number().optional(),
+  accessLevel: z.string().optional(),
+  isEligible: z.boolean().optional(),
+  eligible: z.boolean().optional(),
   reason: z.string().optional(),
-})
+}).passthrough()
 
 // --- Queries ---
 
 /** appBuilder.listProjects */
-export async function listAppBuilderProjects(token: string): Promise<AppBuilderProject[]> {
-  return trpcQuery('appBuilder.listProjects', token, z.array(ProjectSchema))
+export async function listAppBuilderProjects(token: string): Promise<unknown[]> {
+  return trpcQuery('appBuilder.listProjects', token, z.array(ProjectSchema), {})
 }
 
 /** appBuilder.checkEligibility */
-export async function checkAppBuilderEligibility(token: string): Promise<AppBuilderEligibility> {
-  return trpcQuery('appBuilder.checkEligibility', token, EligibilitySchema)
+export async function checkAppBuilderEligibility(token: string): Promise<unknown> {
+  return trpcQuery('appBuilder.checkEligibility', token, EligibilitySchema, {})
 }
 
 // --- Mutations ---
 
 /** appBuilder.deployProject */
-export async function deployAppBuilderProject(token: string, projectId: string): Promise<AppBuilderProject> {
+export async function deployAppBuilderProject(token: string, projectId: string): Promise<unknown> {
   return trpcMutate('appBuilder.deployProject', token, ProjectSchema, { projectId })
 }

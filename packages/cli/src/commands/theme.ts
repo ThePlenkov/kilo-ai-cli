@@ -3,7 +3,8 @@
 import chalk from 'chalk'
 
 // Force color output even when piped (e.g. through node | cat)
-chalk.level = Math.max(chalk.level, 1)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(chalk as any).level = Math.max((chalk as any).level ?? 0, 1)
 
 /** Severity → chalk color name. Red is reserved for critical only. */
 export const SEVERITY_COLORS: Record<string, string> = {
