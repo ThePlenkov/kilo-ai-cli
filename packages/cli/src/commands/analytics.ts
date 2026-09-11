@@ -11,6 +11,7 @@ import {
   getUsageTimeseries,
 } from '../api/usage-analytics.ts'
 import type { UsageAnalyticsFilters } from '../api/types.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 function parseFilters(args: { from?: string; to?: string }): UsageAnalyticsFilters {
@@ -51,12 +52,20 @@ export const analyticsTimeseriesCommand = defineCommand({
       console.log('No timeseries data found.')
       return
     }
-    console.table(points.map((p) => ({
-      Timestamp: p.timestamp,
-      Credits: `$${p.creditsUsd.toFixed(2)}`,
-      Requests: p.requests,
-      Tokens: p.tokens,
-    })))
+    printTable(
+      points.map((p) => ({
+        timestamp: p.timestamp,
+        credits: `$${p.creditsUsd.toFixed(2)}`,
+        requests: p.requests,
+        tokens: p.tokens,
+      })),
+      [
+        { key: 'timestamp', label: 'Timestamp', width: 24 },
+        { key: 'credits', label: 'Credits', width: 10, align: 'right' },
+        { key: 'requests', label: 'Requests', width: 10, align: 'right' },
+        { key: 'tokens', label: 'Tokens', width: 12, align: 'right' },
+      ],
+    )
   },
 })
 
@@ -74,11 +83,18 @@ export const analyticsBreakdownCommand = defineCommand({
       console.log('No breakdown data found.')
       return
     }
-    console.table(entries.map((e) => ({
-      Label: e.label,
-      Value: e.value,
-      Percentage: `${e.percentage.toFixed(1)}%`,
-    })))
+    printTable(
+      entries.map((e) => ({
+        label: e.label,
+        value: e.value,
+        percentage: `${e.percentage.toFixed(1)}%`,
+      })),
+      [
+        { key: 'label', label: 'Label', width: 30 },
+        { key: 'value', label: 'Value', width: 12, align: 'right' },
+        { key: 'percentage', label: 'Percentage', width: 12, align: 'right' },
+      ],
+    )
   },
 })
 
@@ -96,13 +112,23 @@ export const analyticsTableCommand = defineCommand({
       console.log('No usage data found.')
       return
     }
-    console.table(rows.map((r) => ({
-      Date: r.date,
-      Model: r.model,
-      Provider: r.provider,
-      Credits: `$${r.creditsUsd.toFixed(2)}`,
-      Requests: r.requests,
-      Tokens: r.tokens,
-    })))
+    printTable(
+      rows.map((r) => ({
+        date: r.date,
+        model: r.model,
+        provider: r.provider,
+        credits: `$${r.creditsUsd.toFixed(2)}`,
+        requests: r.requests,
+        tokens: r.tokens,
+      })),
+      [
+        { key: 'date', label: 'Date', width: 12 },
+        { key: 'model', label: 'Model', width: 30 },
+        { key: 'provider', label: 'Provider', width: 14 },
+        { key: 'credits', label: 'Credits', width: 10, align: 'right' },
+        { key: 'requests', label: 'Requests', width: 10, align: 'right' },
+        { key: 'tokens', label: 'Tokens', width: 12, align: 'right' },
+      ],
+    )
   },
 })
