@@ -2,7 +2,7 @@
  * Main CLI command tree using citty.
  */
 
-import { defineCommand } from 'citty'
+import { defineCommand, showUsage } from 'citty'
 
 import {
   loginCommand,
@@ -22,6 +22,13 @@ import {
   plansUsageCommand,
 } from './commands/plans.ts'
 
+/** Show help for a command without erroring. */
+function helpRun() {
+  return async ({ cmd }: { cmd: Parameters<typeof showUsage>[0] }) => {
+    showUsage(cmd)
+  }
+}
+
 export const mainCommand = defineCommand({
   meta: {
     name: 'kilo-ai-cli',
@@ -31,6 +38,7 @@ export const mainCommand = defineCommand({
   subCommands: {
     auth: defineCommand({
       meta: { name: 'auth', description: 'Authentication commands' },
+      run: helpRun(),
       subCommands: {
         login: loginCommand,
         logout: logoutCommand,
@@ -41,6 +49,7 @@ export const mainCommand = defineCommand({
     balance: balanceCommand,
     sessions: defineCommand({
       meta: { name: 'sessions', description: 'Cloud session commands' },
+      run: helpRun(),
       subCommands: {
         list: sessionsListCommand,
         get: sessionsGetCommand,
@@ -49,6 +58,7 @@ export const mainCommand = defineCommand({
     }),
     org: defineCommand({
       meta: { name: 'org', description: 'Organization commands' },
+      run: helpRun(),
       subCommands: {
         list: orgListCommand,
         set: orgSetCommand,
@@ -56,6 +66,7 @@ export const mainCommand = defineCommand({
     }),
     plans: defineCommand({
       meta: { name: 'plans', description: 'Coding plan commands' },
+      run: helpRun(),
       subCommands: {
         list: plansListCommand,
         usage: plansUsageCommand,
@@ -63,6 +74,7 @@ export const mainCommand = defineCommand({
     }),
     byok: defineCommand({
       meta: { name: 'byok', description: 'BYOK commands' },
+      run: helpRun(),
       subCommands: {
         list: byokListCommand,
       },
