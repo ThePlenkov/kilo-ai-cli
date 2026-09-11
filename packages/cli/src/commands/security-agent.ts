@@ -7,6 +7,7 @@ import { defineCommand } from 'citty'
 import {
   cancelRemediation,
   deleteFindingsByRepository,
+  dismissAllFindingsForRepo,
   dismissFinding,
   getCommandStatus,
   getDashboardStats,
@@ -389,10 +390,69 @@ export const securityLastSyncCommand = defineCommand({
 
 export const securityDeleteFindingsCommand = defineCommand({
   meta: { name: 'delete-findings', description: 'Delete all findings for a repository' },
-  args: { repo: { type: 'positional', description: 'Repository ID', required: true } },
+  args: { repo: { type: 'positional', description: 'Repository full name (e.g. user/repo)', required: true } },
   async run({ args }) {
     const { token } = await getToken()
     await deleteFindingsByRepository(token, args.repo)
     console.log(`Deleted findings for repository: ${args.repo}`)
+  },
+})
+
+export const securityCloseRepoCommand = defineCommand({
+  meta: { name: 'close-repo', description: 'Dismiss (close/ignore) all open findings for a repository' },
+  args: {
+    repo: { type: 'positional', description: 'Repository full name (e.g. user/repo)', required: true },
+    reason: { type: 'string', description: 'Reason for dismissal', default: 'Bulk closed via CLI' },
+    severity: { type: 'string', description: 'Only close findings of this severity (critical/high/medium/low/info)' },
+    dryRun: { type: 'boolean', description: 'Show what would be closed without actually dismissing' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+
+    if (args.dryRun) {
+      const result = await listFindings(token, {
+        repoFullName: args.repo,
+        status: 'open',
+        severity: args.severity,
+        limit: 100,
+      })
+      const open = result.findings.filter((f) => f.status === 'open')
+      console.log(`Dry run — would close ${open.length} open findings for ${args.repo}`)
+      if (open.length > 0) {
+        console.log('')
+        printTable(
+          open.slice(0, 20).map((f) => ({
+            id: f.id.slice(0, 8),
+            sev: f.severity,
+            title: f.title.slice(0, 50),
+            status: f.status,
+          })),
+          [
+            { key: 'id', label: 'ID', width: 8 },
+            { key: 'sev', label: 'Severity', width: 8 },
+            { key: 'title', label: 'Title', width: 50 },
+            { key: 'status', label: 'Status', width: 8 },
+          ],
+        )
+        if (open.length > 20) console.log(`  ... and ${open.length - 20} more`)
+      }
+      return
+    }
+
+    console.log(`Closing all open findings for ${args.repo}…`)
+    const result = await dismissAllFindingsForRepo(token, args.repo, args.reason ?? 'Bulk closed via CLI')
+    console.log(`\nDone.`)
+    printSummary([
+      { label: 'Dismissed', value: result.dismissed },
+      { label: 'Skipped (already closed)', value: result.skipped },
+      { label: 'Errors', value: result.errors.length },
+    ])
+    if (result.errors.length > 0) {
+      console.log('\nErrors:')
+      for (const e of result.errors.slice(0, 10)) {
+        console.log(`  ${e}`)
+      }
+      if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
+    }
   },
 })

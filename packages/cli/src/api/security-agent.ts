@@ -256,9 +256,53 @@ export async function cancelRemediation(token: string, commandId: string): Promi
   await trpcMutate('securityAgent.cancelRemediation', token, z.unknown(), { commandId })
 }
 
-/** securityAgent.deleteFindingsByRepository */
-export async function deleteFindingsByRepository(token: string, repositoryId: string): Promise<void> {
-  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repositoryId })
+/** securityAgent.deleteFindingsByRepository — deletes ALL findings for a repo */
+export async function deleteFindingsByRepository(token: string, repoFullName: string): Promise<void> {
+  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repoFullName })
+}
+
+/**
+ * Dismiss (close/ignore) all OPEN findings for a repository.
+ * Fetches findings in pages, dismisses each one individually.
+ * Returns { dismissed, skipped, errors }.
+ */
+export async function dismissAllFindingsForRepo(
+  token: string,
+  repoFullName: string,
+  reason: string,
+): Promise<{ dismissed: number; skipped: number; errors: string[] }> {
+  const errors: string[] = []
+  let dismissed = 0
+  let skipped = 0
+  let offset = 0
+  const limit = 100
+
+  // Keep paging through open findings until none left
+  for (;;) {
+    const result = await listFindings(token, { repoFullName, status: 'open', limit, offset })
+    const open = result.findings.filter((f) => f.status === 'open')
+    if (open.length === 0) break
+
+    for (const f of open) {
+      try {
+        await dismissFinding(token, f.id, reason)
+        dismissed++
+      } catch (e) {
+        errors.push(`${f.id}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    // If we got fewer than a full page, we've reached the end
+    if (result.findings.length < limit) break
+    offset += limit
+  }
+
+  // Count non-open findings as skipped
+  const allResult = await listFindings(token, { repoFullName, limit: 1 })
+  const total = allResult.totalCount ?? allResult.total_count ?? 0
+  skipped = total - dismissed
+
+  return { dismissed, skipped, errors }
 }
 
 /** securityAgent.trackUiInteraction */
