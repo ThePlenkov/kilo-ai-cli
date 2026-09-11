@@ -14,6 +14,17 @@ const MAX_BODY_BYTES = 512 * 1024
 /** Request timeout for tRPC calls. */
 const REQUEST_TIMEOUT_MS = 5000
 
+/**
+ * Validate that the API base URL uses HTTPS to prevent cleartext token transmission (CWE-319).
+ * Allows http: only on localhost for development.
+ */
+function assertHttpsBaseUrl(baseUrl: string): string {
+  const parsed = new URL(baseUrl)
+  if (parsed.protocol === 'https:') return baseUrl
+  if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return baseUrl
+  throw new CloudTrpcError('protocol', 0)
+}
+
 /** tRPC response envelope: either a result with data, or an error. */
 const envelopeSchema = z.object({
   result: z.object({ data: z.unknown() }).optional(),
@@ -81,7 +92,7 @@ export async function trpcQuery<T>(
   input?: unknown,
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
-  const baseUrl = options?.baseUrl ?? KILO_API_BASE
+  const baseUrl = assertHttpsBaseUrl(options?.baseUrl ?? KILO_API_BASE)
   let url = `${baseUrl}/api/trpc/${procedure}`
   if (input !== undefined) {
     url += `?input=${encodeURIComponent(JSON.stringify(input))}`
@@ -154,7 +165,7 @@ export async function trpcMutate<T>(
   input: unknown,
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
-  const baseUrl = options?.baseUrl ?? KILO_API_BASE
+  const baseUrl = assertHttpsBaseUrl(options?.baseUrl ?? KILO_API_BASE)
   const url = `${baseUrl}/api/trpc/${procedure}?batch=1`
 
   const headers = {

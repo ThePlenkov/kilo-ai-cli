@@ -17,9 +17,6 @@ CLI for interacting with the [kilo.ai](https://kilo.ai) cloud tRPC API.
 # Install
 npm install
 
-# Build .nx-devkit submodule plugins (required before Nx commands)
-cd .nx-devkit && bun install && bun run build && cd ..
-
 # Build
 npx nx build kilo-ai-cli
 
@@ -35,7 +32,7 @@ npx kilo-ai-cli plans list
 
 ## Commands
 
-```text
+```
 kilo-ai-cli auth login          # Browser-based authentication
 kilo-ai-cli auth logout         # Clear stored credentials
 kilo-ai-cli auth status         # Show authentication status
