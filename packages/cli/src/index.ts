@@ -8,6 +8,7 @@ import { mainCommand } from './cli.ts'
 const PARENT_COMMANDS = new Set([
   'auth', 'sessions', 'org', 'plans', 'byok',
   'kiloclaw', 'cloud-agent', 'reviews', 'analytics', 'app-builder',
+  'security',
 ])
 
 const args = process.argv.slice(2)
