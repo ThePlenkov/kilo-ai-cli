@@ -44,14 +44,14 @@ describe('app-builder API', () => {
 
   it('checkAppBuilderEligibility calls appBuilder.checkEligibility', async () => {
     fetchMock.mockResolvedValue(mockResponse({ eligible: true }))
-    const result = await checkAppBuilderEligibility('tok')
+    const result = await checkAppBuilderEligibility('tok') as Record<string, unknown>
     expect(result.eligible).toBe(true)
     expect(fetchMock.mock.calls[0]![0]).toContain('appBuilder.checkEligibility')
   })
 
   it('deployAppBuilderProject posts with projectId', async () => {
     fetchMock.mockResolvedValue(mockMutationResponse({ id: 'p1', name: 'My App', status: 'deploying', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
-    const result = await deployAppBuilderProject('tok', 'p1')
+    const result = await deployAppBuilderProject('tok', 'p1') as Record<string, unknown>
     expect(result.status).toBe('deploying')
     const init = fetchMock.mock.calls[0]![1] as { body: string }
     expect(JSON.parse(init.body)).toEqual({ '0': { projectId: 'p1' } })
