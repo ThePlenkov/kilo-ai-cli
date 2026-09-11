@@ -51,7 +51,7 @@ describe('cloud-agent API', () => {
   })
 
   it('listGitHubRepositories passes forceRefresh', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ id: 'r1', name: 'repo', fullName: 'user/repo', url: 'https://github.com/user/repo', private: false }]))
+    fetchMock.mockResolvedValue(mockResponse({ repositories: [{ id: 'r1', name: 'repo', fullName: 'user/repo', url: 'https://github.com/user/repo', private: false }] }))
     const result = await listGitHubRepositories('tok', true)
     expect(result).toHaveLength(1)
     const url = fetchMock.mock.calls[0]![0] as string
@@ -60,7 +60,7 @@ describe('cloud-agent API', () => {
   })
 
   it('listGitLabRepositories calls cloudAgentNext.listGitLabRepositories', async () => {
-    fetchMock.mockResolvedValue(mockResponse([]))
+    fetchMock.mockResolvedValue(mockResponse({ repositories: [] }))
     await listGitLabRepositories('tok')
     expect(fetchMock.mock.calls[0]![0]).toContain('cloudAgentNext.listGitLabRepositories')
   })

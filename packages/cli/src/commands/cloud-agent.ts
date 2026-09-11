@@ -32,17 +32,16 @@ export const cloudAgentGithubReposCommand = defineCommand({
   args: { refresh: { type: 'boolean', description: 'Force refresh', alias: 'f' } },
   async run({ args }) {
     const { token } = await getToken()
-    const repos = await listGitHubRepositories(token, args.refresh)
+    const repos = await listGitHubRepositories(token, args.refresh) as Array<Record<string, unknown>>
     if (repos.length === 0) {
       console.log('No repositories found.')
       return
     }
     printTable(
-      repos.map((r) => ({ name: r.fullName, private: r.private ? 'yes' : 'no', default: r.defaultBranch ?? '-' })),
+      repos.map((r) => ({ name: String(r.fullName ?? r.name ?? '-'), private: r.private ? 'yes' : 'no' })),
       [
         { key: 'name', label: 'Repository', width: 40 },
         { key: 'private', label: 'Private', width: 8 },
-        { key: 'default', label: 'Default Branch', width: 20 },
       ],
     )
   },
@@ -53,17 +52,16 @@ export const cloudAgentGitlabReposCommand = defineCommand({
   args: { refresh: { type: 'boolean', description: 'Force refresh', alias: 'f' } },
   async run({ args }) {
     const { token } = await getToken()
-    const repos = await listGitLabRepositories(token, args.refresh)
+    const repos = await listGitLabRepositories(token, args.refresh) as Array<Record<string, unknown>>
     if (repos.length === 0) {
       console.log('No repositories found.')
       return
     }
     printTable(
-      repos.map((r) => ({ name: r.fullName, private: r.private ? 'yes' : 'no', default: r.defaultBranch ?? '-' })),
+      repos.map((r) => ({ name: String(r.fullName ?? r.name ?? '-'), private: r.private ? 'yes' : 'no' })),
       [
         { key: 'name', label: 'Repository', width: 40 },
         { key: 'private', label: 'Private', width: 8 },
-        { key: 'default', label: 'Default Branch', width: 20 },
       ],
     )
   },
