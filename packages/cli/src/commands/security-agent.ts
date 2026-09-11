@@ -7,7 +7,7 @@ import { defineCommand } from 'citty'
 import {
   cancelRemediation,
   deleteFindingsByRepository,
-  dismissAllFindingsForRepo,
+  dismissFindingsBulk,
   dismissFinding,
   getCommandStatus,
   getDashboardStats,
@@ -26,6 +26,7 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
+import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
@@ -402,63 +403,99 @@ export const securityLastSyncCommand = defineCommand({
   },
 })
 
-export const securityDeleteFindingsCommand = defineCommand({
-  meta: { name: 'delete-findings', description: 'Delete all findings for a repository' },
-  args: { repo: { type: 'positional', description: 'Repository full name (e.g. user/repo)', required: true } },
-  async run({ args }) {
-    const { token } = await getToken()
-    await deleteFindingsByRepository(token, args.repo)
-    console.log(`Deleted findings for repository: ${args.repo}`)
-  },
-})
-
-export const securityCloseRepoCommand = defineCommand({
-  meta: { name: 'close-repo', description: 'Dismiss (close/ignore) all open findings for a repository' },
+export const securityCloseCommand = defineCommand({
+  meta: { name: 'close', description: 'Dismiss (close/ignore) security findings matching filters' },
   args: {
-    repo: { type: 'positional', description: 'Repository full name (e.g. user/repo)', required: true },
+    repo: { type: 'string', description: 'Repository full name (e.g. user/repo)' },
+    severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
+    status: { type: 'string', description: 'Filter by status (default: open)', default: 'open' },
+    from: { type: 'string', description: 'Only findings created after this date (ISO, e.g. 2025-01-01)' },
+    to: { type: 'string', description: 'Only findings created before this date (ISO)' },
     reason: { type: 'string', description: 'Reason for dismissal', default: 'Bulk closed via CLI' },
-    severity: { type: 'string', description: 'Only close findings of this severity (critical/high/medium/low/info)' },
     dryRun: { type: 'boolean', description: 'Show what would be closed without actually dismissing' },
+    yes: { type: 'boolean', description: 'Skip confirmation prompt' },
   },
   async run({ args }) {
     const { token } = await getToken()
 
+    const filters = {
+      repoFullName: args.repo,
+      severity: args.severity,
+      status: args.status ?? 'open',
+      createdAfter: args.from,
+      createdBefore: args.to,
+    }
+
+    // Dry run — show what would be closed
     if (args.dryRun) {
       const result = await listFindings(token, {
-        repoFullName: args.repo,
-        status: 'open',
-        severity: args.severity,
+        repoFullName: filters.repoFullName,
+        severity: filters.severity,
+        status: filters.status,
         limit: 100,
       })
-      const open = result.findings.filter((f) => f.status === 'open')
-      console.log(`Dry run — would close ${open.length} open findings for ${args.repo}`)
-      if (open.length > 0) {
+      let findings = result.findings
+      if (filters.createdAfter || filters.createdBefore) {
+        findings = findings.filter((f) => {
+          const created = f.createdAt ?? f.created_at ?? ''
+          if (filters.createdAfter && created < filters.createdAfter) return false
+          if (filters.createdBefore && created > filters.createdBefore) return false
+          return true
+        })
+      }
+      const total = result.totalCount ?? result.total_count ?? 0
+      console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
+      if (filters.repoFullName) console.log(`  repo: ${filters.repoFullName}`)
+      if (filters.severity) console.log(`  severity: ${filters.severity}`)
+      if (filters.status) console.log(`  status: ${filters.status}`)
+      if (filters.createdAfter) console.log(`  from: ${filters.createdAfter}`)
+      if (filters.createdBefore) console.log(`  to: ${filters.createdBefore}`)
+      if (findings.length > 0) {
         console.log('')
         printTable(
-          open.slice(0, 20).map((f) => ({
+          findings.slice(0, 20).map((f) => ({
             id: f.id.slice(0, 8),
             sev: f.severity,
             title: f.title.slice(0, 50),
+            repo: f.repoFullName ?? f.repo_full_name ?? '-',
             status: f.status,
           })),
           [
             { key: 'id', label: 'ID', width: 8 },
             { key: 'sev', label: 'Severity', width: 8 },
             { key: 'title', label: 'Title', width: 50 },
+            { key: 'repo', label: 'Repository', width: 30 },
             { key: 'status', label: 'Status', width: 8 },
           ],
         )
-        if (open.length > 20) console.log(`  ... and ${open.length - 20} more`)
+        if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
       }
       return
     }
 
-    console.log(`Closing all open findings for ${args.repo}…`)
-    const result = await dismissAllFindingsForRepo(token, args.repo, args.reason ?? 'Bulk closed via CLI')
-    console.log(`\nDone.`)
+    // Confirmation
+    const filterDesc = [
+      filters.repoFullName && `repo=${filters.repoFullName}`,
+      filters.severity && `severity=${filters.severity}`,
+      `status=${filters.status}`,
+      filters.createdAfter && `from=${filters.createdAfter}`,
+      filters.createdBefore && `to=${filters.createdBefore}`,
+    ].filter(Boolean).join(', ')
+
+    if (!args.yes) {
+      const ok = await confirm(`Close all findings matching: ${filterDesc}?`)
+      if (!ok) {
+        console.log('Aborted.')
+        return
+      }
+    }
+
+    console.log(`Closing findings (${filterDesc})…`)
+    const result = await dismissFindingsBulk(token, filters, args.reason ?? 'Bulk closed via CLI')
+    console.log('\nDone.')
     printSummary([
       { label: 'Dismissed', value: result.dismissed },
-      { label: 'Skipped (already closed)', value: result.skipped },
+      { label: 'Total matched', value: result.totalMatched },
       { label: 'Errors', value: result.errors.length },
     ])
     if (result.errors.length > 0) {
@@ -468,5 +505,27 @@ export const securityCloseRepoCommand = defineCommand({
       }
       if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
     }
+  },
+})
+
+export const securityDeleteCommand = defineCommand({
+  meta: { name: 'delete', description: 'Permanently delete ALL findings for a repository' },
+  args: {
+    repo: { type: 'string', description: 'Repository full name (e.g. user/repo)', required: true },
+    yes: { type: 'boolean', description: 'Skip confirmation prompt' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+
+    if (!args.yes) {
+      const ok = await confirm(`Permanently DELETE all findings for ${args.repo}? This cannot be undone.`)
+      if (!ok) {
+        console.log('Aborted.')
+        return
+      }
+    }
+
+    await deleteFindingsByRepository(token, args.repo)
+    console.log(`Deleted all findings for repository: ${args.repo}`)
   },
 })

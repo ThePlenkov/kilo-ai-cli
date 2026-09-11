@@ -261,29 +261,61 @@ export async function deleteFindingsByRepository(token: string, repoFullName: st
   await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repoFullName })
 }
 
+/** Filters for bulk dismiss/delete operations. */
+export interface BulkFindingFilters {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  /** ISO date string — only findings created after this date */
+  createdAfter?: string
+  /** ISO date string — only findings created before this date */
+  createdBefore?: string
+}
+
 /**
- * Dismiss (close/ignore) all OPEN findings for a repository.
+ * Dismiss (close/ignore) findings matching the given filters.
  * Fetches findings in pages, dismisses each one individually.
- * Returns { dismissed, skipped, errors }.
+ * Returns { dismissed, errors, totalMatched }.
  */
-export async function dismissAllFindingsForRepo(
+export async function dismissFindingsBulk(
   token: string,
-  repoFullName: string,
+  filters: BulkFindingFilters,
   reason: string,
-): Promise<{ dismissed: number; skipped: number; errors: string[] }> {
+): Promise<{ dismissed: number; totalMatched: number; errors: string[] }> {
   const errors: string[] = []
   let dismissed = 0
-  let skipped = 0
+  let totalMatched = 0
   let offset = 0
   const limit = 100
 
-  // Keep paging through open findings until none left
   for (;;) {
-    const result = await listFindings(token, { repoFullName, status: 'open', limit, offset })
-    const open = result.findings.filter((f) => f.status === 'open')
-    if (open.length === 0) break
+    const result = await listFindings(token, {
+      repoFullName: filters.repoFullName,
+      severity: filters.severity,
+      status: filters.status ?? 'open',
+      limit,
+      offset,
+    })
+    totalMatched = result.totalCount ?? result.total_count ?? 0
 
-    for (const f of open) {
+    // Filter by date client-side (API may not support date filters directly)
+    let findings = result.findings
+    if (filters.createdAfter || filters.createdBefore) {
+      findings = findings.filter((f) => {
+        const created = f.createdAt ?? f.created_at ?? ''
+        if (filters.createdAfter && created < filters.createdAfter) return false
+        if (filters.createdBefore && created > filters.createdBefore) return false
+        return true
+      })
+    }
+
+    if (findings.length === 0) {
+      if (result.findings.length < limit) break
+      offset += limit
+      continue
+    }
+
+    for (const f of findings) {
       try {
         await dismissFinding(token, f.id, reason)
         dismissed++
@@ -292,17 +324,22 @@ export async function dismissAllFindingsForRepo(
       }
     }
 
-    // If we got fewer than a full page, we've reached the end
     if (result.findings.length < limit) break
     offset += limit
   }
 
-  // Count non-open findings as skipped
-  const allResult = await listFindings(token, { repoFullName, limit: 1 })
-  const total = allResult.totalCount ?? allResult.total_count ?? 0
-  skipped = total - dismissed
+  return { dismissed, totalMatched, errors }
+}
 
-  return { dismissed, skipped, errors }
+/**
+ * Delete ALL findings for a repository (uses server-side bulk delete).
+ * This removes findings from the database entirely.
+ */
+export async function deleteFindingsBulk(
+  token: string,
+  repoFullName: string,
+): Promise<void> {
+  await deleteFindingsByRepository(token, repoFullName)
 }
 
 /** securityAgent.trackUiInteraction */
