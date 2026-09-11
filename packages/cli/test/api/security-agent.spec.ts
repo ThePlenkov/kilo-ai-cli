@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelRemediation,
   deleteFindingsByRepository,
+  dismissAllFindingsForRepo,
   dismissFinding,
   getDashboardStats,
   getFinding,
@@ -178,11 +179,44 @@ describe('security-agent API (personal level)', () => {
       expect(JSON.parse(init.body)).toEqual({ '0': { commandId: 'c1' } })
     })
 
-    it('deleteFindingsByRepository posts with repositoryId', async () => {
+    it('deleteFindingsByRepository posts with repoFullName', async () => {
       fetchMock.mockResolvedValue(mockMutationResponse(null))
-      await deleteFindingsByRepository('tok', 'r1')
+      await deleteFindingsByRepository('tok', 'user/repo')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { repositoryId: 'r1' } })
+      expect(JSON.parse(init.body)).toEqual({ '0': { repoFullName: 'user/repo' } })
+    })
+
+    it('dismissAllFindingsForRepo dismisses all open findings', async () => {
+      // First listFindings returns 3 open findings (all fit in one page of 100)
+      // Then 3 dismissFinding mutations
+      // Then a final listFindings with limit=1 to count total
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse(null)
+        }
+
+        // listFindings — return all 3 on first page
+        const input = decodeURIComponent(url.split('input=')[1] ?? '{}')
+        const parsed = JSON.parse(input)
+        const limit = parsed['0']?.limit ?? 100
+
+        if (limit === 1) {
+          // final count call
+          return mockResponse({ findings: [], totalCount: 3 })
+        }
+        return mockResponse({
+          findings: [
+            { id: 'f1', severity: 'high', title: 't1', status: 'open' },
+            { id: 'f2', severity: 'low', title: 't2', status: 'open' },
+            { id: 'f3', severity: 'critical', title: 't3', status: 'open' },
+          ],
+          totalCount: 3,
+        })
+      })
+
+      const result = await dismissAllFindingsForRepo('tok', 'user/repo', 'test')
+      expect(result.dismissed).toBe(3)
+      expect(result.errors).toHaveLength(0)
     })
   })
 })
