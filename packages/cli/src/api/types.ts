@@ -371,13 +371,81 @@ export interface AppBuilderEligibility {
 }
 
 // ============================================================================
-// tRPC Types — Security Agent
+// tRPC Types — Security Agent (personal + organization)
 // ============================================================================
 
 export interface SecurityAgentPermissionStatus {
   granted: boolean
   permissions: string[]
   pendingRequests: number
+}
+
+export interface SecurityAgentConfig {
+  isEnabled: boolean
+  repositories: string[]
+  scanFrequency?: string
+  autoRemediate?: boolean
+}
+
+export interface SecurityAgentRepository {
+  id: string
+  name: string
+  fullName: string
+  url: string
+  private: boolean
+  lastSyncedAt?: string
+  findingsCount?: number
+}
+
+export interface SecurityFinding {
+  id: string
+  repositoryId: string
+  repositoryName: string
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  title: string
+  description: string
+  file?: string
+  line?: number
+  status: 'open' | 'dismissed' | 'remediated' | 'in_progress'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SecurityAgentStats {
+  totalFindings: number
+  criticalFindings: number
+  highFindings: number
+  mediumFindings: number
+  lowFindings: number
+  openFindings: number
+  remediatedFindings: number
+  dismissedFindings: number
+}
+
+export interface SecurityAgentDashboardStats {
+  totalRepositories: number
+  totalFindings: number
+  findingsTrend: { date: string; count: number }[]
+  topRepositories: { name: string; findings: number }[]
+}
+
+export interface SecurityAgentAnalysis {
+  id: string
+  repositoryId: string
+  status: string
+  startedAt: string
+  completedAt?: string
+  findingsCount: number
+}
+
+export interface SecurityAgentCommand {
+  id: string
+  type: string
+  status: string
+  repositoryId: string
+  startedAt: string
+  completedAt?: string
+  output?: string
 }
 
 // ============================================================================
