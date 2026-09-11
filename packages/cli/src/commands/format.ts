@@ -2,10 +2,17 @@
  * Clean terminal output formatting — no ugly console.table borders.
  */
 
+/** Strip ANSI escape sequences to get visible string length. */
+function visibleLen(str: string): number {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*m/g, '').length
+}
+
 /** Pad or truncate a string to a fixed width. */
 function pad(str: string, width: number): string {
-  if (str.length > width) return str.slice(0, width - 1) + '…'
-  return str.padEnd(width)
+  const vlen = visibleLen(str)
+  if (vlen > width) return str.slice(0, width - 1) + '…'
+  return str + ' '.repeat(width - vlen)
 }
 
 /** Column definition for table output. */

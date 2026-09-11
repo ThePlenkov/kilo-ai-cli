@@ -176,7 +176,7 @@ export async function listFindings(token: string, input?: SecurityFindingsInput)
 
 /** securityAgent.getFinding */
 export async function getFinding(token: string, findingId: string): Promise<SecurityFinding> {
-  return trpcQuery('securityAgent.getFinding', token, FindingSchema, { findingId })
+  return trpcQuery('securityAgent.getFinding', token, FindingSchema, { id: findingId })
 }
 
 /** securityAgent.getStats */

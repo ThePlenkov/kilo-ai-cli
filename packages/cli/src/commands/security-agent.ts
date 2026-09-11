@@ -29,6 +29,7 @@ import {
 import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
+import { repoShort, repoUrl, truncate } from './theme.ts'
 
 export const securityStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show security agent permission status' },
@@ -141,18 +142,18 @@ export const securityFindingsCommand = defineCommand({
       result.findings.map((f) => ({
         id: f.id.slice(0, 8),
         sev: f.severity.slice(0, 8),
-        title: f.title,
-        repo: f.repoFullName ?? f.repo_full_name ?? '-',
+        title: truncate(f.title, 50),
+        repo: repoShort(f.repoFullName ?? f.repo_full_name),
         status: f.status,
-        pkg: f.packageName ?? f.package_name ?? '-',
+        analysis: f.analysisStatus ?? f.analysis_status ?? '-',
       })),
       [
         { key: 'id', label: 'ID', width: 8 },
         { key: 'sev', label: 'Severity', width: 8 },
         { key: 'title', label: 'Title', width: 50 },
-        { key: 'repo', label: 'Repository', width: 30 },
+        { key: 'repo', label: 'Repo', width: 20 },
         { key: 'status', label: 'Status', width: 8 },
-        { key: 'pkg', label: 'Package', width: 20 },
+        { key: 'analysis', label: 'Analysis', width: 10 },
       ],
     )
   },
@@ -165,13 +166,6 @@ export const securityFindingCommand = defineCommand({
     const { token } = await getToken()
     const f = await getFinding(token, args.id)
     const repo = f.repoFullName ?? f.repo_full_name
-    const pkg = f.packageName ?? f.package_name
-    const ecosystem = f.packageEcosystem ?? f.package_ecosystem
-    const vuln = f.vulnerableVersionRange ?? f.vulnerable_version_range
-    const patched = f.patchedVersion ?? f.patched_version
-    const cve = f.cveId ?? f.cve_id
-    const ghsa = f.ghsaId ?? f.ghsa_id
-    const cvss = f.cvssScore ?? f.cvss_score
     const sla = f.slaDueAt ?? f.sla_due_at
     const analysisStatus = f.analysisStatus ?? f.analysis_status
     const remediation = f.remediationSummary ?? f.remediation_summary
@@ -180,16 +174,10 @@ export const securityFindingCommand = defineCommand({
     console.log(`  ID:         ${f.id}`)
     console.log(`  Severity:   ${f.severity}`)
     console.log(`  Title:      ${f.title}`)
-    if (repo) console.log(`  Repository: ${repo}`)
+    if (repo) console.log(`  Repo:       ${repoUrl(repo)}`)
     console.log(`  Status:     ${f.status}`)
     if (f.source) console.log(`  Source:     ${f.source}`)
     if (f.description) console.log(`  Description: ${f.description}`)
-    if (pkg) console.log(`  Package:    ${pkg} (${ecosystem ?? '?'})`)
-    if (vuln) console.log(`  Vulnerable: ${vuln}`)
-    if (patched) console.log(`  Patched:    ${patched}`)
-    if (cve) console.log(`  CVE:        ${cve}`)
-    if (ghsa) console.log(`  GHSA:       ${ghsa}`)
-    if (cvss) console.log(`  CVSS:       ${cvss}`)
     if (sla) console.log(`  SLA due:    ${sla}`)
     if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
     if (remediation) console.log(`  Remediation: ${remediation}`)
@@ -442,16 +430,18 @@ export const securityCloseCommand = defineCommand({
           findings.slice(0, 20).map((f) => ({
             id: f.id.slice(0, 8),
             sev: f.severity,
-            title: f.title.slice(0, 50),
-            repo: f.repoFullName ?? f.repo_full_name ?? '-',
+            title: truncate(f.title, 50),
+            repo: repoShort(f.repoFullName ?? f.repo_full_name),
             status: f.status,
+            analysis: f.analysisStatus ?? f.analysis_status ?? '-',
           })),
           [
             { key: 'id', label: 'ID', width: 8 },
             { key: 'sev', label: 'Severity', width: 8 },
             { key: 'title', label: 'Title', width: 50 },
-            { key: 'repo', label: 'Repository', width: 30 },
+            { key: 'repo', label: 'Repo', width: 20 },
             { key: 'status', label: 'Status', width: 8 },
+            { key: 'analysis', label: 'Analysis', width: 10 },
           ],
         )
         if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
