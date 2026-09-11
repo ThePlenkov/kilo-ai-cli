@@ -147,8 +147,9 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     const items = [
       { label: '(all statuses)', value: '' },
       { label: 'open', value: 'open' },
-      { label: 'ignored', value: 'ignored' },
-      { label: 'fixed', value: 'fixed' },
+      { label: 'dismissed', value: 'dismissed' },
+      { label: 'remediated', value: 'remediated' },
+      { label: 'in_progress', value: 'in_progress' },
     ]
     return (
       <Box flexDirection="column">
