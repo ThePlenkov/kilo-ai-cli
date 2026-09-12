@@ -1,15 +1,42 @@
 {
   "name": "kilo-ai-cli",
-  "version": "0.0.0",
-  "description": "CLI for interacting with the kilo.ai cloud tRPC API",
+  "version": "0.1.0",
+  "description": "CLI for interacting with the kilo.ai cloud tRPC API — auth, sessions, organizations, plans, KiloClaw, security agent, analytics, and more",
   "type": "module",
   "license": "MIT",
+  "author": "ThePlenkov",
+  "homepage": "https://github.com/ThePlenkov/kilo-ai-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ThePlenkov/kilo-ai-cli.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/ThePlenkov/kilo-ai-cli/issues"
+  },
+  "keywords": [
+    "kilo",
+    "kilo-ai",
+    "kiloai",
+    "cli",
+    "trpc",
+    "cloud",
+    "security",
+    "devops",
+    "automation",
+    "terminal"
+  ],
   "engines": {
     "node": ">=24.21.0"
   },
   "bin": {
     "kilo-ai-cli": "./dist/index.mjs"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
@@ -20,7 +47,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "dev": "node src/index.ts"
+    "dev": "node src/index.ts",
+    "prepublishOnly": "tsdown"
   },
   "dependencies": {
     "chalk": "^5.4.0",

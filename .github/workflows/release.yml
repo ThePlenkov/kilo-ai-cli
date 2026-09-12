@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (skip actual npm publish)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# Required for npm OIDC trusted publishing
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment: npm
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: true
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: lts/*
+          check-latest: true
+          # OIDC trusted publishing — no npm token needed
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build .nx-devkit submodule plugins
+        working-directory: .nx-devkit
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify package contents
+        run: |
+          cd packages/cli
+          npm pack --dry-run
+          echo "---"
+          tar -tzf kilo-ai-cli-*.tgz | head -30
+
+      - name: Publish to npm (OIDC)
+        if: ${{ github.event.inputs.dry-run != 'true' }}
+        run: npm publish --provenance --access public
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm (dry run)
+        if: ${{ github.event.inputs.dry-run == 'true' }}
+        run: npm publish --provenance --access public --dry-run
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
