@@ -2,17 +2,19 @@ import { defineCommand } from 'citty'
 import { render } from 'ink'
 import React from 'react'
 
-import { App } from '../tui/App.tsx'
 import { getToken } from './helpers.ts'
 
 export const tuiCommand = defineCommand({
-  meta: { name: 'tui', description: 'Launch interactive TUI for security agent' },
+  meta: { name: 'tui', description: 'Launch interactive TUI' },
   async run() {
-    const { token } = await getToken()
+    const { token, organizationId } = await getToken()
     if (!token) {
       console.error('Not authenticated. Run: kilo-ai-cli auth login')
       process.exit(1)
     }
-    render(React.createElement(App, { token }))
+    // Lazy import: keeps .tsx out of the static graph so `node src/index.ts`
+    // (native TS) works for all non-TUI commands.
+    const { App } = await import('../tui/App.tsx')
+    render(React.createElement(App, { token, organizationId }))
   },
 })

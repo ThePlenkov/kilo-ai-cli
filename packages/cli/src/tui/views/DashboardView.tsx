@@ -6,9 +6,10 @@ import { getDashboardStats } from '../../api/security-agent.ts'
 export interface DashboardViewProps {
   token: string
   onBack: () => void
+  focused: boolean
 }
 
-export function DashboardView({ token, onBack }: DashboardViewProps) {
+export function DashboardView({ token, onBack, focused }: DashboardViewProps) {
   const [stats, setStats] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -31,7 +32,7 @@ export function DashboardView({ token, onBack }: DashboardViewProps) {
 
   useInput((_input, key) => {
     if (key.escape) onBack()
-  })
+  }, { isActive: focused })
 
   if (loading) {
     return <Box><Text color="yellow">Loading dashboard…</Text></Box>

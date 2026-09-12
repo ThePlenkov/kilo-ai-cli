@@ -156,7 +156,7 @@ export const securityFindingsCommand = defineCommand({
         id: (f.id ?? '-').slice(0, 8),
         sev: colorSeverity((f.severity ?? '-').slice(0, 8)),
         title: f.title ?? '-',
-        repo: repoLink(f.repoFullName ?? f.repo_full_name),
+        repo: repoLink(f.repoFullName ?? f.repo_full_name ?? undefined),
         status: colorStatus(f.status ?? '-'),
         pkg: f.packageName ?? f.package_name ?? '-',
       })),

@@ -30,25 +30,32 @@ describe('kiloclaw API', () => {
 
   describe('queries', () => {
     it('getChangelog calls kiloclaw.getChangelog', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ version: '1.0', date: '2024-01-01', changes: ['fix'] }]))
+      fetchMock.mockResolvedValue(
+        mockResponse([{ date: '2026-08-01', description: 'fix thing', category: 'fix', deployHint: 'auto' }]),
+      )
       const result = await getChangelog('tok')
       expect(result).toHaveLength(1)
-      expect(result[0]!.version).toBe('1.0')
+      expect(result[0]!.description).toBe('fix thing')
       expect(fetchMock.mock.calls[0]![0]).toBe(`${KILO_API_BASE}/api/trpc/kiloclaw.getChangelog`)
     })
 
     it('getBillingStatus calls kiloclaw.getBillingStatus', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ balance: 50, activeSubscriptions: 2, currentPeriodUsageUsd: 10 }))
+      fetchMock.mockResolvedValue(
+        mockResponse({ hasAccess: true, creditBalanceMicrodollars: 10346942, hasCurrentPersonalSubscription: false }),
+      )
       const result = await getBillingStatus('tok')
-      expect(result.balance).toBe(50)
+      expect(result.hasAccess).toBe(true)
+      expect(result.creditBalanceMicrodollars).toBe(10346942)
       expect(fetchMock.mock.calls[0]![0]).toContain('kiloclaw.getBillingStatus')
     })
 
     it('getLatestVersion passes currentImageTag', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ latestVersion: '2.0', isUpToDate: false }))
+      fetchMock.mockResolvedValue(
+        mockResponse({ openclawVersion: '2.0', variant: 'standard', imageTag: 'v2.0', isLatest: false }),
+      )
       const result = await getLatestVersion('tok', '1.0')
-      expect(result.latestVersion).toBe('2.0')
-      expect(result.isUpToDate).toBe(false)
+      expect(result.openclawVersion).toBe('2.0')
+      expect(result.isLatest).toBe(false)
       const url = fetchMock.mock.calls[0]![0] as string
       expect(url).toContain('input=')
       expect(decodeURIComponent(url.split('input=')[1]!)).toContain('currentImageTag')
@@ -84,22 +91,35 @@ describe('kiloclaw API', () => {
     })
 
     it('listPersonalSubscriptions calls kiloclaw.listPersonalSubscriptions', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 's1', planName: 'pro', status: 'active', providerName: 'stripe', providerId: 'p1', cancelAtPeriodEnd: false }]))
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          commitPlanAvailable: false,
+          subscriptions: [{ instanceId: 's1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }],
+        }),
+      )
       const result = await listPersonalSubscriptions('tok')
-      expect(result).toHaveLength(1)
+      expect(result.subscriptions).toHaveLength(1)
+      expect(result.subscriptions[0]!.instanceId).toBe('s1')
     })
 
     it('getSubscriptionDetail passes instanceId', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ id: 's1', planName: 'pro', status: 'active', providerName: 'stripe', providerId: 'p1', cancelAtPeriodEnd: false }))
+      fetchMock.mockResolvedValue(
+        mockResponse({ instanceId: 's1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }),
+      )
       const result = await getSubscriptionDetail('tok', 'inst1')
-      expect(result.id).toBe('s1')
+      expect(result.instanceId).toBe('s1')
     })
 
-    it('getBillingHistory passes period when provided', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'b1', date: '2024-01-01', amount: 10, description: 'charge', type: 'payment' }]))
-      await getBillingHistory('tok', '2024-01')
+    it('getBillingHistory passes instanceId and period', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({ entries: [{ amount: 10 }], hasMore: false, cursor: null }),
+      )
+      const page = await getBillingHistory('tok', 'inst1', '2024-01')
+      expect(page.entries).toHaveLength(1)
       const url = fetchMock.mock.calls[0]![0] as string
-      expect(decodeURIComponent(url.split('input=')[1]!)).toContain('2024-01')
+      const input = JSON.parse(decodeURIComponent(url.split('input=')[1]!))
+      expect(input.instanceId).toBe('inst1')
+      expect(input.period).toBe('2024-01')
     })
   })
 

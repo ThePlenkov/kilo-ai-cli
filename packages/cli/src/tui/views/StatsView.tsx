@@ -6,9 +6,10 @@ import { getSecurityStats } from '../../api/security-agent.ts'
 export interface StatsViewProps {
   token: string
   onBack: () => void
+  focused: boolean
 }
 
-export function StatsView({ token, onBack }: StatsViewProps) {
+export function StatsView({ token, onBack, focused }: StatsViewProps) {
   const [stats, setStats] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -31,7 +32,7 @@ export function StatsView({ token, onBack }: StatsViewProps) {
 
   useInput((_input, key) => {
     if (key.escape) onBack()
-  })
+  }, { isActive: focused })
 
   if (loading) {
     return <Box><Text color="yellow">Loading stats…</Text></Box>

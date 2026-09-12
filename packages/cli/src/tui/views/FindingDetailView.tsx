@@ -8,6 +8,7 @@ export interface FindingDetailViewProps {
   token: string
   findingId: string
   onBack: () => void
+  focused: boolean
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -18,7 +19,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   info: 'gray',
 }
 
-export function FindingDetailView({ token, findingId, onBack }: FindingDetailViewProps) {
+export function FindingDetailView({ token, findingId, onBack, focused }: FindingDetailViewProps) {
   const [finding, setFinding] = useState<SecurityFinding | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -41,7 +42,7 @@ export function FindingDetailView({ token, findingId, onBack }: FindingDetailVie
 
   useInput((_input, key) => {
     if (key.escape) onBack()
-  })
+  }, { isActive: focused })
 
   if (loading) {
     return (

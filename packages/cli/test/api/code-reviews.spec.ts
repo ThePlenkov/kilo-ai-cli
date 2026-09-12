@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  getCodeReview,
   getReviewConfig,
   listCodeReviews,
+  listCodeReviewsForUser,
   listGitLabRepositories,
   toggleReviewAgent,
 } from '../../src/api/code-reviews.ts'
@@ -16,8 +18,57 @@ describe('code-reviews API', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
-  it('listCodeReviews calls codeReviews.listForOrganization with orgId', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ id: 'cr1', title: 'review', status: 'open', platform: 'github', createdAt: '2024-01-01', updatedAt: '2024-01-02' }]))
+  it('listCodeReviewsForUser unwraps { reviews } from codeReviews.listForUser', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse({
+        reviews: [
+          {
+            id: 'cr1',
+            pr_title: 'fix: something',
+            status: 'completed',
+            platform: 'github',
+            repo_full_name: 'user/repo',
+            pr_number: 25,
+            created_at: '2026-09-12',
+            updated_at: '2026-09-12',
+          },
+        ],
+      }),
+    )
+    const result = await listCodeReviewsForUser('tok')
+    expect(result).toHaveLength(1)
+    expect(result[0]!.repo_full_name).toBe('user/repo')
+    expect(fetchMock.mock.calls[0]![0]).toContain('codeReviews.listForUser')
+  })
+
+  it('getCodeReview calls codeReviews.get with reviewId', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse({
+        review: { id: 'cr1', status: 'completed', created_at: '2026-09-12', updated_at: '2026-09-12' },
+        attempts: [
+          {
+            id: 'a1',
+            code_review_id: 'cr1',
+            attempt_number: 1,
+            status: 'completed',
+            created_at: '2026-09-12',
+            updated_at: '2026-09-12',
+          },
+        ],
+        tokenUsage: { input: 0, output: 0, cached: 0 },
+      }),
+    )
+    const result = await getCodeReview('tok', 'cr1')
+    expect(result.review.id).toBe('cr1')
+    expect(result.attempts).toHaveLength(1)
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(decodeURIComponent(url.split('input=')[1]!)).toContain('reviewId')
+  })
+
+  it('listCodeReviews accepts { reviews } envelope', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse({ reviews: [{ id: 'cr1', status: 'open', created_at: '2024-01-01', updated_at: '2024-01-02' }] }),
+    )
     const result = await listCodeReviews('tok', 'org1')
     expect(result).toHaveLength(1)
     const url = fetchMock.mock.calls[0]![0] as string

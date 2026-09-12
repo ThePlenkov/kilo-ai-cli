@@ -45,6 +45,7 @@ import {
 } from './commands/cloud-agent.ts'
 import {
   reviewsConfigCommand,
+  reviewsGetCommand,
   reviewsListCommand,
   reviewsToggleCommand,
 } from './commands/code-reviews.ts'
@@ -178,6 +179,7 @@ export const mainCommand = defineCommand({
       meta: { name: 'reviews', description: 'Code review commands' },
       subCommands: {
         list: reviewsListCommand,
+        get: reviewsGetCommand,
         config: reviewsConfigCommand,
         toggle: reviewsToggleCommand,
       },
