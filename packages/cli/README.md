@@ -163,7 +163,7 @@ The CLI reads configuration from environment variables and a local credentials f
 |----------|---------|-------------|
 | `KILO_API_URL` | `https://api.kilo.ai` | Base URL for the Kilo API |
 | `KILO_SESSION_INGEST_URL` | `https://ingest.kilosessions.ai` | Session ingest endpoint |
-| `KILO_CLI_VERSION` | _(from package)_ | Version reported in User-Agent |
+| `KILO_CLI_VERSION` | _(none — no version in User-Agent unless set)_ | Version reported in User-Agent |
 
 ### Credential Storage
 
@@ -372,7 +372,7 @@ The `tui` command launches a full-screen interactive terminal UI built with [Ink
 - **Finding Detail** — inspect a single finding
 - **Stats** — aggregated security statistics
 
-Use arrow keys to navigate, Enter to select, and `q` or `Esc` to quit.
+Use arrow keys to navigate, Enter to select, and select the "Exit" menu item to quit.
 
 ---
 
