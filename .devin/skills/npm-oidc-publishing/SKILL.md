@@ -15,7 +15,7 @@ Set up npm OIDC trusted publishing for a package using `@nx-devkit/prepare-for-r
 
 ## Prerequisites
 
-1. **npm account** with 2FA enabled (required for `npm trust github`).
+1. **npm account** with MFA enabled (browser-based approval — npm sends a push notification, you click approve in your browser; no OTP codes needed).
 2. **npm CLI** logged in (`npm whoami` returns your username).
 3. **`.nx-devkit` submodule** built (`cd .nx-devkit && bun install && bun run build`).
 4. **GitHub repository** with a release workflow (e.g. `.github/workflows/release.yml`) that uses `id-token: write` and `registry-url: https://registry.npmjs.org`.
@@ -59,7 +59,7 @@ Add `workspaceLayout` to `nx.json` so Nx discovers the `release/` project:
 # Dry run first
 npx nx run release:prepare-for-release --dryRun=true
 
-# Real publish (requires npm OTP / 2FA)
+# Real publish (triggers npm MFA — approve in your browser)
 npx nx run release:prepare-for-release
 ```
 
@@ -81,7 +81,7 @@ This publishes a `0.0.0` placeholder tarball with dist-tag `placeholder` to rese
 
 ### 3. Set up OIDC trust (links npm package to GitHub Actions)
 
-The executor prints the trust command. Run it manually (requires MFA):
+The executor prints the trust command. Run it manually (triggers npm MFA — approve in your browser):
 
 ```bash
 npm trust github <pkg-name> --file release.yml --repo <owner>/<repo> --allow-publish --yes
@@ -147,7 +147,7 @@ npm publish --provenance (no NPM_TOKEN needed)
 
 ### `EOTP` / one-time password required
 
-`npm publish` and `npm trust github` require 2FA. Run them interactively in a terminal where you can enter your OTP.
+`npm publish` and `npm trust github` require MFA. npm uses browser-based approval — when the command runs, npm sends a push notification and opens a browser URL. Click "Approve" in your browser to authorize. No OTP code entry needed. Run these commands in a terminal on a machine where you can open a browser.
 
 ### `Could not find project "release"`
 
