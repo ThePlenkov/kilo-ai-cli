@@ -92,6 +92,7 @@ import {
   securityStatusCommand,
   securitySyncCommand,
 } from './commands/security-agent.ts'
+import { tuiCommand } from './commands/tui.ts'
 
 export const mainCommand = defineCommand({
   meta: {
@@ -110,6 +111,7 @@ export const mainCommand = defineCommand({
     }),
     profile: profileCommand,
     balance: balanceCommand,
+    tui: tuiCommand,
     sessions: defineCommand({
       meta: { name: 'sessions', description: 'Cloud session commands' },
       subCommands: {
