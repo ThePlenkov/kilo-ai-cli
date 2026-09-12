@@ -1,8 +1,8 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "workspaceLayout": {
-    "appsDir": ["release"],
-    "libsDir": ["packages"]
+    "appsDir": "release",
+    "libsDir": "packages"
   },
   "plugins": [
     "./.nx-devkit/packages/tsdown/dist/plugin.mjs",
