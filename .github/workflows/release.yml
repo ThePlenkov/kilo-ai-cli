@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: lts/*
           check-latest: true
-          # OIDC trusted publishing — no npm token needed
+          # OIDC trusted publishing — npm authenticates via the OIDC token
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Bun
@@ -69,22 +69,15 @@ jobs:
         run: npm run build
 
       - name: Verify package contents
-        run: |
-          cd packages/cli
-          npm pack --dry-run
-          echo "---"
-          tar -tzf kilo-ai-cli-*.tgz | head -30
+        working-directory: packages/cli
+        run: npm pack
 
       - name: Publish to npm (OIDC)
-        if: ${{ github.event.inputs.dry-run != 'true' }}
-        run: npm publish --provenance --access public
+        if: ${{ github.event_name == 'push' || github.event.inputs.dry-run == 'false' }}
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
 
       - name: Publish to npm (dry run)
-        if: ${{ github.event.inputs.dry-run == 'true' }}
-        run: npm publish --provenance --access public --dry-run
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run == 'true' }}
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public --dry-run
