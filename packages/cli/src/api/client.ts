@@ -8,22 +8,11 @@ import { KILO_API_BASE } from './constants.ts'
 import { buildAuthHeaders } from './headers.ts'
 import { CloudTrpcError } from './types.ts'
 
-/** Maximum response body size we are willing to read (512 KB). */
-const MAX_BODY_BYTES = 512 * 1024
+/** Maximum response body size we are willing to read (10 MB). */
+const MAX_BODY_BYTES = 10 * 1024 * 1024
 
 /** Request timeout for tRPC calls. */
-const REQUEST_TIMEOUT_MS = 5000
-
-/**
- * Validate that the API base URL uses HTTPS to prevent cleartext token transmission (CWE-319).
- * Allows http: only on localhost for development.
- */
-function assertHttpsBaseUrl(baseUrl: string): string {
-  const parsed = new URL(baseUrl)
-  if (parsed.protocol === 'https:') return baseUrl
-  if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return baseUrl
-  throw new CloudTrpcError('protocol', 0)
-}
+const REQUEST_TIMEOUT_MS = 15000
 
 /** tRPC response envelope: either a result with data, or an error. */
 const envelopeSchema = z.object({
@@ -31,16 +20,33 @@ const envelopeSchema = z.object({
   error: z.unknown().optional(),
 })
 
+/** Extract a human-readable message from a tRPC error object. */
+function extractErrorMessage(error: unknown): string | undefined {
+  if (error == null) return undefined
+  if (typeof error === 'string') return error
+  if (typeof error === 'object') {
+    const e = error as Record<string, unknown>
+    // tRPC error shape: { message, code, data: { code, httpStatus, ... } }
+    if (typeof e.message === 'string') return e.message
+    if (e.data && typeof e.data === 'object') {
+      const d = e.data as Record<string, unknown>
+      if (typeof d.message === 'string') return d.message
+      if (typeof d.code === 'string') return d.code
+    }
+  }
+  return undefined
+}
+
 /**
  * Read a response body as text, enforcing a 512 KB size limit.
  * Falls back to `response.text()` when no readable stream is available.
  */
-async function readBody(response: Response): Promise<string> {
+async function readBody(response: Response, procedure: string): Promise<string> {
   const contentLengthHeader = response.headers?.get?.('content-length')
   if (contentLengthHeader) {
     const declared = Number.parseInt(contentLengthHeader, 10)
     if (!Number.isNaN(declared) && declared > MAX_BODY_BYTES) {
-      throw new CloudTrpcError('protocol', response.status)
+      throw new CloudTrpcError('protocol', response.status, procedure, `Response too large: ${declared} bytes`)
     }
   }
 
@@ -55,7 +61,7 @@ async function readBody(response: Response): Promise<string> {
       if (value) {
         total += value.byteLength
         if (total > MAX_BODY_BYTES) {
-          throw new CloudTrpcError('protocol', response.status)
+          throw new CloudTrpcError('protocol', response.status, procedure, `Response too large: >${MAX_BODY_BYTES} bytes`)
         }
         chunks.push(value)
       }
@@ -80,6 +86,11 @@ function extractData(data: unknown): unknown {
   return data
 }
 
+/** Classify an HTTP status as unauthorized. */
+function isAuthError(status: number): boolean {
+  return status === 401 || status === 403
+}
+
 /**
  * Query a tRPC procedure with typed input and Zod-validated output.
  * Uses GET with `?input=<json>` query parameter.
@@ -92,7 +103,7 @@ export async function trpcQuery<T>(
   input?: unknown,
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
-  const baseUrl = assertHttpsBaseUrl(options?.baseUrl ?? KILO_API_BASE)
+  const baseUrl = options?.baseUrl ?? KILO_API_BASE
   let url = `${baseUrl}/api/trpc/${procedure}`
   if (input !== undefined) {
     url += `?input=${encodeURIComponent(JSON.stringify(input))}`
@@ -109,46 +120,58 @@ export async function trpcQuery<T>(
       headers,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
-  } catch {
-    throw new CloudTrpcError('network')
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', undefined, procedure, detail)
   }
 
   let text: string
   try {
-    text = await readBody(response)
+    text = await readBody(response, procedure)
   } catch (err) {
     if (err instanceof CloudTrpcError) throw err
-    throw new CloudTrpcError('network')
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', response.status, procedure, detail)
   }
 
   let json: unknown
   try {
     json = JSON.parse(text)
   } catch {
-    throw new CloudTrpcError('protocol', response.status)
+    const snippet = text.slice(0, 200)
+    throw new CloudTrpcError('protocol', response.status, procedure, `Non-JSON response: ${snippet}`)
   }
 
   const envelope = envelopeSchema.safeParse(json)
   if (!envelope.success) {
-    throw new CloudTrpcError('protocol', response.status)
+    const snippet = text.slice(0, 200)
+    throw new CloudTrpcError('protocol', response.status, procedure, `Unexpected response format: ${snippet}`)
   }
   const { result, error } = envelope.data
 
   if (error != null) {
-    throw new CloudTrpcError('procedure', response.status)
+    const detail = extractErrorMessage(error)
+    if (isAuthError(response.status)) {
+      throw new CloudTrpcError('unauthorized', response.status, procedure, detail)
+    }
+    throw new CloudTrpcError('procedure', response.status, procedure, detail)
   }
   if (!response.ok) {
-    throw new CloudTrpcError('http', response.status)
+    if (isAuthError(response.status)) {
+      throw new CloudTrpcError('unauthorized', response.status, procedure)
+    }
+    throw new CloudTrpcError('http', response.status, procedure)
   }
   if (!result) {
-    throw new CloudTrpcError('protocol', response.status)
+    throw new CloudTrpcError('protocol', response.status, procedure, 'No result in response')
   }
 
   const extracted = extractData(result.data)
 
   const validated = schema.safeParse(extracted)
   if (!validated.success) {
-    throw new CloudTrpcError('schema', response.status)
+    const detail = validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new CloudTrpcError('schema', response.status, procedure, detail)
   }
   return validated.data
 }
@@ -165,7 +188,7 @@ export async function trpcMutate<T>(
   input: unknown,
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
-  const baseUrl = assertHttpsBaseUrl(options?.baseUrl ?? KILO_API_BASE)
+  const baseUrl = options?.baseUrl ?? KILO_API_BASE
   const url = `${baseUrl}/api/trpc/${procedure}?batch=1`
 
   const headers = {
@@ -183,23 +206,26 @@ export async function trpcMutate<T>(
       body: JSON.stringify({ '0': input }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
-  } catch {
-    throw new CloudTrpcError('network')
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', undefined, procedure, detail)
   }
 
   let text: string
   try {
-    text = await readBody(response)
+    text = await readBody(response, procedure)
   } catch (err) {
     if (err instanceof CloudTrpcError) throw err
-    throw new CloudTrpcError('network')
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', response.status, procedure, detail)
   }
 
   let json: unknown
   try {
     json = JSON.parse(text)
   } catch {
-    throw new CloudTrpcError('protocol', response.status)
+    const snippet = text.slice(0, 200)
+    throw new CloudTrpcError('protocol', response.status, procedure, `Non-JSON response: ${snippet}`)
   }
 
   const batchEntrySchema = z.object({
@@ -209,28 +235,37 @@ export async function trpcMutate<T>(
   const batchSchema = z.array(batchEntrySchema)
   const batch = batchSchema.safeParse(json)
   if (!batch.success) {
-    throw new CloudTrpcError('protocol', response.status)
+    const snippet = text.slice(0, 200)
+    throw new CloudTrpcError('protocol', response.status, procedure, `Unexpected batch format: ${snippet}`)
   }
   const entry = batch.data[0]
   if (!entry) {
-    throw new CloudTrpcError('protocol', response.status)
+    throw new CloudTrpcError('protocol', response.status, procedure, 'Empty batch response')
   }
 
   if (entry.error != null) {
-    throw new CloudTrpcError('procedure', response.status)
+    const detail = extractErrorMessage(entry.error)
+    if (isAuthError(response.status)) {
+      throw new CloudTrpcError('unauthorized', response.status, procedure, detail)
+    }
+    throw new CloudTrpcError('procedure', response.status, procedure, detail)
   }
   if (!response.ok) {
-    throw new CloudTrpcError('http', response.status)
+    if (isAuthError(response.status)) {
+      throw new CloudTrpcError('unauthorized', response.status, procedure)
+    }
+    throw new CloudTrpcError('http', response.status, procedure)
   }
   if (!entry.result) {
-    throw new CloudTrpcError('protocol', response.status)
+    throw new CloudTrpcError('protocol', response.status, procedure, 'No result in batch entry')
   }
 
   const extracted = extractData(entry.result.data)
 
   const validated = schema.safeParse(extracted)
   if (!validated.success) {
-    throw new CloudTrpcError('schema', response.status)
+    const detail = validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new CloudTrpcError('schema', response.status, procedure, detail)
   }
   return validated.data
 }

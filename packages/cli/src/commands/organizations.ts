@@ -8,6 +8,7 @@ import { fetchProfile } from '../api/profile.ts'
 import { fetchOrganizations } from '../api/trpc.ts'
 import type { KiloAuth } from '../api/types.ts'
 import { createTokenStore } from '../auth/token-store.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const orgListCommand = defineCommand({
@@ -20,13 +21,19 @@ export const orgListCommand = defineCommand({
       console.log('No organizations found.')
       return
     }
-    console.table(
+    printTable(
       orgs.map((o) => ({
-        ID: o.id,
-        Name: o.name,
-        Role: o.role,
-        Active: o.id === organizationId ? 'yes' : '',
+        id: o.id,
+        name: o.name,
+        role: o.role,
+        active: o.id === organizationId ? 'yes' : '',
       })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'name', label: 'Name', width: 30 },
+        { key: 'role', label: 'Role', width: 12 },
+        { key: 'active', label: 'Active', width: 8 },
+      ],
     )
   },
 })

@@ -9,6 +9,7 @@ import {
   listCodeReviews,
   toggleReviewAgent,
 } from '../api/code-reviews.ts'
+import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const reviewsListCommand = defineCommand({
@@ -21,14 +22,24 @@ export const reviewsListCommand = defineCommand({
       console.log('No code reviews found.')
       return
     }
-    console.table(reviews.map((r) => ({
-      ID: r.id,
-      Title: r.title,
-      Status: r.status,
-      Platform: r.platform,
-      Repo: r.repositoryName ?? '-',
-      'PR #': r.pullRequestNumber ?? '-',
-    })))
+    printTable(
+      reviews.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+        platform: r.platform,
+        repo: r.repositoryName ?? '-',
+        pr: r.pullRequestNumber ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 12 },
+        { key: 'title', label: 'Title', width: 40 },
+        { key: 'status', label: 'Status', width: 10 },
+        { key: 'platform', label: 'Platform', width: 10 },
+        { key: 'repo', label: 'Repo', width: 30 },
+        { key: 'pr', label: 'PR #', width: 6, align: 'right' },
+      ],
+    )
   },
 })
 

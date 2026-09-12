@@ -15,104 +15,163 @@ import type {
   SecurityAgentRepository,
   SecurityAgentStats,
   SecurityFinding,
+  SecurityFindingsInput,
+  SecurityFindingsResult,
 } from './types.ts'
 
 // --- Schemas ---
 
-const PermissionStatusSchema: z.ZodType<SecurityAgentPermissionStatus> = z.object({
-  granted: z.boolean(),
-  permissions: z.array(z.string()),
-  pendingRequests: z.number(),
-})
+const PermissionStatusSchema = z.object({
+  granted: z.boolean().optional(),
+  permissions: z.array(z.string()).optional(),
+  pendingRequests: z.number().optional(),
+}).passthrough()
 
-const ConfigSchema: z.ZodType<SecurityAgentConfig> = z.object({
-  isEnabled: z.boolean(),
-  repositories: z.array(z.string()),
+const ConfigSchema = z.object({
+  isEnabled: z.boolean().optional(),
+  is_enabled: z.boolean().optional(),
+  repositories: z.array(z.string()).optional(),
   scanFrequency: z.string().optional(),
+  scan_frequency: z.string().optional(),
   autoRemediate: z.boolean().optional(),
-})
+  auto_remediate: z.boolean().optional(),
+}).passthrough()
 
-const RepositorySchema: z.ZodType<SecurityAgentRepository> = z.object({
-  id: z.string(),
-  name: z.string(),
-  fullName: z.string(),
-  url: z.string(),
-  private: z.boolean(),
-  lastSyncedAt: z.string().optional(),
+const RepositorySchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  name: z.string().optional(),
+  full_name: z.string().optional(),
+  fullName: z.string().optional(),
+  url: z.string().optional(),
+  private: z.boolean().optional(),
+  lastSyncedAt: z.string().nullable().optional(),
+  last_synced_at: z.string().nullable().optional(),
   findingsCount: z.number().optional(),
-})
+  findings_count: z.number().optional(),
+}).passthrough()
 
 const FindingSchema: z.ZodType<SecurityFinding> = z.object({
   id: z.string(),
-  repositoryId: z.string(),
-  repositoryName: z.string(),
-  severity: z.union([z.literal('critical'), z.literal('high'), z.literal('medium'), z.literal('low'), z.literal('info')]),
+  repoFullName: z.string().optional(),
+  repo_full_name: z.string().optional(),
+  source: z.string().optional(),
+  sourceId: z.string().optional(),
+  source_id: z.string().optional(),
+  severity: z.string(),
   title: z.string(),
-  description: z.string(),
-  file: z.string().optional(),
-  line: z.number().optional(),
-  status: z.union([z.literal('open'), z.literal('dismissed'), z.literal('remediated'), z.literal('in_progress')]),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
-
-const StatsSchema: z.ZodType<SecurityAgentStats> = z.object({
-  totalFindings: z.number(),
-  criticalFindings: z.number(),
-  highFindings: z.number(),
-  mediumFindings: z.number(),
-  lowFindings: z.number(),
-  openFindings: z.number(),
-  remediatedFindings: z.number(),
-  dismissedFindings: z.number(),
-})
-
-const DashboardStatsSchema: z.ZodType<SecurityAgentDashboardStats> = z.object({
-  totalRepositories: z.number(),
-  totalFindings: z.number(),
-  findingsTrend: z.array(z.object({ date: z.string(), count: z.number() })),
-  topRepositories: z.array(z.object({ name: z.string(), findings: z.number() })),
-})
-
-const AnalysisSchema: z.ZodType<SecurityAgentAnalysis> = z.object({
-  id: z.string(),
-  repositoryId: z.string(),
+  description: z.string().optional(),
   status: z.string(),
-  startedAt: z.string(),
-  completedAt: z.string().optional(),
-  findingsCount: z.number(),
-})
+  packageName: z.string().optional(),
+  package_name: z.string().optional(),
+  packageEcosystem: z.string().optional(),
+  package_ecosystem: z.string().optional(),
+  vulnerableVersionRange: z.string().optional(),
+  vulnerable_version_range: z.string().optional(),
+  patchedVersion: z.string().optional(),
+  patched_version: z.string().optional(),
+  manifestPath: z.string().optional(),
+  manifest_path: z.string().optional(),
+  ghsaId: z.string().optional(),
+  ghsa_id: z.string().optional(),
+  cveId: z.string().optional(),
+  cve_id: z.string().optional(),
+  cvssScore: z.union([z.number(), z.string()]).optional(),
+  cvss_score: z.union([z.number(), z.string()]).optional(),
+  cweIds: z.array(z.string()).optional(),
+  cwe_ids: z.array(z.string()).optional(),
+  dependencyScope: z.string().optional(),
+  dependency_scope: z.string().optional(),
+  dependabotHtmlUrl: z.string().optional(),
+  dependabot_html_url: z.string().optional(),
+  ignoredReason: z.string().nullable().optional(),
+  ignored_reason: z.string().nullable().optional(),
+  fixedAt: z.string().nullable().optional(),
+  fixed_at: z.string().nullable().optional(),
+  slaDueAt: z.string().nullable().optional(),
+  sla_due_at: z.string().nullable().optional(),
+  analysisStatus: z.string().nullable().optional(),
+  analysis_status: z.string().nullable().optional(),
+  analysisStartedAt: z.string().nullable().optional(),
+  analysis_started_at: z.string().nullable().optional(),
+  analysisCompletedAt: z.string().nullable().optional(),
+  analysis_completed_at: z.string().nullable().optional(),
+  analysisError: z.string().nullable().optional(),
+  analysis_error: z.string().nullable().optional(),
+  remediationSummary: z.string().nullable().optional(),
+  remediation_summary: z.string().nullable().optional(),
+  remediationCapability: z.record(z.string(), z.unknown()).optional(),
+  remediation_capability: z.record(z.string(), z.unknown()).optional(),
+  firstDetectedAt: z.string().optional(),
+  first_detected_at: z.string().optional(),
+  lastSyncedAt: z.string().optional(),
+  last_synced_at: z.string().optional(),
+  createdAt: z.string().optional(),
+  created_at: z.string().optional(),
+  updatedAt: z.string().optional(),
+  updated_at: z.string().optional(),
+}).passthrough() as z.ZodType<SecurityFinding>
 
-const CommandSchema: z.ZodType<SecurityAgentCommand> = z.object({
-  id: z.string(),
-  type: z.string(),
-  status: z.string(),
-  repositoryId: z.string(),
-  startedAt: z.string(),
-  completedAt: z.string().optional(),
-  output: z.string().optional(),
-})
+const FindingsResultSchema = z.object({
+  findings: z.array(FindingSchema),
+  totalCount: z.number().optional(),
+  total_count: z.number().optional(),
+  runningCount: z.number().optional(),
+  running_count: z.number().optional(),
+  concurrencyLimit: z.number().optional(),
+  concurrency_limit: z.number().optional(),
+}).passthrough()
+
+const StatsSchema = z.object({}).passthrough()
+
+const DashboardStatsSchema = z.object({}).passthrough()
+
+const AnalysisSchema = z.object({
+  id: z.string().optional(),
+  repositoryId: z.string().optional(),
+  repository_id: z.string().optional(),
+  status: z.string().optional(),
+  startedAt: z.string().optional(),
+  started_at: z.string().optional(),
+  completedAt: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  findingsCount: z.number().optional(),
+  findings_count: z.number().optional(),
+}).passthrough()
+
+const CommandSchema = z.object({
+  id: z.string().optional(),
+  type: z.string().optional(),
+  status: z.string().optional(),
+  repositoryId: z.string().optional(),
+  repository_id: z.string().optional(),
+  startedAt: z.string().optional(),
+  started_at: z.string().optional(),
+  completedAt: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  output: z.string().nullable().optional(),
+}).passthrough()
 
 // --- Queries (personal level — no organizationId needed) ---
 
 /** securityAgent.getPermissionStatus */
 export async function getPermissionStatus(token: string): Promise<SecurityAgentPermissionStatus> {
-  return trpcQuery('securityAgent.getPermissionStatus', token, PermissionStatusSchema)
+  return trpcQuery('securityAgent.getPermissionStatus', token, PermissionStatusSchema, {})
 }
 
 /** securityAgent.getConfig */
 export async function getSecurityConfig(token: string): Promise<SecurityAgentConfig> {
-  return trpcQuery('securityAgent.getConfig', token, ConfigSchema)
+  return trpcQuery('securityAgent.getConfig', token, ConfigSchema, {})
 }
 
 /** securityAgent.getRepositories */
 export async function getSecurityRepositories(token: string): Promise<SecurityAgentRepository[]> {
-  return trpcQuery('securityAgent.getRepositories', token, z.array(RepositorySchema))
+  return trpcQuery('securityAgent.getRepositories', token, z.array(RepositorySchema), {})
 }
 
-/** securityAgent.listFindings */
-export async function listFindings(token: string, input?: { repositoryId?: string; severity?: string; status?: string; limit?: number }): Promise<SecurityFinding[]> {
-  return trpcQuery('securityAgent.listFindings', token, z.array(FindingSchema), input)
+/** securityAgent.listFindings — paginated, returns { findings, totalCount, runningCount, concurrencyLimit } */
+export async function listFindings(token: string, input?: SecurityFindingsInput): Promise<SecurityFindingsResult> {
+  const result = await trpcQuery('securityAgent.listFindings', token, FindingsResultSchema, input)
+  return { ...result, findings: result.findings as SecurityFinding[] }
 }
 
 /** securityAgent.getFinding */
@@ -122,17 +181,17 @@ export async function getFinding(token: string, findingId: string): Promise<Secu
 
 /** securityAgent.getStats */
 export async function getSecurityStats(token: string): Promise<SecurityAgentStats> {
-  return trpcQuery('securityAgent.getStats', token, StatsSchema)
+  return trpcQuery('securityAgent.getStats', token, StatsSchema, {})
 }
 
 /** securityAgent.getDashboardStats */
 export async function getDashboardStats(token: string, input?: { startDate?: string; endDate?: string }): Promise<SecurityAgentDashboardStats> {
-  return trpcQuery('securityAgent.getDashboardStats', token, DashboardStatsSchema, input)
+  return trpcQuery('securityAgent.getDashboardStats', token, DashboardStatsSchema, input ?? {})
 }
 
 /** securityAgent.getLastSyncTime */
-export async function getLastSyncTime(token: string, input?: { repositoryId?: string }): Promise<{ lastSyncTime: string | null }> {
-  return trpcQuery('securityAgent.getLastSyncTime', token, z.object({ lastSyncTime: z.string().nullable() }), input)
+export async function getLastSyncTime(token: string, input?: { repositoryId?: string }): Promise<{ lastSyncTime?: string | null; last_sync_time?: string | null; [key: string]: unknown }> {
+  return trpcQuery('securityAgent.getLastSyncTime', token, z.object({ lastSyncTime: z.string().nullable().optional(), last_sync_time: z.string().nullable().optional() }).passthrough(), input ?? {})
 }
 
 /** securityAgent.getAnalysis */
@@ -147,12 +206,12 @@ export async function getCommandStatus(token: string, commandId: string): Promis
 
 /** securityAgent.listActiveCommands */
 export async function listActiveCommands(token: string): Promise<SecurityAgentCommand[]> {
-  return trpcQuery('securityAgent.listActiveCommands', token, z.array(CommandSchema))
+  return trpcQuery('securityAgent.listActiveCommands', token, z.array(CommandSchema), {})
 }
 
 /** securityAgent.getOrphanedRepositories */
 export async function getOrphanedRepositories(token: string): Promise<SecurityAgentRepository[]> {
-  return trpcQuery('securityAgent.getOrphanedRepositories', token, z.array(RepositorySchema))
+  return trpcQuery('securityAgent.getOrphanedRepositories', token, z.array(RepositorySchema), {})
 }
 
 // --- Mutations (personal level) ---
