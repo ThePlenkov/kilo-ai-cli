@@ -98,7 +98,7 @@ export const mainCommand = defineCommand({
   meta: {
     name: 'kilo-ai-cli',
     description: 'CLI for interacting with the kilo.ai cloud tRPC API',
-    version: '0.1.0',
+    version: '0.1.1',
   },
   subCommands: {
     auth: defineCommand({
