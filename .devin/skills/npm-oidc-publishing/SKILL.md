@@ -16,9 +16,10 @@ Set up npm OIDC trusted publishing for a package using `@nx-devkit/prepare-for-r
 ## Prerequisites
 
 1. **npm account** with MFA enabled (browser-based approval — npm sends a push notification, you click approve in your browser; no OTP codes needed).
-2. **npm CLI** logged in (`npm whoami` returns your username).
-3. **`.nx-devkit` submodule** built (`cd .nx-devkit && bun install && bun run build`).
-4. **GitHub repository** with a release workflow (e.g. `.github/workflows/release.yml`) that uses `id-token: write` and `registry-url: https://registry.npmjs.org`.
+2. **npm CLI** version 11.15.0 or later (required for `npm trust github`). Check with `npm --version`; update with `npm install -g npm@^11.15.0`.
+3. **npm CLI** logged in (`npm whoami` returns your username).
+4. **`.nx-devkit` submodule** built (`cd .nx-devkit && bun install && bun run build`).
+5. **GitHub repository** with a release workflow (e.g. `.github/workflows/release.yml`) that uses `id-token: write` and `registry-url: https://registry.npmjs.org`.
 
 ## Steps
 
@@ -47,8 +48,8 @@ Add `workspaceLayout` to `nx.json` so Nx discovers the `release/` project:
 ```json
 {
   "workspaceLayout": {
-    "appsDir": ["release"],
-    "libsDir": ["packages"]
+    "appsDir": "release",
+    "libsDir": "packages"
   }
 }
 ```
@@ -84,16 +85,16 @@ This publishes a `0.0.0` placeholder tarball with dist-tag `placeholder` to rese
 The executor prints the trust command. Run it manually (triggers npm MFA — approve in your browser):
 
 ```bash
-npm trust github <pkg-name> --file release.yml --repo <owner>/<repo> --allow-publish --yes
+npm trust github <pkg-name> --file release.yml --repo <owner>/<repo> --env npm --allow-publish --yes
 ```
 
 Example:
 
 ```bash
-npm trust github kilo-ai-cli --file release.yml --repo ThePlenkov/kilo-ai-cli --allow-publish --yes
+npm trust github kilo-ai-cli --file release.yml --repo ThePlenkov/kilo-ai-cli --env npm --allow-publish --yes
 ```
 
-This tells npm: "Allow the GitHub Actions workflow `release.yml` in `ThePlenkov/kilo-ai-cli` to publish `kilo-ai-cli` without an npm token."
+The `--env npm` flag restricts publishing to workflows running in the `npm` GitHub environment, adding a layer of protection. This tells npm: "Allow the GitHub Actions workflow `release.yml` in `ThePlenkov/kilo-ai-cli` to publish `kilo-ai-cli` without an npm token, but only when running in the `npm` environment."
 
 ### 4. Create the GitHub environment
 
