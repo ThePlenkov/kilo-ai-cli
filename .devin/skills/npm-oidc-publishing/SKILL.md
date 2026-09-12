@@ -147,7 +147,19 @@ npm publish --provenance (no NPM_TOKEN needed)
 
 ### `EOTP` / one-time password required
 
-`npm publish` and `npm trust github` require MFA. npm uses browser-based approval — when the command runs, npm sends a push notification and opens a browser URL. Click "Approve" in your browser to authorize. No OTP code entry needed. Run these commands in a terminal on a machine where you can open a browser.
+`npm publish` and `npm trust github` require MFA. npm uses browser-based approval — when the command runs, npm opens a browser URL and you click "Approve". No OTP code entry needed.
+
+**Important:** The `@nx-devkit/prepare-for-release` executor uses `spawnSync` internally, which cannot handle the interactive browser MFA flow. For the placeholder publish, run `npm publish` directly instead:
+
+```bash
+# Create a minimal placeholder tarball
+mkdir -p /tmp/placeholder
+echo '{"name":"<pkg-name>","version":"0.0.0","description":"placeholder","type":"module","license":"MIT","private":false}' > /tmp/placeholder/package.json
+cd /tmp/placeholder && npm pack
+npm publish <pkg-name>-0.0.0.tgz --access public --tag placeholder
+```
+
+This opens a browser URL — click "Approve" to authorize the publish.
 
 ### `Could not find project "release"`
 
