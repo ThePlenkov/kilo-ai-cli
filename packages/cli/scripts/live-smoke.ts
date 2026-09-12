@@ -338,7 +338,7 @@ async function main() {
     '',
     '| Command | Class | Status | Detail |',
     '|---|---|---|---|',
-    ...rows.map((r) => `| \`${r.cmd}\` | ${r.cls} | ${r.status} | ${r.detail.replace(/\|/g, '\\|')} |`),
+    ...rows.map((r) => `| \`${r.cmd}\` | ${r.cls} | ${r.status} | ${escapeMdCell(r.detail)} |`),
     '',
     summary(rows),
   ]
@@ -354,6 +354,11 @@ function msg(e: unknown): string {
 
 function short(s: string): string {
   return s.length > 16 ? s.slice(0, 15) + '…' : s
+}
+
+/** Escape a value for embedding in a Markdown table cell (backslashes first). */
+function escapeMdCell(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 }
 
 function truncate(s: string, n: number): string {
