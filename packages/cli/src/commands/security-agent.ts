@@ -26,6 +26,8 @@ import {
   triggerSync,
 } from '../api/security-agent.ts'
 import { printSummary, printTable } from './format.ts'
+import { confirm } from './confirm.ts'
+import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 import { getToken } from './helpers.ts'
 
 export const securityStatusCommand = defineCommand({
@@ -152,10 +154,10 @@ export const securityFindingsCommand = defineCommand({
     printTable(
       result.findings.map((f) => ({
         id: (f.id ?? '-').slice(0, 8),
-        sev: (f.severity ?? '-').slice(0, 8),
+        sev: colorSeverity((f.severity ?? '-').slice(0, 8)),
         title: f.title ?? '-',
-        repo: f.repoFullName ?? f.repo_full_name ?? '-',
-        status: f.status ?? '-',
+        repo: repoLink(f.repoFullName ?? f.repo_full_name),
+        status: colorStatus(f.status ?? '-'),
         pkg: f.packageName ?? f.package_name ?? '-',
       })),
       [
@@ -403,9 +405,19 @@ export const securityLastSyncCommand = defineCommand({
 
 export const securityDeleteFindingsCommand = defineCommand({
   meta: { name: 'delete-findings', description: 'Delete all findings for a repository' },
-  args: { repo: { type: 'positional', description: 'Repository ID', required: true } },
+  args: {
+    repo: { type: 'positional', description: 'Repository ID', required: true },
+    yes: { type: 'boolean', description: 'Skip confirmation prompt', alias: 'y' },
+  },
   async run({ args }) {
     const { token } = await getToken()
+    if (!args.yes) {
+      const ok = await confirm(`Delete ALL findings for repository ${args.repo}?`)
+      if (!ok) {
+        console.log('Cancelled.')
+        return
+      }
+    }
     await deleteFindingsByRepository(token, args.repo)
     console.log(`Deleted findings for repository: ${args.repo}`)
   },

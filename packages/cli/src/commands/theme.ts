@@ -70,12 +70,25 @@ export function colorAnalysis(s: string): string {
  * Format a repo full name as a clickable terminal hyperlink (OSC 8).
  * Uses ST terminator (\x1b\\) which is the standard.
  * Shows just the repo name (short), links to the full GitHub URL.
+ * Sanitizes control characters to prevent terminal injection.
  */
 export function repoLink(repoFullName: string | undefined): string {
   if (!repoFullName || repoFullName === '-') return '-'
-  const short = repoFullName.split('/').pop() ?? repoFullName
-  const url = `https://github.com/${repoFullName}`
-  return `\x1b]8;;${url}\x1b\\${short}\x1b]8;;\x1b\\`
+  // Strip control characters (C0 and C1) to prevent terminal injection
+  const c0 = String.fromCharCode(0)
+  const c1f = String.fromCharCode(0x1f)
+  const del = String.fromCharCode(0x7f)
+  const c9f = String.fromCharCode(0x9f)
+  const ctrl = new RegExp(`[${c0}-${c1f}${del}-${c9f}]`, 'g')
+  const safe = repoFullName.replace(ctrl, '')
+  // Reject path traversal segments before building the URL
+  const segments = safe.split('/')
+  if (segments.some((s) => s === '.' || s === '..' || s === '')) return safe || '-'
+  // URI-encode each path segment separately (preserve / in owner/repo)
+  const url = `https://github.com/${segments.map(encodeURIComponent).join('/')}`
+  // OSC 8 hyperlink: ESC ] 8 ; ; <url> ESC \ <label> ESC ] 8 ; ; ESC \
+  const esc = String.fromCharCode(27)
+  return `${esc}]8;;${url}${esc}\\${safe}${esc}]8;;${esc}\\`
 }
 
 /** Get the full GitHub URL for a repo full name. */
