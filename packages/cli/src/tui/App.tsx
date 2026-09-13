@@ -44,8 +44,10 @@ export function App({ token, organizationId }: AppProps) {
   }, [])
 
   const goBack = useCallback(() => {
+    // Popping to the root screen returns keyboard focus to the sidebar.
+    const nextLen = Math.max(1, stack.length - 1)
     setStack((p) => (p.length > 1 ? p.slice(0, -1) : p))
-    setFocus((f) => (stack.length > 1 ? f : 'nav'))
+    setFocus(nextLen > 1 ? 'content' : 'nav')
   }, [stack.length])
 
   const select = useCallback(
@@ -96,7 +98,11 @@ export function App({ token, organizationId }: AppProps) {
           <Box marginBottom={1}>
             <Text bold>{screen.title}</Text>
           </Box>
-          <Screen ctx={ctx} focused={focus === 'content'} />
+          <Screen
+            key={`${route.name}:${JSON.stringify(route.params)}`}
+            ctx={ctx}
+            focused={focus === 'content'}
+          />
         </Box>
       </Box>
       <Box marginTop={1}>

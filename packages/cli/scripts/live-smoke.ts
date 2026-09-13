@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -265,6 +265,16 @@ interface Row {
 }
 
 async function main() {
+  // dist/index.mjs is the executable under test — build it if missing (fresh checkout).
+  if (!existsSync(DIST)) {
+    console.log('dist/index.mjs not found — building first…')
+    const b = spawnSync('npm', ['run', 'build'], { cwd: PKG, stdio: 'inherit' })
+    if (b.status !== 0 || !existsSync(DIST)) {
+      console.error('Build failed — run `npm run build` in packages/cli first.')
+      process.exit(1)
+    }
+  }
+
   const store = createTokenStore()
   const auth = await store.get()
   if (!auth) {

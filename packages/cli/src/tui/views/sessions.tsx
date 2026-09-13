@@ -13,7 +13,18 @@ export function SessionsScreen({ ctx, focused }: ScreenProps) {
   return (
     <QueryListScreen<CliSession>
       focused={focused}
-      fetch={async () => (await fetchCloudSessions(ctx.token, { limit: 50 }, ctx.organizationId)).cliSessions}
+      fetch={async () => {
+        const all: CliSession[] = []
+        let cursor: string | undefined
+        // Follow nextCursor until the server stops paginating (bounded to 20 pages).
+        for (let i = 0; i < 20; i++) {
+          const page = await fetchCloudSessions(ctx.token, { limit: 50, cursor }, ctx.organizationId)
+          all.push(...page.cliSessions)
+          if (!page.nextCursor) break
+          cursor = page.nextCursor
+        }
+        return all
+      }}
       columns={[
         { label: 'ID', width: 14, value: (s) => s.session_id },
         { label: 'Title', width: 44, value: (s) => s.title ?? '(untitled)' },

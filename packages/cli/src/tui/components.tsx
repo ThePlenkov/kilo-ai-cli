@@ -102,7 +102,10 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   const [scrollOffset, setScrollOffset] = useState(0)
 
   const rows = data ?? []
-  const selected = rows[selectedIdx]
+  // Clamp after data shrinks (e.g. refresh returns fewer rows).
+  const selIdx = Math.min(selectedIdx, Math.max(0, rows.length - 1))
+  const offset = Math.min(scrollOffset, Math.max(0, rows.length - maxVisible))
+  const selected = rows[selIdx]
 
   useInput(
     (input, key) => {
@@ -116,14 +119,14 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
       }
       if (onKey?.(input, key, selected)) return
       if (key.upArrow) {
-        const i = Math.max(0, selectedIdx - 1)
+        const i = Math.max(0, selIdx - 1)
         setSelectedIdx(i)
-        if (i < scrollOffset) setScrollOffset(i)
+        if (i < offset) setScrollOffset(i)
       }
       if (key.downArrow) {
-        const i = Math.min(rows.length - 1, selectedIdx + 1)
+        const i = Math.min(rows.length - 1, selIdx + 1)
         setSelectedIdx(i)
-        if (i >= scrollOffset + maxVisible) setScrollOffset(i - maxVisible + 1)
+        if (i >= offset + maxVisible) setScrollOffset(i - maxVisible + 1)
       }
       if (key.return && selected) onSelect?.(selected)
     },
@@ -148,18 +151,18 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
     )
   }
 
-  const visible = rows.slice(scrollOffset, scrollOffset + maxVisible)
+  const visible = rows.slice(offset, offset + maxVisible)
   return (
     <Box flexDirection="column">
       {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
-      {scrollOffset > 0 ? <Text dimColor>  ↑ {scrollOffset} more</Text> : null}
-      <DataTable rows={visible} columns={columns} selected={selectedIdx - scrollOffset} />
-      {scrollOffset + maxVisible < rows.length ? (
-        <Text dimColor>  ↓ {rows.length - scrollOffset - maxVisible} more</Text>
+      {offset > 0 ? <Text dimColor>  ↑ {offset} more</Text> : null}
+      <DataTable rows={visible} columns={columns} selected={selIdx - offset} />
+      {offset + maxVisible < rows.length ? (
+        <Text dimColor>  ↓ {rows.length - offset - maxVisible} more</Text>
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          [{selectedIdx + 1}/{rows.length}] ↑↓ navigate{onSelect ? '  Enter=open' : ''}  r=refresh{help ? `  ${help}` : ''}  Esc=back
+          [{selIdx + 1}/{rows.length}] ↑↓ navigate{onSelect ? '  Enter=open' : ''}  r=refresh{help ? `  ${help}` : ''}  Esc=back
         </Text>
       </Box>
     </Box>

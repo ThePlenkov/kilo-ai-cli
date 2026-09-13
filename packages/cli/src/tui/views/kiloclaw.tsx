@@ -118,7 +118,7 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
   )
 }
 
-/** KiloClaw → Billing history (uses the first subscription's instanceId). */
+/** KiloClaw → Billing history (uses the first subscription's instanceId). Fetches all pages. */
 export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
   return (
     <QueryListScreen<Record<string, unknown>>
@@ -127,8 +127,16 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
         const { subscriptions } = await listPersonalSubscriptions(ctx.token)
         const first = subscriptions[0]
         if (!first) throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
-        const page = await getBillingHistory(ctx.token, first.instanceId)
-        return page.entries
+        const entries: Record<string, unknown>[] = []
+        let cursor: string | undefined
+        // Follow cursor pagination until hasMore=false (bounded to 20 pages).
+        for (let i = 0; i < 20; i++) {
+          const page = await getBillingHistory(ctx.token, first.instanceId, undefined, cursor)
+          entries.push(...page.entries)
+          if (!page.hasMore || !page.cursor) break
+          cursor = page.cursor
+        }
+        return entries
       }}
       columns={[
         {

@@ -1,6 +1,6 @@
 # Live API smoke matrix
 
-Generated: 2026-09-12T23:42:29.472Z — `node packages/cli/scripts/live-smoke.ts`
+Generated: 2026-09-13T00:01:32.222Z — `node packages/cli/scripts/live-smoke.ts`
 
 | Command | Class | Status | Detail |
 |---|---|---|---|
@@ -10,8 +10,8 @@ Generated: 2026-09-12T23:42:29.472Z — `node packages/cli/scripts/live-smoke.ts
 | `profile` | read | PASS |  |
 | `balance` | read | PASS |  |
 | `sessions list` | read | PASS |  |
-| `sessions get ses_f680413e9ff…` | read | PASS |  |
-| `sessions rename ses_f680b9712ff… smoke-rename-17…` | idempotent | PASS | renames to a temp title, then restores the original |
+| `sessions get ses_f67f186e2ff…` | read | PASS |  |
+| `sessions rename ses_f67f186e2ff… smoke-rename-17…` | idempotent | PASS | renames to a temp title, then restores the original |
 | `org list` | read | PASS |  |
 | `org set` | manual | MANUAL | rewrites credentials.json accountId |
 | `org members` | read | SKIP | no orgs on account |
@@ -43,14 +43,14 @@ Generated: 2026-09-12T23:42:29.472Z — `node packages/cli/scripts/live-smoke.ts
 | `cloud-agent gitlab-repos` | read | PASS |  |
 | `reviews list` | read | PASS |  |
 | `reviews list` | read | SKIP | no orgs on account |
-| `reviews get e43668be-6faa-4…` | read | PASS |  |
+| `reviews get fcdbac07-3fb9-4…` | read | PASS |  |
 | `reviews config` | read | SKIP | no orgs on account |
 | `reviews toggle` | manual | MANUAL | enables/disables review agent |
 | `analytics summary` | read | PASS |  |
-| `analytics summary --from 2026-09-05 --to 2026-09-12` | read | PASS | with date range |
-| `analytics timeseries --from 2026-09-05 --to 2026-09-12` | read | PASS |  |
-| `analytics breakdown --from 2026-09-05 --to 2026-09-12` | read | PASS |  |
-| `analytics table --from 2026-09-05 --to 2026-09-12` | read | PASS |  |
+| `analytics summary --from 2026-09-06 --to 2026-09-13` | read | PASS | with date range |
+| `analytics timeseries --from 2026-09-06 --to 2026-09-13` | read | PASS |  |
+| `analytics breakdown --from 2026-09-06 --to 2026-09-13` | read | PASS |  |
+| `analytics table --from 2026-09-06 --to 2026-09-13` | read | PASS |  |
 | `app-builder list` | read | PASS |  |
 | `app-builder eligibility` | read | PASS |  |
 | `app-builder deploy` | manual | MANUAL | deploys a project |

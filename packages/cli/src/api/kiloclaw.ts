@@ -198,9 +198,9 @@ export async function getSubscriptionDetail(token: string, instanceId: string): 
   return trpcQuery('kiloclaw.getSubscriptionDetail', token, SubscriptionDetailSchema, { instanceId })
 }
 
-/** kiloclaw.getBillingHistory — requires an instanceId. */
-export async function getBillingHistory(token: string, instanceId: string, period?: string): Promise<KiloclawBillingHistoryPage> {
-  return trpcQuery('kiloclaw.getBillingHistory', token, BillingHistoryPageSchema, { instanceId, period })
+/** kiloclaw.getBillingHistory — requires an instanceId; pass `cursor` from the previous page for pagination. */
+export async function getBillingHistory(token: string, instanceId: string, period?: string, cursor?: string): Promise<KiloclawBillingHistoryPage> {
+  return trpcQuery('kiloclaw.getBillingHistory', token, BillingHistoryPageSchema, { instanceId, period, cursor })
 }
 
 // --- Mutations ---
