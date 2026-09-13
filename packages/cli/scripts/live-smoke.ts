@@ -15,6 +15,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -243,12 +244,20 @@ const COMMANDS: Cmd[] = [
 // Runner
 // ---------------------------------------------------------------------------
 
-// oxlint-disable-next-line no-control-regex — intentionally strips ANSI escapes
-const ANSI = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
+// Intentionally strips ANSI escapes from child output (built via char codes so
+// no control-character literals appear in a regex — Sonar S6324).
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+const ANSI = new RegExp(`${ESC}\\[[0-9;]*[a-zA-Z]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`, 'g')
+
+// PATH-resolved binaries trip Sonar S4036 — always spawn the current node binary.
+const NODE = process.execPath
+// Resolve tsdown's bin wherever the package manager placed it (hoisted or nested).
+const TSDOWN = join(dirname(createRequire(import.meta.url).resolve('tsdown/package.json')), 'dist/run.mjs')
 
 function run(cmd: string, extra: string[]): { code: number; output: string } {
   const argv = cmd.split(' ').concat(extra)
-  const r = spawnSync('node', [DIST, ...argv], {
+  const r = spawnSync(NODE, [DIST, ...argv], {
     timeout: TIMEOUT_MS,
     encoding: 'utf8',
     env: { ...process.env, NO_COLOR: '1' },
@@ -268,7 +277,7 @@ async function main() {
   // dist/index.mjs is the executable under test — build it if missing (fresh checkout).
   if (!existsSync(DIST)) {
     console.log('dist/index.mjs not found — building first…')
-    const b = spawnSync('npm', ['run', 'build'], { cwd: PKG, stdio: 'inherit' })
+    const b = spawnSync(NODE, [TSDOWN], { cwd: PKG, stdio: 'inherit' })
     if (b.status !== 0 || !existsSync(DIST)) {
       console.error('Build failed — run `npm run build` in packages/cli first.')
       process.exit(1)

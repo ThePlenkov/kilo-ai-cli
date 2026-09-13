@@ -28,11 +28,15 @@ const token = auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.k
 let url = `${KILO_API_BASE}/api/trpc/${procedure}`
 if (inputJson) url += `?input=${encodeURIComponent(inputJson)}`
 
+// Sanitize remote payloads before logging (Sonar S5145 — log injection).
+const safe = (s: string, n: number): string =>
+  Array.from(s.slice(0, n), (c) => (c === '\n' || (c >= ' ' && c <= '~') ? c : '.')).join('')
+
 const res = await fetch(url, { method: 'GET', headers: buildAuthHeaders(token, undefined, {}) })
 const text = await res.text()
 console.log(`HTTP ${res.status}`)
 try {
-  console.log(JSON.stringify(JSON.parse(text), null, 2).slice(0, 12000))
+  console.log(safe(JSON.stringify(JSON.parse(text), null, 2), 12000))
 } catch {
-  console.log(text.slice(0, 4000))
+  console.log(safe(text, 4000))
 }
