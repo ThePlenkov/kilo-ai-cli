@@ -2,6 +2,14 @@
  * Clean terminal output formatting — no ugly console.table borders.
  */
 
+/** Strip C0/C1 control characters and DEL from remote text before terminal output. */
+export function sanitize(s: string): string {
+  return Array.from(s, (c) => {
+    const code = c.codePointAt(0) ?? 0
+    return code < 32 || code === 127 || (code >= 128 && code < 160) ? '' : c
+  }).join('')
+}
+
 /** Pad or truncate a string to a fixed width. */
 function pad(str: string, width: number): string {
   if (str.length > width) return str.slice(0, width - 1) + '…'
@@ -37,7 +45,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
   for (const row of rows) {
     const line = columns
       .map((c) => {
-        const val = String(row[c.key] ?? '-')
+        const val = sanitize(String(row[c.key] ?? '-'))
         return c.align === 'right' ? padRight(val, c.width) : pad(val, c.width)
       })
       .join('  ')
@@ -50,7 +58,7 @@ export function printRecord(record: Record<string, unknown>, labels?: Record<str
   for (const [key, value] of Object.entries(record)) {
     if (value === undefined || value === null) continue
     const label = labels?.[key] ?? key
-    console.log(`  ${label}: ${value}`)
+    console.log(`  ${label}: ${sanitize(String(value))}`)
   }
 }
 

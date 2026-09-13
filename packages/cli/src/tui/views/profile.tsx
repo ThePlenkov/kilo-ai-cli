@@ -8,7 +8,10 @@ import type { ScreenProps } from '../types.ts'
 
 /** Dashboard → Your Profile: profile record + balance + organizations. */
 export function ProfileScreen({ ctx, focused }: ScreenProps) {
-  const { data, error, loading, reload } = useQuery(() => fetchProfileWithBalance(ctx.token), [ctx.token])
+  const { data, error, loading, reload } = useQuery(
+    () => fetchProfileWithBalance(ctx.token, ctx.organizationId),
+    [ctx.token, ctx.organizationId],
+  )
 
   useInput(
     (input, key) => {

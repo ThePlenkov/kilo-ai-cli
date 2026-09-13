@@ -42,6 +42,9 @@ export const kiloclawInstancesCommand = defineCommand({
   },
 })
 
+/** Render an optional boolean flag; absent fields stay "unknown", not "no". */
+const flag = (v: boolean | undefined) => (v == null ? 'unknown' : v ? 'yes' : 'no')
+
 export const kiloclawBillingCommand = defineCommand({
   meta: { name: 'billing', description: 'Show KiloClaw billing status' },
   async run() {
@@ -51,9 +54,9 @@ export const kiloclawBillingCommand = defineCommand({
     if (status.creditBalanceMicrodollars != null) {
       console.log(`Credit balance: $${(status.creditBalanceMicrodollars / 1e6).toFixed(2)}`)
     }
-    console.log(`Current subscription: ${status.hasCurrentPersonalSubscription ? 'yes' : 'no'}`)
-    console.log(`Trial eligible: ${status.trialEligible ? 'yes' : 'no'}`)
-    console.log(`KiloPass active: ${status.hasActiveKiloPass ? 'yes' : 'no'}`)
+    console.log(`Current subscription: ${flag(status.hasCurrentPersonalSubscription)}`)
+    console.log(`Trial eligible: ${flag(status.trialEligible)}`)
+    console.log(`KiloPass active: ${flag(status.hasActiveKiloPass)}`)
   },
 })
 
@@ -84,6 +87,7 @@ export const kiloclawSubscriptionsCommand = defineCommand({
     const { subscriptions, commitPlanAvailable } = await listPersonalSubscriptions(token)
     if (subscriptions.length === 0) {
       console.log('No subscriptions found.')
+      if (commitPlanAvailable) console.log('Commit plan is available.')
       return
     }
     printTable(

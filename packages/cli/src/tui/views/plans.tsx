@@ -72,8 +72,9 @@ export function PlanUsageScreen({ ctx, focused }: ScreenProps) {
               label: 'Remaining',
               width: 30,
               value: (w) => {
-                const filled = Math.round((w.remainingPercent / 100) * 20)
-                return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)} ${w.remainingPercent.toFixed(0)}%`
+                const pct = Math.min(100, Math.max(0, w.remainingPercent))
+                const filled = Math.round((pct / 100) * 20)
+                return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)} ${pct.toFixed(0)}%`
               },
               color: (w) => (w.remainingPercent < 20 ? 'red' : w.remainingPercent < 50 ? 'yellow' : 'green'),
             },

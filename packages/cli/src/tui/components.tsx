@@ -322,11 +322,16 @@ export function Sidebar({
   )
   const visible = Math.max(3, height ?? entries.length)
   const start = Math.max(0, Math.min(selEntry - Math.floor(visible / 2), entries.length - visible))
-  const window = entries.slice(start, start + visible)
+  // Reserve a line for each scroll marker so the box never exceeds `height`.
+  const up = start > 0
+  let size = visible - (up ? 1 : 0)
+  const down = start + size < entries.length
+  if (down) size--
+  const window = entries.slice(start, start + size)
 
   return (
     <Box flexDirection="column" width={width} height={visible + 2} borderStyle="single" borderColor={focused ? 'cyan' : 'gray'} paddingX={1} overflow="hidden">
-      {start > 0 ? <Text dimColor>  ↑ {start} more</Text> : null}
+      {up ? <Text dimColor>  ↑ {start} more</Text> : null}
       {window.map((e, i) => {
         if (e.kind === 'group') {
           return (
@@ -349,7 +354,7 @@ export function Sidebar({
           </Text>
         )
       })}
-      {start + visible < entries.length ? <Text dimColor>  ↓ {entries.length - start - visible} more</Text> : null}
+      {down ? <Text dimColor>  ↓ {entries.length - start - size} more</Text> : null}
     </Box>
   )
 }

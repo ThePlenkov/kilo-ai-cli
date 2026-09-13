@@ -11,7 +11,7 @@ import {
   listCodeReviewsForUser,
   toggleReviewAgent,
 } from '../api/code-reviews.ts'
-import { printTable } from './format.ts'
+import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
 
 function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>>) {
@@ -21,7 +21,7 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
   }
   printTable(
     reviews.map((r) => ({
-      id: r.id.slice(0, 8),
+      id: r.id,
       title: r.pr_title ?? '-',
       status: r.status,
       platform: r.platform ?? '-',
@@ -30,7 +30,7 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
       model: r.model ?? '-',
     })),
     [
-      { key: 'id', label: 'ID', width: 8 },
+      { key: 'id', label: 'ID', width: 36 },
       { key: 'title', label: 'Title', width: 40 },
       { key: 'status', label: 'Status', width: 10 },
       { key: 'platform', label: 'Platform', width: 8 },
@@ -42,14 +42,17 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
 }
 
 export const reviewsListCommand = defineCommand({
-  meta: { name: 'list', description: 'List code reviews (personal, or org with --org)' },
-  args: { org: { type: 'string', description: 'Organization ID (omit for personal reviews)' } },
+  meta: { name: 'list', description: 'List code reviews (personal by default; pass an org id for org reviews)' },
+  args: {
+    id: { type: 'positional', description: 'Organization ID (same as --org)', required: false },
+    org: { type: 'string', description: 'Organization ID (omit for personal reviews)' },
+  },
   async run({ args }) {
-    const { token, organizationId } = await getToken()
-    const reviews = args.org
-      ? await listCodeReviews(token, args.org)
+    const { token } = await getToken()
+    const orgId = args.org ?? args.id
+    const reviews = orgId
+      ? await listCodeReviews(token, orgId)
       : await listCodeReviewsForUser(token)
-    void organizationId
     printReviews(reviews)
   },
 })
@@ -61,12 +64,12 @@ export const reviewsGetCommand = defineCommand({
     const { token } = await getToken()
     const { review, attempts, tokenUsage } = await getCodeReview(token, args.id)
     console.log(`ID: ${review.id}`)
-    console.log(`Title: ${review.pr_title ?? '-'}`)
+    console.log(`Title: ${sanitize(review.pr_title ?? '-')}`)
     console.log(`Status: ${review.status}`)
-    console.log(`Repo: ${review.repo_full_name ?? '-'}  PR #${review.pr_number ?? '?'}`)
-    if (review.pr_url) console.log(`URL: ${review.pr_url}`)
+    console.log(`Repo: ${sanitize(review.repo_full_name ?? '-')}  PR #${review.pr_number ?? '?'}`)
+    if (review.pr_url) console.log(`URL: ${sanitize(review.pr_url)}`)
     if (review.model) console.log(`Model: ${review.model}`)
-    if (review.error_message) console.log(`Error: ${review.error_message}`)
+    if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
     if (tokenUsage) {
       console.log(`Tokens: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`)
     }
@@ -78,7 +81,7 @@ export const reviewsGetCommand = defineCommand({
           status: a.status,
           started: a.started_at ?? '-',
           completed: a.completed_at ?? '-',
-          error: a.error_message ?? '-',
+          error: sanitize(a.error_message ?? '-'),
         })),
         [
           { key: 'n', label: '#', width: 4, align: 'right' },

@@ -21,10 +21,33 @@ import { getToken } from './helpers.ts'
 
 const GRANULARITIES: UsageGranularity[] = ['hour', 'day', 'week', 'month']
 const DIMENSIONS: UsageDimension[] = ['feature', 'model', 'mode', 'user', 'provider', 'project', 'organization']
+const METRICS: UsageMetric[] = [
+  'cost',
+  'requests',
+  'tokens',
+  'inputTokens',
+  'outputTokens',
+  'errorRate',
+  'avgLatencyMs',
+  'avgGenerationTimeMs',
+  'costPerRequest',
+  'tokensPerRequest',
+  'cacheHitRatio',
+  'outputInputRatio',
+]
 
-/** Coerce a date ("2026-08-14") or datetime into a full ISO datetime. */
-function toIsoDatetime(s: string): string {
-  return s.includes('T') ? s : `${s}T00:00:00Z`
+/** Parse a date ("2026-08-14") or ISO datetime; date-only values map to start of day. */
+function parseDateStart(s: string, flag: string): string {
+  const d = new Date(s.includes('T') ? s : `${s}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
+  return d.toISOString()
+}
+
+/** Date-only --to values include the whole day (end-of-day). */
+function parseDateEnd(s: string, flag: string): string {
+  const d = new Date(s.includes('T') ? s : `${s}T23:59:59.999Z`)
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
+  return d.toISOString()
 }
 
 interface FilterArgs {
@@ -35,18 +58,48 @@ interface FilterArgs {
 
 function parseFilters(args: FilterArgs, organizationId?: string): UsageAnalyticsFilters {
   const now = new Date()
-  const from = args.from ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const to = args.to ?? now.toISOString()
   const granularity = (args.granularity ?? 'day') as UsageGranularity
   if (!GRANULARITIES.includes(granularity)) {
     throw new Error(`Invalid --granularity "${args.granularity}" (expected: ${GRANULARITIES.join('|')})`)
   }
   return {
-    startDate: toIsoDatetime(from),
-    endDate: toIsoDatetime(to),
+    startDate: args.from ? parseDateStart(args.from, '--from') : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    endDate: args.to ? parseDateEnd(args.to, '--to') : now.toISOString(),
     granularity,
     organizationId,
   }
+}
+
+function parseMetric(s: string | undefined): UsageMetric {
+  const m = (s ?? 'cost') as UsageMetric
+  if (!METRICS.includes(m)) throw new Error(`Invalid --metric "${s}" (expected: ${METRICS.join('|')})`)
+  return m
+}
+
+const BREAKDOWN_METRICS = ['cost', 'requests', 'tokens'] as const
+
+function parseBreakdownMetric(s: string | undefined): 'cost' | 'requests' | 'tokens' {
+  const m = (s ?? 'cost') as 'cost' | 'requests' | 'tokens'
+  if (!BREAKDOWN_METRICS.includes(m)) {
+    throw new Error(`Invalid --metric "${s}" (expected: ${BREAKDOWN_METRICS.join('|')})`)
+  }
+  return m
+}
+
+function parseDimension(s: string | undefined): UsageDimension {
+  const d = (s ?? 'model') as UsageDimension
+  if (!DIMENSIONS.includes(d)) throw new Error(`Invalid --dimension "${s}" (expected: ${DIMENSIONS.join('|')})`)
+  return d
+}
+
+function parseGroupBy(s: string): UsageDimension[] {
+  return s.split(',').map((raw) => {
+    const d = raw.trim()
+    if (!DIMENSIONS.includes(d as UsageDimension)) {
+      throw new Error(`Invalid --group-by entry "${d}" (expected: ${DIMENSIONS.join('|')})`)
+    }
+    return d as UsageDimension
+  })
 }
 
 const filterArgs = {
@@ -77,7 +130,7 @@ export const analyticsTimeseriesCommand = defineCommand({
   },
   async run({ args }) {
     const { token, organizationId } = await getToken()
-    const metric = args.metric as UsageMetric
+    const metric = parseMetric(args.metric)
     const points = await getUsageTimeseries(token, { ...parseFilters(args, organizationId), metric })
     if (points.length === 0) {
       console.log('No timeseries data found.')
@@ -108,8 +161,8 @@ export const analyticsBreakdownCommand = defineCommand({
     const { token, organizationId } = await getToken()
     const entries = await getUsageBreakdown(token, {
       ...parseFilters(args, organizationId),
-      dimension: args.dimension as UsageDimension,
-      metric: args.metric as 'cost' | 'requests' | 'tokens',
+      dimension: parseDimension(args.dimension),
+      metric: parseBreakdownMetric(args.metric),
     })
     if (entries.length === 0) {
       console.log('No breakdown data found.')
@@ -118,7 +171,7 @@ export const analyticsBreakdownCommand = defineCommand({
     printTable(
       entries.map((e) => ({
         label: e.label,
-        value: args.metric === 'cost' ? `$${(e.value / 1e6).toFixed(4)}` : String(e.value),
+        value: (args.metric ?? 'cost') === 'cost' ? `$${(e.value / 1e6).toFixed(4)}` : String(e.value),
         percentage: `${e.percentage.toFixed(1)}%`,
       })),
       [
@@ -138,7 +191,7 @@ export const analyticsTableCommand = defineCommand({
   },
   async run({ args }) {
     const { token, organizationId } = await getToken()
-    const groupBy = args['group-by'].split(',').map((s) => s.trim()) as UsageDimension[]
+    const groupBy = parseGroupBy(args['group-by'])
     const rows = await getUsageTable(token, { ...parseFilters(args, organizationId), groupBy })
     if (rows.length === 0) {
       console.log('No usage data found.')
@@ -158,7 +211,7 @@ export const analyticsTableCommand = defineCommand({
     })
     printTable(mapped,
       [
-        { key: 'datetime', label: 'Date', width: 12 },
+        { key: 'datetime', label: 'Datetime', width: 24 },
         ...dimCols,
         { key: 'credits', label: 'Cost', width: 10, align: 'right' },
         { key: 'requests', label: 'Requests', width: 10, align: 'right' },

@@ -86,9 +86,9 @@ function extractData(data: unknown): unknown {
   return data
 }
 
-/** Classify an HTTP status as unauthorized. */
+/** Classify an HTTP status as an auth failure. 403 is entitlement (e.g. missing subscription), not auth. */
 function isAuthError(status: number): boolean {
-  return status === 401 || status === 403
+  return status === 401
 }
 
 /**

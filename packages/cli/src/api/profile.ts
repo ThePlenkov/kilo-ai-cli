@@ -71,14 +71,14 @@ export async function fetchBalance(
   }
 }
 
-/** Fetch profile and balance in parallel. */
+/** Fetch profile and balance in parallel. `organizationId` overrides the profile-derived scope. */
 export async function fetchProfileWithBalance(
   token: string,
+  organizationId?: string,
   baseUrl?: string,
 ): Promise<{ profile: KilocodeProfile; balance: KilocodeBalance | null }> {
   const profile = await fetchProfile(token, baseUrl)
-  const organizationId = defaultOrganizationId(profile)
-  const balance = await fetchBalance(token, organizationId, baseUrl)
+  const balance = await fetchBalance(token, organizationId ?? defaultOrganizationId(profile), baseUrl)
   return { profile, balance }
 }
 

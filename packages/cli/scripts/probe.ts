@@ -6,6 +6,10 @@
  * Usage: node scripts/probe.ts <procedure> [inputJson]
  *   node scripts/probe.ts kiloclaw.getBillingStatus
  *   node scripts/probe.ts usageAnalytics.getSummary '{"startDate":"2026-08-14","endDate":"2026-09-13"}'
+ *
+ * `inputJson` is sent verbatim as the tRPC `input` query parameter — i.e. the
+ * JSON the client would put in `?input=`. For procedures whose input schema is
+ * `z.void()`/optional, pass `'{}'` or omit it entirely.
  */
 
 import { createTokenStore } from '../src/auth/token-store.ts'
@@ -25,16 +29,22 @@ if (!auth) {
 }
 const token = auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.key : auth.token
 
-let url = `${KILO_API_BASE}/api/trpc/${procedure}`
-if (inputJson) url += `?input=${encodeURIComponent(inputJson)}`
+const url = new URL(`${KILO_API_BASE}/api/trpc/${procedure}`)
+if (inputJson) url.searchParams.set('input', inputJson)
 
 // Sanitize remote payloads before logging (Sonar S5145 — log injection).
-const safe = (s: string, n: number): string =>
-  Array.from(s.slice(0, n), (c) => (c === '\n' || (c >= ' ' && c <= '~') ? c : '.')).join('')
+const safe = (s: string, n: number): string => s.slice(0, n).replace(/[^\x20-\x7E\n]/g, '.')
 
-const res = await fetch(url, { method: 'GET', headers: buildAuthHeaders(token, undefined, {}) })
+const res = await fetch(url, {
+  method: 'GET',
+  headers: buildAuthHeaders(token, undefined, {
+    kilocodeOrganizationId: auth.type === 'oauth' ? auth.accountId : undefined,
+  }),
+  signal: AbortSignal.timeout(15_000),
+})
 const text = await res.text()
 console.log(`HTTP ${res.status}`)
+if (!res.ok) process.exitCode = 1
 try {
   console.log(safe(JSON.stringify(JSON.parse(text), null, 2), 12000))
 } catch {

@@ -62,7 +62,7 @@ describe('code-reviews API', () => {
     expect(result.review.id).toBe('cr1')
     expect(result.attempts).toHaveLength(1)
     const url = fetchMock.mock.calls[0]![0] as string
-    expect(decodeURIComponent(url.split('input=')[1]!)).toContain('reviewId')
+    expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({ reviewId: 'cr1' })
   })
 
   it('listCodeReviews accepts { reviews } envelope', async () => {
@@ -74,6 +74,15 @@ describe('code-reviews API', () => {
     const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toContain('codeReviews.listForOrganization')
     expect(decodeURIComponent(url.split('input=')[1]!)).toContain('org1')
+  })
+
+  it('listCodeReviews accepts a bare array', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse([{ id: 'cr2', status: 'open', created_at: '2024-01-01', updated_at: '2024-01-02' }]),
+    )
+    const result = await listCodeReviews('tok', 'org1')
+    expect(result).toHaveLength(1)
+    expect(result[0]!.id).toBe('cr2')
   })
 
   it('listGitLabRepositories calls organizations.codeReviews.listGitLabRepositories', async () => {

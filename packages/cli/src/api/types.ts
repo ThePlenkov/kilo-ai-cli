@@ -268,8 +268,8 @@ export interface CodeReview {
   id: string
   owned_by_organization_id?: string | null
   owned_by_user_id?: string | null
-  review_type?: string
-  trigger_source?: string
+  review_type?: string | null
+  trigger_source?: string | null
   repo_full_name?: string | null
   pr_number?: number | null
   pr_url?: string | null

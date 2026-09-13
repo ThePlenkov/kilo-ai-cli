@@ -25,6 +25,7 @@ import { listFindings, listActiveCommands, getSecurityRepositories } from '../sr
 import { listOrganizations } from '../src/api/organizations.ts'
 import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
 import { listCodeReviewsForUser } from '../src/api/code-reviews.ts'
+import { listAppBuilderProjects } from '../src/api/app-builder.ts'
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(PKG, 'dist/index.mjs')
@@ -68,7 +69,9 @@ async function firstSessionId(ctx: Ctx): Promise<string[] | null> {
 
 async function firstPlanId(ctx: Ctx): Promise<string[] | null> {
   const subs = await fetchCodingPlanSubscriptions(ctx.token, ctx.organizationId)
-  return subs[0] ? [subs[0].id] : null
+  // Prefer a usage-eligible subscription — the first one may be ineligible.
+  const usable = subs.find((s) => s.canQueryUsage) ?? subs[0]
+  return usable ? [usable.id] : null
 }
 
 async function firstOrgId(_ctx: Ctx): Promise<string[] | null> {
@@ -102,6 +105,11 @@ async function firstKiloclawSubId(ctx: Ctx): Promise<string[] | null> {
   return subscriptions[0] ? [subscriptions[0].instanceId] : null
 }
 
+async function firstProjectId(ctx: Ctx): Promise<string[] | null> {
+  const projects = await listAppBuilderProjects(ctx.token)
+  return projects[0] ? [projects[0].id] : null
+}
+
 const dates = [
   '--from',
   new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -109,8 +117,8 @@ const dates = [
   new Date().toISOString().slice(0, 10),
 ]
 
-/** Stashed original session title for the idempotent rename test. */
-let originalTitle: string | null = null
+/** Stashed session id + original title for the idempotent rename test. */
+let renameTarget: { id: string; title: string } | null = null
 
 // ---------------------------------------------------------------------------
 // Command inventory — mirrors src/cli.ts
@@ -132,19 +140,21 @@ const COMMANDS: Cmd[] = [
     args: async (ctx) => {
       const ids = await firstSessionId(ctx)
       if (!ids) return null
-      originalTitle = (await fetchCloudSession(ctx.token, ids[0]!, ctx.organizationId)).title
-      return [ids[0]!, `smoke-rename-${Date.now()}`]
+      const title = (await fetchCloudSession(ctx.token, ids[0]!, ctx.organizationId)).title
+      // Untitled sessions can't be restored via rename (title is required) — skip.
+      renameTarget = title == null ? null : { id: ids[0]!, title }
+      return renameTarget ? [renameTarget.id, `smoke-rename-${Date.now()}`] : null
     },
     post: async (ctx) => {
-      const ids = await firstSessionId(ctx)
-      if (ids) await renameCloudSession(ctx.token, ids[0]!, originalTitle ?? '', ctx.organizationId)
+      // Restore by the captured id — list order may shift after rename.
+      if (renameTarget) await renameCloudSession(ctx.token, renameTarget.id, renameTarget.title, ctx.organizationId)
     },
-    skipReason: 'no sessions',
+    skipReason: 'no sessions with a title',
     note: 'renames to a temp title, then restores the original',
   },
 
   { cmd: 'org list', cls: 'read' },
-  { cmd: 'org set', cls: 'manual', note: 'rewrites credentials.json accountId' },
+  { cmd: 'org set', cls: 'manual', args: firstOrgId, skipReason: 'no orgs on account', note: 'rewrites credentials.json accountId' },
   { cmd: 'org members', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org usage', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org credits', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
@@ -152,8 +162,17 @@ const COMMANDS: Cmd[] = [
   { cmd: 'org invoices', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org models', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org security', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
-  { cmd: 'org create', cls: 'manual', note: 'creates a real org on the account' },
-  { cmd: 'org update', cls: 'manual', note: 'renames an org' },
+  { cmd: 'org create', cls: 'manual', args: async () => ['live-smoke-org'], note: 'creates a real org on the account' },
+  {
+    cmd: 'org update',
+    cls: 'manual',
+    args: async (c) => {
+      const org = await firstOrgId(c)
+      return org ? [...org, '--name', 'live-smoke-renamed'] : null
+    },
+    skipReason: 'no orgs on account',
+    note: 'renames an org',
+  },
 
   { cmd: 'plans list', cls: 'read' },
   {
@@ -174,7 +193,7 @@ const COMMANDS: Cmd[] = [
   { cmd: 'kiloclaw changelog', cls: 'read' },
   { cmd: 'kiloclaw version', cls: 'read' },
   { cmd: 'kiloclaw file-tree', cls: 'read', expectError: /requires an active subscription/i },
-  { cmd: 'kiloclaw run-start', cls: 'manual', note: 'spins up a paid run' },
+  { cmd: 'kiloclaw run-start', cls: 'manual', args: async () => ['live smoke test prompt'], note: 'spins up a paid run' },
   { cmd: 'kiloclaw run-status', cls: 'never', note: 'no run id fixture — needs run-start first' },
   { cmd: 'kiloclaw run-cancel', cls: 'never', note: 'needs a live run id' },
   { cmd: 'kiloclaw unpin', cls: 'manual', note: 'removes version pin' },
@@ -185,14 +204,11 @@ const COMMANDS: Cmd[] = [
 
   { cmd: 'reviews list', cls: 'read' },
   {
-    cmd: 'reviews list',
+    cmd: 'reviews list --org',
     cls: 'read',
-    args: async (c) => {
-      const org = await firstOrgId(c)
-      return org ? ['--org', ...org] : null
-    },
+    args: firstOrgId,
     skipReason: 'no orgs on account',
-    note: 'org-scoped via --org',
+    note: 'org-scoped variant',
   },
   { cmd: 'reviews get', cls: 'read', args: firstReviewId, skipReason: 'no personal reviews' },
   {
@@ -204,7 +220,16 @@ const COMMANDS: Cmd[] = [
     },
     skipReason: 'no orgs on account',
   },
-  { cmd: 'reviews toggle', cls: 'manual', note: 'enables/disables review agent' },
+  {
+    cmd: 'reviews toggle',
+    cls: 'manual',
+    args: async (c) => {
+      const org = await firstOrgId(c)
+      return org ? [...org, 'github', 'false'] : null
+    },
+    skipReason: 'no orgs on account',
+    note: 'enables/disables review agent',
+  },
 
   { cmd: 'analytics summary', cls: 'read' },
   { cmd: 'analytics summary', cls: 'read', args: async () => dates, note: 'with date range' },
@@ -214,7 +239,7 @@ const COMMANDS: Cmd[] = [
 
   { cmd: 'app-builder list', cls: 'read' },
   { cmd: 'app-builder eligibility', cls: 'read' },
-  { cmd: 'app-builder deploy', cls: 'manual', note: 'deploys a project' },
+  { cmd: 'app-builder deploy', cls: 'manual', args: firstProjectId, skipReason: 'no app-builder projects', note: 'deploys a project' },
 
   { cmd: 'security status', cls: 'read' },
   { cmd: 'security config', cls: 'read' },
@@ -228,11 +253,11 @@ const COMMANDS: Cmd[] = [
   { cmd: 'security orphaned-repos', cls: 'read' },
   { cmd: 'security last-sync', cls: 'read' },
   { cmd: 'security sync', cls: 'manual', note: 'triggers GitHub sync' },
-  { cmd: 'security analyze', cls: 'manual', args: firstSecurityRepoId, note: 'starts a paid analysis' },
-  { cmd: 'security dismiss', cls: 'manual', note: 'dismisses a finding' },
-  { cmd: 'security remediate', cls: 'manual', note: 'may open real PRs' },
-  { cmd: 'security retry-remediation', cls: 'manual' },
-  { cmd: 'security cancel-remediation', cls: 'manual' },
+  { cmd: 'security analyze', cls: 'manual', args: firstSecurityRepoId, skipReason: 'no security repos', note: 'starts a paid analysis' },
+  { cmd: 'security dismiss', cls: 'manual', args: firstFindingId, skipReason: 'no findings', note: 'dismisses a finding' },
+  { cmd: 'security remediate', cls: 'manual', args: firstFindingId, skipReason: 'no findings', note: 'may open real PRs' },
+  { cmd: 'security retry-remediation', cls: 'manual', args: firstCommandId, skipReason: 'no active commands' },
+  { cmd: 'security cancel-remediation', cls: 'manual', args: firstCommandId, skipReason: 'no active commands' },
   { cmd: 'security enable', cls: 'manual' },
   { cmd: 'security disable', cls: 'manual' },
   { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
@@ -336,7 +361,7 @@ async function main() {
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
     rows.push({
-      cmd: c.cmd + (extra.length ? ` ${extra.map(short).join(' ')}` : ''),
+      cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
       cls: c.cls,
       status: ok ? 'PASS' : expected ? 'SKIP' : 'FAIL',
       detail: ok
@@ -346,7 +371,7 @@ async function main() {
           : truncate(errLine ?? `exit ${code}`, 160),
     })
     const label = ok ? 'PASS' : expected ? 'SKIP' : 'FAIL'
-    console.log(`${ok ? '✓' : expected ? '-' : '✗'} ${label} ${c.cmd}${extra.length ? ' ' + extra.map(short).join(' ') : ''}`)
+    console.log(`${ok ? '✓' : expected ? '-' : '✗'} ${label} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`)
   }
 
   // Markdown matrix
@@ -371,8 +396,9 @@ function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-function short(s: string): string {
-  return s.length > 16 ? s.slice(0, 15) + '…' : s
+/** Redact resolved resource IDs (UUIDs, `xxx_<token>` style) so account identifiers don't land in the matrix/log. */
+function maskArg(s: string): string {
+  return /^[0-9a-f]{8}-[0-9a-f-]{9,}/i.test(s) || /^[a-z]{2,5}_[A-Za-z0-9]{10,}$/.test(s) ? '<id>' : s
 }
 
 /** Escape a value for embedding in a Markdown table cell (backslashes first). */

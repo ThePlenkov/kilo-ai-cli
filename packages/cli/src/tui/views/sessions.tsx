@@ -47,12 +47,16 @@ export function SessionDetailScreen({ ctx, focused }: ScreenProps) {
   )
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
 
   useInput(
     (input, key) => {
+      if (key.escape) {
+        if (renaming) setRenaming(false)
+        else ctx.goBack()
+        return
+      }
       if (renaming) return
-      if (key.escape) ctx.goBack()
       if (input === 'r' && !key.ctrl) setRenaming(true)
       if (input === 'R') reload()
     },
@@ -81,21 +85,22 @@ export function SessionDetailScreen({ ctx, focused }: ScreenProps) {
           version: data.version,
         }}
       />
-      {notice ? <Text color="green">{notice}</Text> : null}
+      {notice ? <Text color={notice.error ? 'red' : 'green'}>{notice.text}</Text> : null}
       {renaming ? (
         <Box marginTop={1}>
           <Text>New title: </Text>
           <TextInput
             value={title}
             onChange={setTitle}
+            focus={focused}
             onSubmit={async (v) => {
               setRenaming(false)
               try {
                 await renameCloudSession(ctx.token, id, v, ctx.organizationId)
-                setNotice(`Renamed to "${truncate(v, 60)}"`)
+                setNotice({ text: `Renamed to "${truncate(v, 60)}"`, error: false })
                 reload()
               } catch (e) {
-                setNotice(`Rename failed: ${e instanceof Error ? e.message : String(e)}`)
+                setNotice({ text: `Rename failed: ${e instanceof Error ? e.message : String(e)}`, error: true })
               }
             }}
           />

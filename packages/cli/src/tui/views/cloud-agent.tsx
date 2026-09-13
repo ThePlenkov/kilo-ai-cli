@@ -57,6 +57,7 @@ export function CloudAgentSessionScreen({ ctx, focused }: ScreenProps) {
           <TextInput
             value={input}
             onChange={setInput}
+            focus={focused}
             onSubmit={(v) => {
               if (v.trim()) setSubmitted(v.trim())
             }}

@@ -50,14 +50,20 @@ import { FindingDetailView } from './views/FindingDetailView.tsx'
 import { StatsView } from './views/StatsView.tsx'
 import { DashboardView } from './views/DashboardView.tsx'
 
+// Persisted across mounts so returning from a finding detail keeps filters/page.
+let savedFindingsFilter: FindingsFilter = { limit: 50, offset: 0 }
+
 function FindingsScreen({ ctx, focused }: ScreenProps) {
-  const [filter, setFilter] = useState<FindingsFilter>({ limit: 50, offset: 0 })
+  const [filter, setFilter] = useState<FindingsFilter>(savedFindingsFilter)
   return (
     <FindingsListView
       token={ctx.token}
       focused={focused}
       filter={filter}
-      onFilterChange={setFilter}
+      onFilterChange={(f) => {
+        savedFindingsFilter = f
+        setFilter(f)
+      }}
       onSelectFinding={(id) => ctx.navigate('security-finding', { id })}
       onBack={ctx.goBack}
     />

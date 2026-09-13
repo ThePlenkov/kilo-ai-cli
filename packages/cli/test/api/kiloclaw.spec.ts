@@ -104,10 +104,12 @@ describe('kiloclaw API', () => {
 
     it('getSubscriptionDetail passes instanceId', async () => {
       fetchMock.mockResolvedValue(
-        mockResponse({ instanceId: 's1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }),
+        mockResponse({ instanceId: 'inst1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }),
       )
       const result = await getSubscriptionDetail('tok', 'inst1')
-      expect(result.instanceId).toBe('s1')
+      expect(result.instanceId).toBe('inst1')
+      const url = fetchMock.mock.calls[0]![0] as string
+      expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({ instanceId: 'inst1' })
     })
 
     it('getBillingHistory passes instanceId and period', async () => {

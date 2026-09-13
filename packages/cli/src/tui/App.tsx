@@ -30,6 +30,8 @@ export function App({ token, organizationId }: AppProps) {
     }
     return out
   }, [navScreens])
+  // Flattened in the same order the Sidebar renders — navIdx indexes this list.
+  const flatNav = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
   const [stack, setStack] = useState<Route[]>([{ name: 'profile', params: {} }])
   const [focus, setFocus] = useState<'nav' | 'content'>('nav')
@@ -60,9 +62,9 @@ export function App({ token, organizationId }: AppProps) {
 
   useInput(
     (input, key) => {
-      if (key.upArrow) setNavIdx((i) => (i - 1 + navScreens.length) % navScreens.length)
-      if (key.downArrow) setNavIdx((i) => (i + 1) % navScreens.length)
-      if (key.return || key.rightArrow) select(navScreens[navIdx]!.name)
+      if (key.upArrow) setNavIdx((i) => (i - 1 + flatNav.length) % flatNav.length)
+      if (key.downArrow) setNavIdx((i) => (i + 1) % flatNav.length)
+      if (key.return || key.rightArrow) select(flatNav[navIdx]!.name)
       if (input === 'q') process.exit(0)
     },
     { isActive: focus === 'nav' },
@@ -93,7 +95,7 @@ export function App({ token, organizationId }: AppProps) {
         </Text>
       </Box>
       <Box flexDirection="row" height={bodyHeight} overflow="hidden">
-        <Sidebar groups={sidebarGroups} selected={navIdx} focused={focus === 'nav'} height={bodyHeight} />
+        <Sidebar groups={sidebarGroups} selected={navIdx} focused={focus === 'nav'} height={Math.max(3, bodyHeight - 2)} />
         <Box flexDirection="column" flexGrow={1} paddingLeft={2} overflow="hidden">
           <Box marginBottom={1}>
             <Text bold>{screen.title}</Text>

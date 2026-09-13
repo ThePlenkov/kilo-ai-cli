@@ -104,9 +104,9 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
             data.creditBalanceMicrodollars != null
               ? `$${(data.creditBalanceMicrodollars / 1e6).toFixed(2)}`
               : '-',
-          currentSubscription: data.hasCurrentPersonalSubscription ? 'yes' : 'no',
-          trialEligible: data.trialEligible ? 'yes' : 'no',
-          kiloPass: data.hasActiveKiloPass ? 'active' : 'none',
+          currentSubscription: data.hasCurrentPersonalSubscription == null ? 'unknown' : data.hasCurrentPersonalSubscription ? 'yes' : 'no',
+          trialEligible: data.trialEligible == null ? 'unknown' : data.trialEligible ? 'yes' : 'no',
+          kiloPass: data.hasActiveKiloPass == null ? 'unknown' : data.hasActiveKiloPass ? 'active' : 'none',
           referralRewards: data.referralTotal,
           referralPending: data.referralPending,
         }}
@@ -118,26 +118,28 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
   )
 }
 
-/** KiloClaw → Billing history (uses the first subscription's instanceId). Fetches all pages. */
+/** KiloClaw → Billing history for a chosen instance (route param `id`, or the first subscription). */
 export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
+  const paramId = ctx.route.params.id
   return (
     <QueryListScreen<Record<string, unknown>>
       focused={focused}
       fetch={async () => {
         const { subscriptions } = await listPersonalSubscriptions(ctx.token)
-        const first = subscriptions[0]
-        if (!first) throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
+        const instanceId = paramId ?? subscriptions[0]?.instanceId
+        if (!instanceId) throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
         const entries: Record<string, unknown>[] = []
         let cursor: string | undefined
         // Follow cursor pagination until hasMore=false (bounded to 20 pages).
         for (let i = 0; i < 20; i++) {
-          const page = await getBillingHistory(ctx.token, first.instanceId, undefined, cursor)
+          const page = await getBillingHistory(ctx.token, instanceId, undefined, cursor)
           entries.push(...page.entries)
           if (!page.hasMore || !page.cursor) break
           cursor = page.cursor
         }
         return entries
       }}
+      banner={() => <Text dimColor>instance: {paramId ?? 'first subscription'}</Text>}
       columns={[
         {
           label: 'Entry',
@@ -172,6 +174,7 @@ export function KiloclawSubscriptionsScreen({ ctx, focused }: ScreenProps) {
         },
         { label: 'Cancel@EOP', width: 10, value: (s: { cancelAtPeriodEnd: boolean }) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
       ]}
+      onSelect={(s: { instanceId: string }) => ctx.navigate('kiloclaw-history', { id: s.instanceId })}
       onBack={ctx.goBack}
       emptyText="No KiloClaw subscriptions."
     />

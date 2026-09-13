@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
 
 import {
@@ -53,32 +53,41 @@ export function AnalyticsSummaryScreen({ ctx, focused }: ScreenProps) {
   )
 }
 
-/** Usage → Timeseries: ASCII bar chart of cost per day. */
+/** Usage → Timeseries: ASCII bar chart of cost per day (scrollable). */
 export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
   const { stdout } = useStdout()
   const width = Math.max(10, (stdout?.columns ?? 80) - 50)
+  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - 8)
   const { data, error, loading } = useQuery(
     () => getUsageTimeseries(ctx.token, { ...defaultFilters(ctx), metric: 'cost' }),
     [ctx.token],
   )
+  const [offset, setOffset] = useState(0)
+  const rows = data ?? []
   useInput((_i, key) => {
     if (key.escape) ctx.goBack()
+    if (key.upArrow) setOffset((o) => Math.max(0, o - 1))
+    if (key.downArrow) setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + 1))
+    if (key.pageDown) setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + maxVisible))
+    if (key.pageUp) setOffset((o) => Math.max(0, o - maxVisible))
   }, { isActive: focused })
 
   if (loading && !data) return <Text color="yellow">Loading timeseries…</Text>
   if (error) return <Text color="red">Error: {error}</Text>
-  if (!data || data.length === 0) return <Text>No timeseries data.</Text>
+  if (rows.length === 0) return <Text>No timeseries data.</Text>
 
-  const max = Math.max(...data.map((p) => p.value), 1)
+  const max = Math.max(...rows.map((p) => p.value), 1)
+  const visible = rows.slice(offset, offset + maxVisible)
   return (
     <Box flexDirection="column">
       <Text bold dimColor>
         Cost per day (last 30 days)
       </Text>
-      {data.map((p, i) => {
+      {offset > 0 ? <Text dimColor>  ↑ {offset} more</Text> : null}
+      {visible.map((p, i) => {
         const len = Math.max(1, Math.round((p.value / max) * width))
         return (
-          <Box key={i}>
+          <Box key={offset + i}>
             <Box width={12}>
               <Text dimColor>{p.datetime.slice(0, 10)}</Text>
             </Box>
@@ -87,8 +96,11 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
           </Box>
         )
       })}
+      {offset + maxVisible < rows.length ? (
+        <Text dimColor>  ↓ {rows.length - offset - maxVisible} more</Text>
+      ) : null}
       <Box marginTop={1}>
-        <Text dimColor>Esc=back</Text>
+        <Text dimColor>[{offset + 1}-{Math.min(offset + maxVisible, rows.length)}/{rows.length}] ↑↓ scroll  Esc=back</Text>
       </Box>
     </Box>
   )
@@ -96,6 +108,10 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
 
 /** Usage → Breakdown (cost by model). */
 export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
+  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const barWidth = avail < 60 ? 10 : 20
+  const modelWidth = Math.max(10, avail - barWidth - 30)
   return (
     <QueryListScreen<UsageAnalyticsBreakdownEntry>
       focused={focused}
@@ -103,14 +119,15 @@ export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
         getUsageBreakdown(ctx.token, { ...defaultFilters(ctx), dimension: 'model', metric: 'cost' })
       }
       columns={[
-        { label: 'Model', width: 36, value: (e) => e.label },
+        { label: 'Model', width: modelWidth, value: (e) => e.label },
         { label: 'Cost', width: 12, align: 'right', value: (e) => `$${(e.value / 1e6).toFixed(4)}` },
         {
           label: 'Share',
-          width: 30,
+          width: barWidth + 10,
           value: (e) => {
-            const filled = Math.round((e.percentage / 100) * 20)
-            return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)} ${e.percentage.toFixed(1)}%`
+            const pct = Math.min(100, Math.max(0, e.percentage))
+            const filled = Math.round((pct / 100) * barWidth)
+            return `${'█'.repeat(filled)}${'░'.repeat(barWidth - filled)} ${pct.toFixed(1)}%`
           },
         },
       ]}
@@ -122,18 +139,28 @@ export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
 
 /** Usage → Table (grouped by model). */
 export function AnalyticsTableScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
+  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  // On narrow panes drop the trailing Tokens/Err columns so the table fits.
+  const narrow = avail < 66
+  const modelWidth = Math.max(10, avail - (narrow ? 36 : 54))
+  const columns: { label: string; width: number; align?: 'left' | 'right'; value: (r: UsageAnalyticsTableRow) => string }[] = [
+    { label: 'Date', width: 10, value: (r) => r.datetime.slice(0, 10) },
+    { label: 'Model', width: modelWidth, value: (r) => r.dimensions.model ?? '-' },
+    { label: 'Cost', width: 10, align: 'right', value: (r) => `$${(r.costMicrodollars / 1e6).toFixed(4)}` },
+    { label: 'Req', width: 6, align: 'right', value: (r) => String(r.requestCount) },
+  ]
+  if (!narrow) {
+    columns.push(
+      { label: 'Tokens', width: 12, align: 'right', value: (r) => String(r.inputTokens + r.outputTokens) },
+      { label: 'Err', width: 5, align: 'right', value: (r) => String(r.errorCount) },
+    )
+  }
   return (
     <QueryListScreen<UsageAnalyticsTableRow>
       focused={focused}
       fetch={() => getUsageTable(ctx.token, { ...defaultFilters(ctx), groupBy: ['model'] })}
-      columns={[
-        { label: 'Date', width: 12, value: (r) => r.datetime.slice(0, 10) },
-        { label: 'Model', width: 32, value: (r) => r.dimensions.model ?? '-' },
-        { label: 'Cost', width: 10, align: 'right', value: (r) => `$${(r.costMicrodollars / 1e6).toFixed(4)}` },
-        { label: 'Req', width: 8, align: 'right', value: (r) => String(r.requestCount) },
-        { label: 'Tokens', width: 12, align: 'right', value: (r) => String(r.inputTokens + r.outputTokens) },
-        { label: 'Err', width: 6, align: 'right', value: (r) => String(r.errorCount) },
-      ]}
+      columns={columns}
       onBack={ctx.goBack}
       emptyText="No usage data."
     />
