@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 
 import { fetchCodingPlanSubscriptions, fetchCodingPlanUsage } from '../../api/trpc.ts'
 import type { CodingPlanSubscription } from '../../api/types.ts'
@@ -16,19 +16,25 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Usage → Coding Plans: subscriptions list. */
 export function PlansScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
+  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  // Below ~56 cols even the shrunken full column set overflows — drop extras.
+  const narrow = avail < 56
+  const columns = [
+    { label: 'ID', width: 14, value: (s: CodingPlanSubscription) => s.id },
+    { label: 'Plan', width: narrow ? avail - 30 : 22, value: (s: CodingPlanSubscription) => s.planName },
+    { label: 'Provider', width: 14, value: (s: CodingPlanSubscription) => s.providerName },
+    { label: 'Status', width: 10, value: (s: CodingPlanSubscription) => s.status, color: (s: CodingPlanSubscription) => STATUS_COLORS[s.status] },
+    { label: 'BYOK', width: 5, value: (s: CodingPlanSubscription) => (s.hasInstalledByokKey ? 'yes' : 'no') },
+    { label: 'Cancel@EOP', width: 10, value: (s: CodingPlanSubscription) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
+    { label: 'Usage', width: 6, value: (s: CodingPlanSubscription) => (s.canQueryUsage ? 'yes' : '—') },
+  ]
+  const visible = narrow ? columns.filter((c) => ['ID', 'Plan', 'Status', 'Usage'].includes(c.label)) : columns
   return (
     <QueryListScreen<CodingPlanSubscription>
       focused={focused}
       fetch={() => fetchCodingPlanSubscriptions(ctx.token, ctx.organizationId)}
-      columns={[
-        { label: 'ID', width: 14, value: (s) => s.id },
-        { label: 'Plan', width: 22, value: (s) => s.planName },
-        { label: 'Provider', width: 14, value: (s) => s.providerName },
-        { label: 'Status', width: 10, value: (s) => s.status, color: (s) => STATUS_COLORS[s.status] },
-        { label: 'BYOK', width: 5, value: (s) => (s.hasInstalledByokKey ? 'yes' : 'no') },
-        { label: 'Cancel@EOP', width: 10, value: (s) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
-        { label: 'Usage', width: 6, value: (s) => (s.canQueryUsage ? 'yes' : '—') },
-      ]}
+      columns={visible}
       // Usage queries are rejected by the API when canQueryUsage is false.
       onSelect={(s) => {
         if (s.canQueryUsage) ctx.navigate('plan-usage', { id: s.id })

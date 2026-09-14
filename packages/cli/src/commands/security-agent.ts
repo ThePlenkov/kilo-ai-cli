@@ -154,18 +154,18 @@ export const securityFindingsCommand = defineCommand({
     printTable(
       result.findings.map((f) => ({
         id: (f.id ?? '-').slice(0, 8),
-        sev: colorSeverity((f.severity ?? '-').slice(0, 8)),
+        sev: f.severity ?? '-',
         title: f.title ?? '-',
-        repo: repoLink(f.repoFullName ?? f.repo_full_name ?? undefined),
-        status: colorStatus(f.status ?? '-'),
+        repo: f.repoFullName ?? f.repo_full_name ?? '-',
+        status: f.status ?? '-',
         pkg: f.packageName ?? f.package_name ?? '-',
       })),
       [
         { key: 'id', label: 'ID', width: 8 },
-        { key: 'sev', label: 'Severity', width: 8 },
+        { key: 'sev', label: 'Severity', width: 8, format: (v) => colorSeverity(v) },
         { key: 'title', label: 'Title', width: 50 },
-        { key: 'repo', label: 'Repository', width: 30 },
-        { key: 'status', label: 'Status', width: 8 },
+        { key: 'repo', label: 'Repository', width: 30, format: (shown, raw) => repoLink(raw, shown) },
+        { key: 'status', label: 'Status', width: 8, format: (v) => colorStatus(v) },
         { key: 'pkg', label: 'Package', width: 20 },
       ],
     )

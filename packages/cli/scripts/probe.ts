@@ -53,13 +53,15 @@ if (reader) {
     // eslint-disable-next-line no-await-in-loop -- stream chunks are sequential by design
     const { done, value } = await reader.read()
     if (done || !value) break
-    size += value.byteLength
-    chunks.push(Buffer.from(value))
-    if (size >= MAX_BYTES) {
+    const remaining = MAX_BYTES - size
+    if (value.byteLength >= remaining) {
+      chunks.push(Buffer.from(value.subarray(0, remaining)))
       // eslint-disable-next-line no-await-in-loop -- cancelling after the cap
       await reader.cancel()
       break
     }
+    chunks.push(Buffer.from(value))
+    size += value.byteLength
   }
   text = Buffer.concat(chunks).toString('utf8')
 } else {

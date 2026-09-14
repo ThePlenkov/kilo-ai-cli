@@ -5,23 +5,22 @@
 // Control characters built from char codes — no literals in regexes (Sonar S6324).
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
-// Keep SGR color codes (our own chalk output); strip OSC hyperlinks, other CSI
-// sequences (cursor moves, clears), stray ESCs, then residual C0/C1/DEL chars.
-const UNSAFE_ANSI = new RegExp(
-  `(${ESC}\\[[0-9;:]*m)` +
-    `|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)` +
-    `|${ESC}\\[[0-9;:]*[A-Za-z]` +
-    `|${ESC}.?`,
+// Strip every ANSI sequence (CSI incl. SGR, OSC incl. hyperlinks, stray ESC)
+// and residual C0/C1/DEL characters — remote text must not carry escapes at all
+// (SGR conceal mode `ESC[8m` is a real terminal-injection vector). Callers that
+// colorize do so via Column.format, applied after sanitization.
+const ANSI_ALL = new RegExp(
+  `${ESC}\\[[0-9;:]*[A-Za-z]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)|${ESC}.?`,
   'g',
 )
 const CTRL = new RegExp(
-  `[${String.fromCharCode(0)}-${String.fromCharCode(26)}${String.fromCharCode(28)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
+  `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
   'g',
 )
 
-/** Strip dangerous control characters/sequences from remote text; SGR colors survive. */
+/** Strip all ANSI escape sequences and control characters from remote text. */
 export function sanitize(s: string): string {
-  return s.replace(UNSAFE_ANSI, (_m, sgr: string | undefined) => sgr ?? '').replace(CTRL, '')
+  return s.replace(ANSI_ALL, '').replace(CTRL, '')
 }
 
 /** Pad or truncate a string to a fixed width. */
@@ -42,6 +41,11 @@ export interface Column {
   label: string
   width: number
   align?: 'left' | 'right'
+  /**
+   * Post-sanitize formatter (colors, hyperlinks). Receives the truncated cell
+   * text and the full sanitized value; ANSI it adds is trusted and survives.
+   */
+  format?: (shown: string, raw: string) => string
 }
 
 /** Print rows as a clean aligned table — no borders, no index column. */
@@ -59,8 +63,11 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
   for (const row of rows) {
     const line = columns
       .map((c) => {
-        const val = sanitize(String(row[c.key] ?? '-'))
-        return c.align === 'right' ? padRight(val, c.width) : pad(val, c.width)
+        const raw = sanitize(String(row[c.key] ?? '-'))
+        const shown = raw.length > c.width ? raw.slice(0, c.width - 1) + '…' : raw
+        const styled = c.format ? c.format(shown, raw) : shown
+        const fill = ' '.repeat(Math.max(0, c.width - shown.length))
+        return c.align === 'right' ? fill + styled : styled + fill
       })
       .join('  ')
     console.log(line)

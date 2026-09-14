@@ -38,12 +38,14 @@ const METRICS: UsageMetric[] = [
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
 
-/** Reject date-only values that are not real calendar dates (e.g. 2026-02-30). */
+/** Reject values whose calendar date is not real (e.g. 2026-02-30[…]). */
 function assertValidDateOnly(s: string, flag: string): void {
-  const m = DATE_ONLY.exec(s)
-  if (!m) return
-  const d = new Date(`${s}T00:00:00Z`)
-  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+  // Validate the calendar part of both date-only and ISO datetime values —
+  // `new Date()` normalizes impossible dates instead of failing.
+  const datePart = s.split('T')[0]!
+  if (!DATE_ONLY.test(datePart)) return
+  const d = new Date(`${datePart}T00:00:00Z`)
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== datePart) {
     throw new Error(`Invalid ${flag} value "${s}" — not a real calendar date`)
   }
 }
