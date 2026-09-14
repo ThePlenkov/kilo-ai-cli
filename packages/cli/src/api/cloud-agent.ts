@@ -20,13 +20,15 @@ const SessionSchema: z.ZodType<CloudAgentSession> = z.object({
 })
 
 const RepositorySchema: z.ZodType<CloudAgentRepository> = z.object({
-  id: z.string(),
+  id: z.union([z.string(), z.number()]),
   name: z.string(),
   fullName: z.string(),
-  url: z.string(),
+  url: z.string().optional(),
   private: z.boolean(),
   defaultBranch: z.string().optional(),
 })
+
+const RepoListSchema = z.object({ repositories: z.array(RepositorySchema) })
 
 const TerminalSchema: z.ZodType<CloudAgentTerminal> = z.object({
   terminalId: z.string(),
@@ -40,14 +42,16 @@ export async function getCloudAgentSession(token: string, sessionId: string): Pr
   return trpcQuery('cloudAgentNext.getSession', token, SessionSchema, { sessionId })
 }
 
-/** cloudAgentNext.listGitHubRepositories */
+/** cloudAgentNext.listGitHubRepositories — returns { repositories: [...] } */
 export async function listGitHubRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  return trpcQuery('cloudAgentNext.listGitHubRepositories', token, z.array(RepositorySchema), { forceRefresh: forceRefresh ?? false })
+  const r = await trpcQuery('cloudAgentNext.listGitHubRepositories', token, RepoListSchema, { forceRefresh: forceRefresh ?? false })
+  return r.repositories
 }
 
-/** cloudAgentNext.listGitLabRepositories */
+/** cloudAgentNext.listGitLabRepositories — returns { repositories: [...] } */
 export async function listGitLabRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  return trpcQuery('cloudAgentNext.listGitLabRepositories', token, z.array(RepositorySchema), { forceRefresh: forceRefresh ?? false })
+  const r = await trpcQuery('cloudAgentNext.listGitLabRepositories', token, RepoListSchema, { forceRefresh: forceRefresh ?? false })
+  return r.repositories
 }
 
 // --- Mutations ---

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 
 import { listFindings } from '../../api/security-agent.ts'
 import type { SecurityFinding, SecurityFindingsResult } from '../../api/types.ts'
+import { useTermSize } from '../hooks.ts'
 import type { FindingsFilter } from '../types.ts'
 
 export interface FindingsListViewProps {
@@ -12,6 +13,7 @@ export interface FindingsListViewProps {
   onFilterChange: (f: FindingsFilter) => void
   onSelectFinding: (id: string) => void
   onBack: () => void
+  focused: boolean
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -27,9 +29,8 @@ type FilterMode = 'none' | 'severity' | 'status'
 /** Lines reserved for header, filters, help bar, scroll indicators, etc. */
 const RESERVED_LINES = 10
 
-export function FindingsListView({ token, filter, onFilterChange, onSelectFinding, onBack }: FindingsListViewProps) {
-  const { stdout } = useStdout()
-  const terminalHeight = stdout?.rows ?? 24
+export function FindingsListView({ token, filter, onFilterChange, onSelectFinding, onBack, focused }: FindingsListViewProps) {
+  const { rows: terminalHeight } = useTermSize()
   const maxVisible = Math.max(3, terminalHeight - RESERVED_LINES)
 
   const [data, setData] = useState<SecurityFindingsResult | null>(null)
@@ -115,7 +116,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
       const finding = data.findings[selectedIdx]
       if (finding && finding.id) onSelectFinding(finding.id)
     }
-  })
+  }, { isActive: focused })
 
   // --- Filter selection mode ---
   if (filterMode === 'severity') {
@@ -132,13 +133,14 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
         <Text bold color="cyan">Filter by severity:</Text>
         <SelectInput
           items={items}
+          isFocused={focused}
           onSelect={(item) => {
             onFilterChange({ ...filter, severity: item.value || undefined, offset: 0 })
             setFilterMode('none')
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} />
+        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -156,13 +158,14 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
         <Text bold color="cyan">Filter by status:</Text>
         <SelectInput
           items={items}
+          isFocused={focused}
           onSelect={(item) => {
             onFilterChange({ ...filter, status: item.value || undefined, offset: 0 })
             setFilterMode('none')
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} />
+        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -172,7 +175,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     return (
       <Box flexDirection="column">
         <Text color="yellow">Loading findings…</Text>
-        <BackHandler onBack={onBack} />
+        <BackHandler onBack={onBack} focused={focused} />
       </Box>
     )
   }
@@ -181,7 +184,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     return (
       <Box flexDirection="column">
         <Text color="red">Error: {error}</Text>
-        <BackHandler onBack={onBack} />
+        <BackHandler onBack={onBack} focused={focused} />
       </Box>
     )
   }
@@ -190,7 +193,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
     return (
       <Box flexDirection="column">
         <Text>No findings found.</Text>
-        <BackHandler onBack={onBack} />
+        <BackHandler onBack={onBack} focused={focused} />
       </Box>
     )
   }
@@ -254,7 +257,7 @@ export function FindingsListView({ token, filter, onFilterChange, onSelectFindin
         </Text>
       </Box>
 
-      <BackHandler onBack={onBack} />
+      <BackHandler onBack={onBack} focused={focused} />
     </Box>
   )
 }
@@ -284,17 +287,17 @@ function FindingRow({ finding, selected }: { finding: SecurityFinding; selected:
 }
 
 /** Handler that listens for Esc to go back. */
-function BackHandler({ onBack }: { onBack: () => void }) {
+function BackHandler({ onBack, focused }: { onBack: () => void; focused: boolean }) {
   useInput((_input, key) => {
     if (key.escape) onBack()
-  })
+  }, { isActive: focused })
   return null
 }
 
 /** Handler for filter cancel. */
-function FilterCancelHandler({ onBack }: { onBack: () => void }) {
+function FilterCancelHandler({ onBack, focused }: { onBack: () => void; focused: boolean }) {
   useInput((_input, key) => {
     if (key.escape) onBack()
-  })
+  }, { isActive: focused })
   return null
 }

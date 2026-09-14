@@ -1,19 +1,23 @@
 /**
  * KiloClaw tRPC procedures — managed instance system.
  * Source: Kilo-Org/cloud apps/web/src/routers/kiloclaw-router.ts
+ *
+ * Schemas verified against live api.kilo.ai responses (see scripts/probe.ts).
  */
 
 import { z } from 'zod'
 import { trpcMutate, trpcQuery } from './client.ts'
 import type {
   KiloclawAgent,
-  KiloclawBillingHistoryEntry,
+  KiloclawBillingHistoryPage,
   KiloclawBillingStatus,
   KiloclawChangelogEntry,
   KiloclawFileTreeNode,
   KiloclawInstance,
   KiloclawKiloCliRun,
+  KiloclawLatestVersion,
   KiloclawSubscriptionDetail,
+  KiloclawSubscriptionsResult,
 } from './types.ts'
 
 // --- Schemas ---
@@ -29,9 +33,10 @@ const KiloclawInstanceSchema: z.ZodType<KiloclawInstance> = z.object({
 })
 
 const ChangelogEntrySchema: z.ZodType<KiloclawChangelogEntry> = z.object({
-  version: z.string(),
   date: z.string(),
-  changes: z.array(z.string()),
+  description: z.string(),
+  category: z.string(),
+  deployHint: z.string().nullable(),
 })
 
 const AgentSchema: z.ZodType<KiloclawAgent> = z.object({
@@ -50,29 +55,61 @@ const FileTreeNodeSchema: z.ZodType<KiloclawFileTreeNode> = z.lazy(() =>
   }),
 )
 
-const BillingStatusSchema: z.ZodType<KiloclawBillingStatus> = z.object({
-  balance: z.number(),
-  activeSubscriptions: z.number(),
-  currentPeriodUsageUsd: z.number(),
+const BillingStatusSchema: z.ZodType<KiloclawBillingStatus> = z
+  .object({
+    hasAccess: z.boolean(),
+    accessReason: z.string().nullish(),
+    hasExistingPersonalSubscription: z.boolean().optional(),
+    hasCurrentPersonalSubscription: z.boolean().optional(),
+    commitPlanAvailable: z.boolean().optional(),
+    trialEligible: z.boolean().optional(),
+    creditBalanceMicrodollars: z.number().optional(),
+    creditIntroEligible: z.boolean().optional(),
+    hasActiveKiloPass: z.boolean().optional(),
+    intendedPriceVersion: z.string().optional(),
+    intendedSelfServiceInstanceType: z.string().optional(),
+  })
+  .passthrough() as z.ZodType<KiloclawBillingStatus>
+
+const BillingHistoryPageSchema: z.ZodType<KiloclawBillingHistoryPage> = z.object({
+  entries: z.array(z.record(z.string(), z.unknown())),
+  hasMore: z.boolean(),
+  cursor: z.string().nullable(),
 })
 
-const BillingHistoryEntrySchema: z.ZodType<KiloclawBillingHistoryEntry> = z.object({
-  id: z.string(),
-  date: z.string(),
-  amount: z.number(),
-  description: z.string(),
-  type: z.string(),
+const SubscriptionDetailSchema: z.ZodType<KiloclawSubscriptionDetail> = z
+  .object({
+    instanceId: z.string(),
+    sandboxId: z.string().optional(),
+    instanceName: z.string().optional(),
+    plan: z.string(),
+    status: z.string(),
+    activationState: z.string().optional(),
+    priceVersion: z.string().optional(),
+    selfServiceInstanceType: z.string().optional(),
+    cancelAtPeriodEnd: z.boolean(),
+    currentPeriodStart: z.string().nullish(),
+    currentPeriodEnd: z.string().nullish(),
+    destroyedAt: z.string().nullish(),
+    suspendedAt: z.string().nullish(),
+    trialStartedAt: z.string().nullish(),
+    trialEndsAt: z.string().nullish(),
+  })
+  .passthrough() as z.ZodType<KiloclawSubscriptionDetail>
+
+const SubscriptionsResultSchema: z.ZodType<KiloclawSubscriptionsResult> = z.object({
+  commitPlanAvailable: z.boolean(),
+  subscriptions: z.array(SubscriptionDetailSchema),
 })
 
-const SubscriptionDetailSchema: z.ZodType<KiloclawSubscriptionDetail> = z.object({
-  id: z.string(),
-  planName: z.string(),
-  status: z.string(),
-  providerName: z.string(),
-  providerId: z.string(),
-  cancelAtPeriodEnd: z.boolean(),
-  currentPeriodStart: z.string().optional(),
-  currentPeriodEnd: z.string().optional(),
+const LatestVersionSchema: z.ZodType<KiloclawLatestVersion> = z.object({
+  openclawVersion: z.string(),
+  variant: z.string(),
+  imageTag: z.string(),
+  imageDigest: z.string().optional(),
+  publishedAt: z.string().optional(),
+  rolloutPercent: z.number().optional(),
+  isLatest: z.boolean(),
 })
 
 const KiloCliRunSchema: z.ZodType<KiloclawKiloCliRun> = z.object({
@@ -97,8 +134,8 @@ export async function getServiceDegraded(token: string): Promise<boolean> {
 }
 
 /** kiloclaw.latestVersion */
-export async function getLatestVersion(token: string, currentImageTag?: string): Promise<{ latestVersion: string; isUpToDate: boolean }> {
-  return trpcQuery('kiloclaw.latestVersion', token, z.object({ latestVersion: z.string(), isUpToDate: z.boolean() }), currentImageTag ? { currentImageTag } : undefined)
+export async function getLatestVersion(token: string, currentImageTag?: string): Promise<KiloclawLatestVersion> {
+  return trpcQuery('kiloclaw.latestVersion', token, LatestVersionSchema, currentImageTag ? { currentImageTag } : undefined)
 }
 
 /** kiloclaw.listAllInstances */
@@ -106,7 +143,7 @@ export async function listAllInstances(token: string): Promise<KiloclawInstance[
   return trpcQuery('kiloclaw.listAllInstances', token, z.array(KiloclawInstanceSchema))
 }
 
-/** kiloclaw.fileTree */
+/** kiloclaw.fileTree — requires an active KiloClaw subscription (server-side 4xx otherwise). */
 export async function getFileTree(token: string, path?: string): Promise<KiloclawFileTreeNode[]> {
   return trpcQuery('kiloclaw.fileTree', token, z.array(FileTreeNodeSchema), path ? { path } : undefined)
 }
@@ -152,8 +189,8 @@ export async function getReferralRewardSummary(token: string): Promise<{ totalRe
 }
 
 /** kiloclaw.listPersonalSubscriptions */
-export async function listPersonalSubscriptions(token: string): Promise<KiloclawSubscriptionDetail[]> {
-  return trpcQuery('kiloclaw.listPersonalSubscriptions', token, z.array(SubscriptionDetailSchema))
+export async function listPersonalSubscriptions(token: string): Promise<KiloclawSubscriptionsResult> {
+  return trpcQuery('kiloclaw.listPersonalSubscriptions', token, SubscriptionsResultSchema)
 }
 
 /** kiloclaw.getSubscriptionDetail */
@@ -161,9 +198,9 @@ export async function getSubscriptionDetail(token: string, instanceId: string): 
   return trpcQuery('kiloclaw.getSubscriptionDetail', token, SubscriptionDetailSchema, { instanceId })
 }
 
-/** kiloclaw.getBillingHistory */
-export async function getBillingHistory(token: string, period?: string): Promise<KiloclawBillingHistoryEntry[]> {
-  return trpcQuery('kiloclaw.getBillingHistory', token, z.array(BillingHistoryEntrySchema), period ? { period } : undefined)
+/** kiloclaw.getBillingHistory — requires an instanceId; pass `cursor` from the previous page for pagination. */
+export async function getBillingHistory(token: string, instanceId: string, period?: string, cursor?: string): Promise<KiloclawBillingHistoryPage> {
+  return trpcQuery('kiloclaw.getBillingHistory', token, BillingHistoryPageSchema, { instanceId, period, cursor })
 }
 
 // --- Mutations ---

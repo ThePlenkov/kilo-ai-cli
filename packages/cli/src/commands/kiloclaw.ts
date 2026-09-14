@@ -42,43 +42,67 @@ export const kiloclawInstancesCommand = defineCommand({
   },
 })
 
+/** Render an optional boolean flag; absent fields stay "unknown", not "no". */
+const flag = (v: boolean | undefined) => (v == null ? 'unknown' : v ? 'yes' : 'no')
+
 export const kiloclawBillingCommand = defineCommand({
   meta: { name: 'billing', description: 'Show KiloClaw billing status' },
   async run() {
     const { token } = await getToken()
     const status = await getBillingStatus(token)
-    console.log(`Balance: $${status.balance.toFixed(2)}`)
-    console.log(`Active subscriptions: ${status.activeSubscriptions}`)
-    console.log(`Current period usage: $${status.currentPeriodUsageUsd.toFixed(2)}`)
+    console.log(`Access: ${status.hasAccess ? 'yes' : 'no'}${status.accessReason ? ` (${status.accessReason})` : ''}`)
+    if (status.creditBalanceMicrodollars != null) {
+      console.log(`Credit balance: $${(status.creditBalanceMicrodollars / 1e6).toFixed(2)}`)
+    }
+    console.log(`Current subscription: ${flag(status.hasCurrentPersonalSubscription)}`)
+    console.log(`Trial eligible: ${flag(status.trialEligible)}`)
+    console.log(`KiloPass active: ${flag(status.hasActiveKiloPass)}`)
   },
 })
 
 export const kiloclawBillingHistoryCommand = defineCommand({
-  meta: { name: 'billing-history', description: 'Show KiloClaw billing history' },
-  args: { period: { type: 'string', description: 'Billing period' } },
+  meta: { name: 'billing-history', description: 'Show KiloClaw billing history for an instance' },
+  args: {
+    id: { type: 'positional', description: 'Instance ID', required: true },
+    period: { type: 'string', description: 'Billing period' },
+    cursor: { type: 'string', description: 'Pagination cursor from a previous call' },
+    all: { type: 'boolean', description: 'Follow pagination and print all pages' },
+  },
   async run({ args }) {
     const { token } = await getToken()
-    const history = await getBillingHistory(token, args.period)
-    if (history.length === 0) {
+    if (args.all) {
+      let cursor: string | undefined = args.cursor
+      let emitted = 0
+      for (let i = 0; i < 20; i++) {
+        // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+        const page = await getBillingHistory(token, args.id, args.period, cursor)
+        for (const entry of page.entries) console.log(JSON.stringify(entry))
+        emitted += page.entries.length
+        if (!page.hasMore || !page.cursor) {
+          if (emitted === 0) {
+            console.log(
+              args.cursor
+                ? 'No more billing history entries after the given cursor.'
+                : 'No billing history found.',
+            )
+          }
+          return
+        }
+        cursor = page.cursor ?? undefined
+      }
+      console.error('Stopped after 20 pages — history continues')
+      process.exitCode = 1
+      return
+    }
+    const page = await getBillingHistory(token, args.id, args.period, args.cursor)
+    if (page.entries.length === 0) {
       console.log('No billing history found.')
       return
     }
-    printTable(
-      history.map((h) => ({
-        id: h.id,
-        date: h.date,
-        amount: h.amount,
-        description: h.description,
-        type: h.type,
-      })),
-      [
-        { key: 'id', label: 'ID', width: 12 },
-        { key: 'date', label: 'Date', width: 12 },
-        { key: 'amount', label: 'Amount', width: 10, align: 'right' },
-        { key: 'description', label: 'Description', width: 40 },
-        { key: 'type', label: 'Type', width: 10 },
-      ],
-    )
+    for (const entry of page.entries) {
+      console.log(JSON.stringify(entry))
+    }
+    if (page.hasMore) console.log(`More entries available (cursor: ${page.cursor})`)
   },
 })
 
@@ -86,27 +110,29 @@ export const kiloclawSubscriptionsCommand = defineCommand({
   meta: { name: 'subscriptions', description: 'List personal KiloClaw subscriptions' },
   async run() {
     const { token } = await getToken()
-    const subs = await listPersonalSubscriptions(token)
-    if (subs.length === 0) {
+    const { subscriptions, commitPlanAvailable } = await listPersonalSubscriptions(token)
+    if (subscriptions.length === 0) {
       console.log('No subscriptions found.')
+      if (commitPlanAvailable) console.log('Commit plan is available.')
       return
     }
     printTable(
-      subs.map((s) => ({
-        id: s.id,
-        plan: s.planName,
+      subscriptions.map((s) => ({
+        id: s.instanceId,
+        name: s.instanceName ?? '-',
+        plan: s.plan,
         status: s.status,
-        provider: s.providerName,
         cancel: s.cancelAtPeriodEnd ? 'yes' : 'no',
       })),
       [
-        { key: 'id', label: 'ID', width: 12 },
-        { key: 'plan', label: 'Plan', width: 20 },
+        { key: 'id', label: 'Instance ID', width: 12 },
+        { key: 'name', label: 'Name', width: 20 },
+        { key: 'plan', label: 'Plan', width: 12 },
         { key: 'status', label: 'Status', width: 10 },
-        { key: 'provider', label: 'Provider', width: 14 },
         { key: 'cancel', label: 'Cancel at EOP', width: 14 },
       ],
     )
+    if (commitPlanAvailable) console.log('\nCommit plan is available.')
   },
 })
 
@@ -116,13 +142,15 @@ export const kiloclawSubscriptionDetailCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const detail = await getSubscriptionDetail(token, args.id)
-    console.log(`ID: ${detail.id}`)
-    console.log(`Plan: ${detail.planName}`)
+    console.log(`Instance ID: ${detail.instanceId}`)
+    if (detail.instanceName) console.log(`Name: ${detail.instanceName}`)
+    console.log(`Plan: ${detail.plan}`)
     console.log(`Status: ${detail.status}`)
-    console.log(`Provider: ${detail.providerName}`)
     console.log(`Cancel at period end: ${detail.cancelAtPeriodEnd ? 'yes' : 'no'}`)
     if (detail.currentPeriodStart) console.log(`Current period start: ${detail.currentPeriodStart}`)
     if (detail.currentPeriodEnd) console.log(`Current period end: ${detail.currentPeriodEnd}`)
+    if (detail.destroyedAt) console.log(`Destroyed: ${detail.destroyedAt}`)
+    if (detail.trialEndsAt) console.log(`Trial ends: ${detail.trialEndsAt}`)
   },
 })
 
@@ -132,10 +160,8 @@ export const kiloclawChangelogCommand = defineCommand({
     const { token } = await getToken()
     const entries = await getChangelog(token)
     for (const entry of entries) {
-      console.log(`\n## ${entry.version} (${entry.date})`)
-      for (const change of entry.changes) {
-        console.log(`  - ${change}`)
-      }
+      console.log(`\n## ${entry.date} [${entry.category}]${entry.deployHint ? ` (${entry.deployHint})` : ''}`)
+      console.log(`  ${entry.description}`)
     }
   },
 })
@@ -146,8 +172,10 @@ export const kiloclawVersionCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const result = await getLatestVersion(token, args.current)
-    console.log(`Latest version: ${result.latestVersion}`)
-    console.log(`Up to date: ${result.isUpToDate ? 'yes' : 'no'}`)
+    console.log(`OpenClaw version: ${result.openclawVersion} (${result.variant})`)
+    console.log(`Image tag: ${result.imageTag}`)
+    if (result.publishedAt) console.log(`Published: ${result.publishedAt}`)
+    console.log(`Is latest: ${result.isLatest ? 'yes' : 'no'}`)
   },
 })
 

@@ -253,7 +253,7 @@ Manage KiloClaw managed instances.
 ```text
 kilo-ai-cli kiloclaw instances                   # List instances
 kilo-ai-cli kiloclaw billing                       # Show billing info
-kilo-ai-cli kiloclaw billing-history              # Show billing history
+kilo-ai-cli kiloclaw billing-history <instance-id> # Show billing history for an instance
 kilo-ai-cli kiloclaw subscriptions                 # List subscriptions
 kilo-ai-cli kiloclaw subscription <id>             # Show subscription details
 kilo-ai-cli kiloclaw changelog                     # Show changelog
@@ -276,7 +276,9 @@ kilo-ai-cli cloud-agent gitlab-repos              # List connected GitLab reposi
 ### reviews
 
 ```text
-kilo-ai-cli reviews list <org>                    # List code reviews for an organization
+kilo-ai-cli reviews list                          # List your personal code reviews
+kilo-ai-cli reviews list <org>                    # List code reviews for an organization (or --org <id>)
+kilo-ai-cli reviews get <id>                      # Show a review with attempts and token usage
 kilo-ai-cli reviews config <org> <platform>       # Show review configuration (github/gitlab)
 kilo-ai-cli reviews toggle <org> <platform> --enabled <bool>   # Toggle code reviews on/off
 ```
@@ -364,15 +366,17 @@ kilo-ai-cli tui                                    # Launch interactive TUI for 
 
 ## Interactive TUI Mode
 
-The `tui` command launches a full-screen interactive terminal UI built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs). It provides a navigable interface for the Security Agent:
+The `tui` command launches a full-screen interactive terminal UI built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs). It mirrors the website's navigation as a sidebar on the left with a content pane on the right:
 
-- **Menu** — navigate between views
-- **Dashboard** — overview of security stats
-- **Findings List** — browse and filter findings
-- **Finding Detail** — inspect a single finding
-- **Stats** — aggregated security statistics
+- **Dashboard** — profile, balance, organizations
+- **Cloud** — sessions (detail + rename), cloud-agent repos, session lookup, code reviews, app builder
+- **Security** — findings (filter/detail), repositories, stats, dashboard, commands, config, permissions
+- **Usage** — analytics summary/timeseries/breakdown/table, coding plans
+- **KiloClaw** — instances, agents, billing, history, subscriptions, changelog, version, files
+- **Organizations** — org list with members/usage/credits/seats/invoices/models/security detail
+- **Account** — BYOK keys
 
-Use arrow keys to navigate, Enter to select, and select the "Exit" menu item to quit.
+Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh (the hint line at the bottom of each screen shows its actual keys). The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
 
 ---
 

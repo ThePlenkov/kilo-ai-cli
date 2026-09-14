@@ -23,9 +23,11 @@ describe('app-builder API', () => {
   })
 
   it('checkAppBuilderEligibility calls appBuilder.checkEligibility', async () => {
-    fetchMock.mockResolvedValue(mockResponse({ eligible: true }))
+    fetchMock.mockResolvedValue(
+      mockResponse({ isEligible: true, balance: 10.35, minBalance: 1, accessLevel: 'full' }),
+    )
     const result = await checkAppBuilderEligibility('tok')
-    expect(result.eligible).toBe(true)
+    expect(result.isEligible).toBe(true)
     expect(fetchMock.mock.calls[0]![0]).toContain('appBuilder.checkEligibility')
   })
 

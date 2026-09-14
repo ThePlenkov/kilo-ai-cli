@@ -19,8 +19,10 @@ const ProjectSchema: z.ZodType<AppBuilderProject> = z.object({
 })
 
 const EligibilitySchema: z.ZodType<AppBuilderEligibility> = z.object({
-  eligible: z.boolean(),
-  reason: z.string().optional(),
+  isEligible: z.boolean(),
+  balance: z.number(),
+  minBalance: z.number(),
+  accessLevel: z.string(),
 })
 
 // --- Queries ---

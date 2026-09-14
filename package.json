@@ -13,6 +13,7 @@
     "format": "nx format kilo-ai-cli",
     "format:check": "nx format-check kilo-ai-cli",
     "typecheck": "nx typecheck kilo-ai-cli",
+    "test:live": "npm run test:live -w kilo-ai-cli",
     "cli": "node packages/cli/dist/index.mjs",
     "dev": "node packages/cli/src/index.ts"
   },

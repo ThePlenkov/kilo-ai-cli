@@ -43,8 +43,9 @@ export const appBuilderEligibilityCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const result = await checkAppBuilderEligibility(token)
-    console.log(`Eligible: ${result.eligible ? 'yes' : 'no'}`)
-    if (result.reason) console.log(`Reason: ${result.reason}`)
+    console.log(`Eligible: ${result.isEligible ? 'yes' : 'no'}`)
+    console.log(`Access level: ${result.accessLevel}`)
+    console.log(`Balance: $${result.balance.toFixed(2)} (min: $${result.minBalance})`)
   },
 })
 

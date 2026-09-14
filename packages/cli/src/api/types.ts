@@ -147,9 +147,10 @@ export interface KiloclawInstance {
 }
 
 export interface KiloclawChangelogEntry {
-  version: string
   date: string
-  changes: string[]
+  description: string
+  category: string
+  deployHint: string | null
 }
 
 export interface KiloclawAgent {
@@ -167,28 +168,58 @@ export interface KiloclawFileTreeNode {
 }
 
 export interface KiloclawBillingStatus {
-  balance: number
-  activeSubscriptions: number
-  currentPeriodUsageUsd: number
+  hasAccess: boolean
+  accessReason?: string | null
+  hasExistingPersonalSubscription?: boolean
+  hasCurrentPersonalSubscription?: boolean
+  commitPlanAvailable?: boolean
+  trialEligible?: boolean
+  creditBalanceMicrodollars?: number
+  creditIntroEligible?: boolean
+  hasActiveKiloPass?: boolean
+  intendedPriceVersion?: string
+  intendedSelfServiceInstanceType?: string
+  [key: string]: unknown
 }
 
-export interface KiloclawBillingHistoryEntry {
-  id: string
-  date: string
-  amount: number
-  description: string
-  type: string
+export interface KiloclawBillingHistoryPage {
+  entries: Record<string, unknown>[]
+  hasMore: boolean
+  cursor: string | null
 }
 
 export interface KiloclawSubscriptionDetail {
-  id: string
-  planName: string
+  instanceId: string
+  sandboxId?: string
+  instanceName?: string
+  plan: string
   status: string
-  providerName: string
-  providerId: string
+  activationState?: string
+  priceVersion?: string
+  selfServiceInstanceType?: string
   cancelAtPeriodEnd: boolean
-  currentPeriodStart?: string
-  currentPeriodEnd?: string
+  currentPeriodStart?: string | null
+  currentPeriodEnd?: string | null
+  destroyedAt?: string | null
+  suspendedAt?: string | null
+  trialStartedAt?: string | null
+  trialEndsAt?: string | null
+  [key: string]: unknown
+}
+
+export interface KiloclawSubscriptionsResult {
+  commitPlanAvailable: boolean
+  subscriptions: KiloclawSubscriptionDetail[]
+}
+
+export interface KiloclawLatestVersion {
+  openclawVersion: string
+  variant: string
+  imageTag: string
+  imageDigest?: string
+  publishedAt?: string
+  rolloutPercent?: number
+  isLatest: boolean
 }
 
 export interface KiloclawKiloCliRun {
@@ -215,10 +246,10 @@ export interface CloudAgentSession {
 }
 
 export interface CloudAgentRepository {
-  id: string
+  id: string | number
   name: string
   fullName: string
-  url: string
+  url?: string
   private: boolean
   defaultBranch?: string
 }
@@ -232,15 +263,63 @@ export interface CloudAgentTerminal {
 // tRPC Types — Code Reviews
 // ============================================================================
 
+/** codeReviews.listForUser / codeReviews.get — snake_case server shape. */
 export interface CodeReview {
   id: string
-  title: string
+  owned_by_organization_id?: string | null
+  owned_by_user_id?: string | null
+  review_type?: string | null
+  trigger_source?: string | null
+  repo_full_name?: string | null
+  pr_number?: number | null
+  pr_url?: string | null
+  pr_title?: string | null
+  pr_author?: string | null
+  base_ref?: string | null
+  head_ref?: string | null
+  head_sha?: string | null
+  platform?: string | null
+  session_id?: string | null
+  cli_session_id?: string | null
   status: string
-  platform: string
-  repositoryName?: string
-  pullRequestNumber?: number
-  createdAt: string
-  updatedAt: string
+  error_message?: string | null
+  terminal_reason?: string | null
+  agent_version?: string | null
+  model?: string | null
+  total_tokens_in?: number | null
+  total_tokens_out?: number | null
+  total_cost_musd?: number | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+  [key: string]: unknown
+}
+
+export interface CodeReviewAttempt {
+  id: string
+  code_review_id: string
+  attempt_number: number
+  retry_of_attempt_id?: string | null
+  retry_reason?: string | null
+  session_id?: string | null
+  cli_session_id?: string | null
+  execution_id?: string | null
+  status: string
+  error_message?: string | null
+  terminal_reason?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+  [key: string]: unknown
+}
+
+export interface CodeReviewDetail {
+  review: CodeReview
+  attempts: CodeReviewAttempt[]
+  tokenUsage?: { input: number; output: number; cached: number }
+  success?: boolean
 }
 
 export interface CodeReviewConfig {
@@ -318,37 +397,82 @@ export interface AvailableModel {
 // ============================================================================
 
 export interface UsageAnalyticsSummary {
-  totalCreditsUsd: number
-  totalRequests: number
+  costMicrodollars: number
+  requestCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheWriteTokens: number
+  cacheHitTokens: number
+  errorCount: number
+  cancelledCount: number
+  freeRequestCount: number
+  byokRequestCount: number
+  totalLatencyMs: number
+  totalGenerationTimeMs: number
+  latencyCount: number
+  generationTimeCount: number
   totalTokens: number
-  averageLatencyMs: number
+  distinctUsers: number
+  errorRate: number
+  avgLatencyMs: number
+  avgGenerationTimeMs: number
+  costPerRequest: number
+  tokensPerRequest: number
+  cacheHitRatio: number
+  outputInputRatio: number
+  effectiveGranularity?: string
+  [key: string]: unknown
 }
 
 export interface UsageAnalyticsTimeseriesPoint {
-  timestamp: string
-  creditsUsd: number
-  requests: number
-  tokens: number
+  datetime: string
+  value: number
 }
 
 export interface UsageAnalyticsBreakdownEntry {
+  key: string
   label: string
   value: number
   percentage: number
 }
 
 export interface UsageAnalyticsTableRow {
-  date: string
-  model: string
-  provider: string
-  creditsUsd: number
-  requests: number
-  tokens: number
+  datetime: string
+  dimensions: Record<string, string>
+  costMicrodollars: number
+  requestCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheWriteTokens: number
+  cacheHitTokens: number
+  errorCount: number
+  [key: string]: unknown
 }
 
+export type UsageGranularity = 'hour' | 'day' | 'week' | 'month'
+
+export type UsageMetric =
+  | 'cost'
+  | 'requests'
+  | 'tokens'
+  | 'inputTokens'
+  | 'outputTokens'
+  | 'errorRate'
+  | 'avgLatencyMs'
+  | 'avgGenerationTimeMs'
+  | 'costPerRequest'
+  | 'tokensPerRequest'
+  | 'cacheHitRatio'
+  | 'outputInputRatio'
+
+export type UsageDimension = 'feature' | 'model' | 'mode' | 'user' | 'provider' | 'project' | 'organization'
+
+/** All fields the usageAnalytics.* procedures require (server-side zod). */
 export interface UsageAnalyticsFilters {
-  startDate?: string
-  endDate?: string
+  /** ISO datetime, e.g. "2026-08-14T00:00:00Z" */
+  startDate: string
+  endDate: string
+  granularity: UsageGranularity
   organizationId?: string
 }
 
@@ -366,8 +490,10 @@ export interface AppBuilderProject {
 }
 
 export interface AppBuilderEligibility {
-  eligible: boolean
-  reason?: string
+  isEligible: boolean
+  balance: number
+  minBalance: number
+  accessLevel: string
 }
 
 // ============================================================================
@@ -408,37 +534,37 @@ export interface SecurityAgentRepository {
 
 export interface SecurityFinding {
   id: string
-  repoFullName?: string
-  repo_full_name?: string
-  source?: string
-  sourceId?: string
-  source_id?: string
+  repoFullName?: string | null
+  repo_full_name?: string | null
+  source?: string | null
+  sourceId?: string | null
+  source_id?: string | null
   severity: string
   title: string
-  description?: string
+  description?: string | null
   status: string
-  packageName?: string
-  package_name?: string
-  packageEcosystem?: string
-  package_ecosystem?: string
-  vulnerableVersionRange?: string
-  vulnerable_version_range?: string
-  patchedVersion?: string
-  patched_version?: string
-  manifestPath?: string
-  manifest_path?: string
-  ghsaId?: string
-  ghsa_id?: string
-  cveId?: string
-  cve_id?: string
-  cvssScore?: number | string
-  cvss_score?: number | string
-  cweIds?: string[]
-  cwe_ids?: string[]
-  dependencyScope?: string
-  dependency_scope?: string
-  dependabotHtmlUrl?: string
-  dependabot_html_url?: string
+  packageName?: string | null
+  package_name?: string | null
+  packageEcosystem?: string | null
+  package_ecosystem?: string | null
+  vulnerableVersionRange?: string | null
+  vulnerable_version_range?: string | null
+  patchedVersion?: string | null
+  patched_version?: string | null
+  manifestPath?: string | null
+  manifest_path?: string | null
+  ghsaId?: string | null
+  ghsa_id?: string | null
+  cveId?: string | null
+  cve_id?: string | null
+  cvssScore?: number | string | null
+  cvss_score?: number | string | null
+  cweIds?: string[] | null
+  cwe_ids?: string[] | null
+  dependencyScope?: string | null
+  dependency_scope?: string | null
+  dependabotHtmlUrl?: string | null
+  dependabot_html_url?: string | null
   ignoredReason?: string | null
   ignored_reason?: string | null
   fixedAt?: string | null
@@ -455,16 +581,16 @@ export interface SecurityFinding {
   analysis_error?: string | null
   remediationSummary?: string | null
   remediation_summary?: string | null
-  remediationCapability?: Record<string, unknown>
-  remediation_capability?: Record<string, unknown>
-  firstDetectedAt?: string
-  first_detected_at?: string
-  lastSyncedAt?: string
-  last_synced_at?: string
-  createdAt?: string
-  created_at?: string
-  updatedAt?: string
-  updated_at?: string
+  remediationCapability?: Record<string, unknown> | null
+  remediation_capability?: Record<string, unknown> | null
+  firstDetectedAt?: string | null
+  first_detected_at?: string | null
+  lastSyncedAt?: string | null
+  last_synced_at?: string | null
+  createdAt?: string | null
+  created_at?: string | null
+  updatedAt?: string | null
+  updated_at?: string | null
   [key: string]: unknown
 }
 
