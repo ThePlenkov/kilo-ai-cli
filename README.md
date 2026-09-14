@@ -163,7 +163,7 @@ The CLI reads configuration from environment variables and a local credentials f
 |----------|---------|-------------|
 | `KILO_API_URL` | `https://api.kilo.ai` | Base URL for the Kilo API |
 | `KILO_SESSION_INGEST_URL` | `https://ingest.kilosessions.ai` | Session ingest endpoint |
-| `KILO_CLI_VERSION` | _(none — no version in User-Agent unless set)_ | Version reported in User-Agent |
+| `KILO_CLI_VERSION` | package version | Version reported in User-Agent (overrides the default) |
 
 ### Credential Storage
 

@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"],
   "exclude": ["node_modules", "dist"]

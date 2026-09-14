@@ -62,7 +62,8 @@ the cloud tRPC router structure (Kilo-Org/cloud).
 All API requests include:
 ```
 Authorization: Bearer <token>
-X-KILOCODE-EDITORNAME: kilo-ai-cli
+User-Agent: kilo-ai-cli/<version>
+X-KILOCODE-EDITORNAME: kilo-ai-cli <version>
 X-KILOCODE-ORGANIZATIONID: <org-id>  (when set)
 ```
 
