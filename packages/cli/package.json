@@ -1,6 +1,6 @@
 {
   "name": "kilo-ai-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI for interacting with the kilo.ai cloud tRPC API — auth, sessions, organizations, plans, KiloClaw, security agent, analytics, and more",
   "type": "module",
   "license": "MIT",
