@@ -17,7 +17,7 @@ import {
 import pkg from '../../package.json' with { type: 'json' }
 
 function cliVersion(): string {
-  return process.env[ENV_VERSION] ?? pkg.version
+  return process.env[ENV_VERSION] || pkg.version
 }
 
 export function getUserAgent(): string {
