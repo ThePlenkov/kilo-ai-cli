@@ -14,15 +14,18 @@ import {
   HEADER_TASKID,
   USER_AGENT_BASE,
 } from './constants.ts'
+import pkg from '../../package.json' with { type: 'json' }
+
+function cliVersion(): string {
+  return process.env[ENV_VERSION] ?? pkg.version
+}
 
 export function getUserAgent(): string {
-  const version = process.env[ENV_VERSION]
-  return version ? `${USER_AGENT_BASE}/${version}` : USER_AGENT_BASE
+  return `${USER_AGENT_BASE}/${cliVersion()}`
 }
 
 export function getEditorNameHeader(): string {
-  const version = process.env[ENV_VERSION]
-  return version ? `${DEFAULT_EDITOR_NAME} ${version}` : DEFAULT_EDITOR_NAME
+  return `${DEFAULT_EDITOR_NAME} ${cliVersion()}`
 }
 
 export function getDefaultHeaders(): Record<string, string> {

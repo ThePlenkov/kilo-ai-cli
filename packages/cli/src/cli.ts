@@ -94,12 +94,13 @@ import {
   securitySyncCommand,
 } from './commands/security-agent.ts'
 import { tuiCommand } from './commands/tui.ts'
+import pkg from '../package.json' with { type: 'json' }
 
 export const mainCommand = defineCommand({
   meta: {
     name: 'kilo-ai-cli',
     description: 'CLI for interacting with the kilo.ai cloud tRPC API',
-    version: '0.1.1',
+    version: pkg.version,
   },
   subCommands: {
     auth: defineCommand({
