@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import { Sidebar, type SidebarItem } from './components.tsx'
+import { useTermSize } from './hooks.ts'
 import { SCREENS } from './screens.tsx'
 import type { Route, ScreenCtx } from './types.ts'
 
@@ -73,8 +74,7 @@ export function App({ token, organizationId }: AppProps) {
   const ctx: ScreenCtx = { token, organizationId, route, navigate, goBack }
   const Screen = screen.component
 
-  const { stdout } = useStdout()
-  const termRows = stdout?.rows ?? 24
+  const { rows: termRows } = useTermSize()
   // header line + its margin (2), footer margin + line (2) → body budget
   const bodyHeight = Math.max(6, termRows - 4)
 

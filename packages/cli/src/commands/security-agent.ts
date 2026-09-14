@@ -165,7 +165,7 @@ export const securityFindingsCommand = defineCommand({
         { key: 'sev', label: 'Severity', width: 8, format: (v) => colorSeverity(v) },
         { key: 'title', label: 'Title', width: 50 },
         { key: 'repo', label: 'Repository', width: 30, format: (shown, raw) => repoLink(raw, shown) },
-        { key: 'status', label: 'Status', width: 8, format: (v) => colorStatus(v) },
+        { key: 'status', label: 'Status', width: 12, format: (v) => colorStatus(v) },
         { key: 'pkg', label: 'Package', width: 20 },
       ],
     )

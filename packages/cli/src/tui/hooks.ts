@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useStdout } from 'ink'
 
 export interface QueryState<T> {
   data: T | undefined
@@ -42,4 +43,22 @@ export function useQuery<T>(fn: () => Promise<T>, deps: readonly unknown[] = [])
   }, [reload])
 
   return { ...state, reload }
+}
+
+/**
+ * Terminal size that re-renders on resize — `useStdout()` alone does not
+ * subscribe to the stream's 'resize' event, so layout math stays stale.
+ */
+export function useTermSize(): { columns: number; rows: number } {
+  const { stdout } = useStdout()
+  const [size, setSize] = useState({ columns: stdout?.columns ?? 80, rows: stdout?.rows ?? 24 })
+  useEffect(() => {
+    if (!stdout) return
+    const onResize = () => setSize({ columns: stdout.columns, rows: stdout.rows })
+    stdout.on('resize', onResize)
+    return () => {
+      stdout.off('resize', onResize)
+    }
+  }, [stdout])
+  return size
 }

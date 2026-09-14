@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import {
   getBillingHistory,
@@ -15,7 +15,7 @@ import {
   readFile,
 } from '../../api/kiloclaw.ts'
 import type { KiloclawFileTreeNode } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
+import { useQuery, useTermSize } from '../hooks.ts'
 import { QueryListScreen, QueryRecordScreen, RecordView, TextScreen } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
@@ -120,7 +120,7 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
 
 /** KiloClaw → Billing history for a chosen instance (route param `id`, or the first subscription). */
 export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { columns: termColumns } = useTermSize()
   const paramId = ctx.route.params.id
   const [truncated, setTruncated] = useState(false)
   const seq = useRef(0)
@@ -156,7 +156,7 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
       columns={[
         {
           label: 'Entry',
-          width: Math.max(30, (stdout?.columns ?? 80) - 38),
+          width: Math.max(30, termColumns - 38),
           value: (e) =>
             Object.entries(e)
               .map(([k, v]) => `${k}=${String(v)}`)

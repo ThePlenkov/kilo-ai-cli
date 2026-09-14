@@ -1,9 +1,9 @@
 import React from 'react'
-import { Box, Text, useStdout } from 'ink'
+import { Box, Text } from 'ink'
 
 import { fetchCodingPlanSubscriptions, fetchCodingPlanUsage } from '../../api/trpc.ts'
 import type { CodingPlanSubscription } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
+import { useQuery, useTermSize } from '../hooks.ts'
 import { DataTable, QueryListScreen } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 import { useInput } from 'ink'
@@ -16,8 +16,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Usage → Coding Plans: subscriptions list. */
 export function PlansScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const { columns: termColumns } = useTermSize()
+  const avail = Math.max(40, termColumns - 34)
   // Below ~56 cols even the shrunken full column set overflows — drop extras.
   const narrow = avail < 56
   const columns = [

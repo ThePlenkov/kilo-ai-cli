@@ -1,9 +1,9 @@
 /** Shared TUI building blocks: tables, list screens, record views, sidebar. */
 
 import React, { useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
-import { useQuery } from './hooks.ts'
+import { useQuery, useTermSize } from './hooks.ts'
 
 export function truncate(s: string, width: number): string {
   if (width <= 0) return ''
@@ -50,8 +50,8 @@ export function DataTable<T>({
   columns: Column<T>[]
   selected?: number
 }) {
-  const { stdout } = useStdout()
-  const avail = Math.max(20, (stdout?.columns ?? 80) - PANE_OVERHEAD)
+  const { columns: termColumns } = useTermSize()
+  const avail = Math.max(20, termColumns - PANE_OVERHEAD)
   // Shrink the widest columns until the table fits the content pane.
   const widths = columns.map((c) => c.width)
   let total = widths.reduce((a, b) => a + b, 0) + 2 * (columns.length - 1) + 2
@@ -118,10 +118,10 @@ export interface QueryListScreenProps<T> {
 
 export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   const { focused, fetch, columns, onSelect, onBack, emptyText, help, onKey, banner } = props
-  const { stdout } = useStdout()
+  const { rows: termRows } = useTermSize()
   // Reserve lines for the banner (2) and both scroll markers (2) so they
   // never push the help line past the clipped content pane.
-  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - RESERVED_LINES - (banner ? 2 : 0) - 2)
+  const maxVisible = Math.max(3, termRows - RESERVED_LINES - (banner ? 2 : 0) - 2)
 
   const { data, error, loading, reload } = useQuery(fetch, [])
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -271,8 +271,8 @@ export function TextScreen({
   fetch: () => Promise<string>
   onBack: () => void
 }) {
-  const { stdout } = useStdout()
-  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - RESERVED_LINES)
+  const { rows: termRows } = useTermSize()
+  const maxVisible = Math.max(3, termRows - RESERVED_LINES)
   const { data, error, loading } = useQuery(fetch, [])
   const [offset, setOffset] = useState(0)
 

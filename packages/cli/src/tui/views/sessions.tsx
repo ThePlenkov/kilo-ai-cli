@@ -1,19 +1,19 @@
 import React, { useRef, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../../api/trpc.ts'
 import type { CliSession } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
-import { QueryListScreen, RecordView, truncate } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
+import { clean, QueryListScreen, RecordView, truncate } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → Sessions: list of cloud CLI sessions. */
 export function SessionsScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { columns: termColumns } = useTermSize()
   const [truncated, setTruncated] = useState(false)
   const seq = useRef(0)
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const avail = Math.max(40, termColumns - 34)
   const narrow = avail < 80
   return (
     <QueryListScreen<CliSession>
@@ -65,8 +65,10 @@ export function SessionDetailScreen({ ctx, focused }: ScreenProps) {
   useInput(
     (input, key) => {
       if (key.escape) {
-        if (renaming) setRenaming(false)
-        else ctx.goBack()
+        if (renaming) {
+          setRenaming(false)
+          setTitle('')
+        } else ctx.goBack()
         return
       }
       if (renaming) return
@@ -98,7 +100,7 @@ export function SessionDetailScreen({ ctx, focused }: ScreenProps) {
           version: data.version,
         }}
       />
-      {notice ? <Text color={notice.error ? 'red' : 'green'}>{notice.text}</Text> : null}
+      {notice ? <Text color={notice.error ? 'red' : 'green'}>{clean(notice.text)}</Text> : null}
       {renaming ? (
         <Box marginTop={1}>
           <Text>New title: </Text>

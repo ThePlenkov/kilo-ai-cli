@@ -73,7 +73,7 @@ export function colorAnalysis(s: string): string {
  * Sanitizes control characters to prevent terminal injection.
  */
 export function repoLink(repoFullName: string | undefined, label?: string): string {
-  if (!repoFullName || repoFullName === '-') return label ?? '-'
+  if (!repoFullName || repoFullName === '-') return label || '-'
   // Strip control characters (C0 and C1) to prevent terminal injection
   const c0 = String.fromCharCode(0)
   const c1f = String.fromCharCode(0x1f)
@@ -81,14 +81,15 @@ export function repoLink(repoFullName: string | undefined, label?: string): stri
   const c9f = String.fromCharCode(0x9f)
   const ctrl = new RegExp(`[${c0}-${c1f}${del}-${c9f}]`, 'g')
   const safe = repoFullName.replace(ctrl, '')
+  const safeLabel = label ? label.replace(ctrl, '') : undefined
   // Reject path traversal segments before building the URL
   const segments = safe.split('/')
-  if (segments.some((s) => s === '.' || s === '..' || s === '')) return label ?? safe ?? '-'
+  if (segments.some((s) => s === '.' || s === '..' || s === '')) return safeLabel || safe || '-'
   // URI-encode each path segment separately (preserve / in owner/repo)
   const url = `https://github.com/${segments.map(encodeURIComponent).join('/')}`
   // OSC 8 hyperlink: ESC ] 8 ; ; <url> ESC \ <label> ESC ] 8 ; ; ESC \
   const esc = String.fromCharCode(27)
-  return `${esc}]8;;${url}${esc}\\${label ?? safe}${esc}]8;;${esc}\\`
+  return `${esc}]8;;${url}${esc}\\${safeLabel ?? safe}${esc}]8;;${esc}\\`
 }
 
 /** Get the full GitHub URL for a repo full name. */

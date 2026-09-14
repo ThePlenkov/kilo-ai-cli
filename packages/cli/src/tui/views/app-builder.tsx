@@ -1,22 +1,23 @@
 import React, { useRef, useState } from 'react'
-import { Text, useStdout } from 'ink'
+import { Text } from 'ink'
 
 import { checkAppBuilderEligibility, listAppBuilderProjects } from '../../api/app-builder.ts'
 import type { AppBuilderEligibility, AppBuilderProject } from '../../api/types.ts'
+import { useTermSize } from '../hooks.ts'
 import { QueryListScreen } from '../components.tsx'
 import type { Column } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → App Builder: eligibility banner + scrollable projects table. */
 export function AppBuilderScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { columns: termColumns } = useTermSize()
   const [eligibility, setEligibility] = useState<AppBuilderEligibility | null>(null)
   // Guards the side-channel eligibility state against overlapping refreshes —
   // useQuery already protects its own data, this protects the side effect.
   const seq = useRef(0)
 
   // Content pane is ~34 columns narrower than the terminal.
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const avail = Math.max(40, termColumns - 34)
   const narrow = avail < 76
 
   const columns: Column<AppBuilderProject>[] = [

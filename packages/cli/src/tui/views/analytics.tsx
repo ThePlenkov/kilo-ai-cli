@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import {
   getUsageBreakdown,
@@ -12,7 +12,7 @@ import type {
   UsageAnalyticsFilters,
   UsageAnalyticsTableRow,
 } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
+import { useQuery, useTermSize } from '../hooks.ts'
 import { QueryListScreen, QueryRecordScreen } from '../components.tsx'
 import type { ScreenCtx, ScreenProps } from '../types.ts'
 
@@ -55,10 +55,10 @@ export function AnalyticsSummaryScreen({ ctx, focused }: ScreenProps) {
 
 /** Usage → Timeseries: ASCII bar chart of cost per day (scrollable). */
 export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
-  const width = Math.max(10, (stdout?.columns ?? 80) - 50)
+  const { columns: termColumns, rows: termRows } = useTermSize()
+  const width = Math.max(10, termColumns - 50)
   // Reserve: app chrome (6) + title + both scroll markers + footer (5).
-  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - 11)
+  const maxVisible = Math.max(3, termRows - 11)
   const { data, error, loading } = useQuery(
     () => getUsageTimeseries(ctx.token, { ...defaultFilters(ctx), metric: 'cost' }),
     [ctx.token],
@@ -111,8 +111,8 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
 
 /** Usage → Breakdown (cost by model). */
 export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const { columns: termColumns } = useTermSize()
+  const avail = Math.max(40, termColumns - 34)
   const barWidth = avail < 60 ? 10 : 20
   const modelWidth = Math.max(10, avail - barWidth - 30)
   return (
@@ -142,8 +142,8 @@ export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
 
 /** Usage → Table (grouped by model). */
 export function AnalyticsTableScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const { columns: termColumns } = useTermSize()
+  const avail = Math.max(40, termColumns - 34)
   // On narrow panes drop the trailing Tokens/Err columns so the table fits.
   const narrow = avail < 66
   const modelWidth = Math.max(10, avail - (narrow ? 36 : 54))

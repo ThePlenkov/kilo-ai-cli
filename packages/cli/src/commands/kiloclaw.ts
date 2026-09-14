@@ -72,14 +72,20 @@ export const kiloclawBillingHistoryCommand = defineCommand({
     const { token } = await getToken()
     if (args.all) {
       let cursor: string | undefined = args.cursor
+      let emitted = 0
       for (let i = 0; i < 20; i++) {
         // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
         const page = await getBillingHistory(token, args.id, args.period, cursor)
         for (const entry of page.entries) console.log(JSON.stringify(entry))
-        if (!page.hasMore || !page.cursor) return
+        emitted += page.entries.length
+        if (!page.hasMore || !page.cursor) {
+          if (emitted === 0) console.log('No billing history found.')
+          return
+        }
         cursor = page.cursor ?? undefined
       }
       console.error('Stopped after 20 pages — history continues')
+      process.exitCode = 1
       return
     }
     const page = await getBillingHistory(token, args.id, args.period, args.cursor)

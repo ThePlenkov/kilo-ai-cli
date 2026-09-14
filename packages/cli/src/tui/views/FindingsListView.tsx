@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 
 import { listFindings } from '../../api/security-agent.ts'
 import type { SecurityFinding, SecurityFindingsResult } from '../../api/types.ts'
+import { useTermSize } from '../hooks.ts'
 import type { FindingsFilter } from '../types.ts'
 
 export interface FindingsListViewProps {
@@ -29,8 +30,7 @@ type FilterMode = 'none' | 'severity' | 'status'
 const RESERVED_LINES = 10
 
 export function FindingsListView({ token, filter, onFilterChange, onSelectFinding, onBack, focused }: FindingsListViewProps) {
-  const { stdout } = useStdout()
-  const terminalHeight = stdout?.rows ?? 24
+  const { rows: terminalHeight } = useTermSize()
   const maxVisible = Math.max(3, terminalHeight - RESERVED_LINES)
 
   const [data, setData] = useState<SecurityFindingsResult | null>(null)

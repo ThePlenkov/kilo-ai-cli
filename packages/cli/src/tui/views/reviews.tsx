@@ -1,9 +1,9 @@
 import React from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import { getCodeReview, listCodeReviews, listCodeReviewsForUser } from '../../api/code-reviews.ts'
 import type { CodeReview } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
+import { useQuery, useTermSize } from '../hooks.ts'
 import { DataTable, QueryListScreen, RecordView } from '../components.tsx'
 import type { Column } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
@@ -17,9 +17,9 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Cloud → Code Reviewer: personal reviews, or org reviews when org context is set. */
 export function ReviewsScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { columns: termColumns } = useTermSize()
   // Sidebar (26) + padding eats ~32 cols; size the table to the content pane.
-  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const avail = Math.max(40, termColumns - 34)
   const narrow = avail < 70
   const titleWidth = narrow ? avail - 22 : avail - 52
 
@@ -56,9 +56,13 @@ export function ReviewsScreen({ ctx, focused }: ScreenProps) {
 
 /** Cloud → review detail: review record + attempts table. */
 export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { columns: termColumns, rows: termRows } = useTermSize()
   // Record view ~15 rows + attempts header/legend + footer → cap attempt rows.
-  const maxAttempts = Math.max(2, (stdout?.rows ?? 24) - 22)
+  const maxAttempts = Math.max(2, termRows - 22)
+  // ~60-col panes cannot fit the full five-column attempts table — drop the
+  // timestamps and let the error column take the slack.
+  const avail = Math.max(30, termColumns - 34)
+  const narrowAttempts = avail < 60
   const id = ctx.route.params.id ?? ''
   const { data, error, loading, reload } = useQuery(() => getCodeReview(ctx.token, id), [ctx.token, id])
 
@@ -111,9 +115,17 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
             columns={[
               { label: '#', width: 3, align: 'right', value: (a) => String(a.attempt_number) },
               { label: 'Status', width: 12, value: (a) => a.status, color: (a) => STATUS_COLORS[a.status] },
-              { label: 'Started', width: 20, value: (a) => a.started_at ?? '-' },
-              { label: 'Completed', width: 20, value: (a) => a.completed_at ?? '-' },
-              { label: 'Error', width: 30, value: (a) => a.error_message ?? '-' },
+              ...(narrowAttempts
+                ? []
+                : [
+                    { label: 'Started', width: 20, value: (a: (typeof attempts)[number]) => a.started_at ?? '-' },
+                    { label: 'Completed', width: 20, value: (a: (typeof attempts)[number]) => a.completed_at ?? '-' },
+                  ]),
+              {
+                label: 'Error',
+                width: narrowAttempts ? avail - 19 : 30,
+                value: (a) => a.error_message ?? '-',
+              },
             ]}
           />
           {attempts.length > maxAttempts ? (

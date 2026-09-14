@@ -1,16 +1,16 @@
 import React from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput } from 'ink'
 
 import { fetchProfileWithBalance } from '../../api/profile.ts'
-import { useQuery } from '../hooks.ts'
+import { useQuery, useTermSize } from '../hooks.ts'
 import { RecordView } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
 /** Dashboard → Your Profile: profile record + balance + organizations. */
 export function ProfileScreen({ ctx, focused }: ScreenProps) {
-  const { stdout } = useStdout()
+  const { rows: termRows } = useTermSize()
   // Cap the organizations list so the footer stays inside the clipped pane.
-  const maxOrgs = Math.max(2, (stdout?.rows ?? 24) - 16)
+  const maxOrgs = Math.max(2, termRows - 16)
   const { data, error, loading, reload } = useQuery(
     () => fetchProfileWithBalance(ctx.token, ctx.organizationId),
     [ctx.token, ctx.organizationId],

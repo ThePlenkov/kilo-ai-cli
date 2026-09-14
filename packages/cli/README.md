@@ -376,7 +376,7 @@ The `tui` command launches a full-screen interactive terminal UI built with [Ink
 - **Organizations** — org list with members/usage/credits/seats/invoices/models/security detail
 - **Account** — BYOK keys
 
-Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused, **r** refreshes the current screen. The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
+Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh (the hint line at the bottom of each screen shows its actual keys). The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
 
 ---
 
