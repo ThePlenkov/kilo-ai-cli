@@ -65,10 +65,24 @@ export const kiloclawBillingHistoryCommand = defineCommand({
   args: {
     id: { type: 'positional', description: 'Instance ID', required: true },
     period: { type: 'string', description: 'Billing period' },
+    cursor: { type: 'string', description: 'Pagination cursor from a previous call' },
+    all: { type: 'boolean', description: 'Follow pagination and print all pages' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const page = await getBillingHistory(token, args.id, args.period)
+    if (args.all) {
+      let cursor: string | undefined = args.cursor
+      for (let i = 0; i < 20; i++) {
+        // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+        const page = await getBillingHistory(token, args.id, args.period, cursor)
+        for (const entry of page.entries) console.log(JSON.stringify(entry))
+        if (!page.hasMore || !page.cursor) return
+        cursor = page.cursor ?? undefined
+      }
+      console.error('Stopped after 20 pages — history continues')
+      return
+    }
+    const page = await getBillingHistory(token, args.id, args.period, args.cursor)
     if (page.entries.length === 0) {
       console.log('No billing history found.')
       return

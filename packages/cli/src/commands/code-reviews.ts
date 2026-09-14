@@ -63,12 +63,12 @@ export const reviewsGetCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const { review, attempts, tokenUsage } = await getCodeReview(token, args.id)
-    console.log(`ID: ${review.id}`)
+    console.log(`ID: ${sanitize(review.id)}`)
     console.log(`Title: ${sanitize(review.pr_title ?? '-')}`)
-    console.log(`Status: ${review.status}`)
+    console.log(`Status: ${sanitize(review.status)}`)
     console.log(`Repo: ${sanitize(review.repo_full_name ?? '-')}  PR #${review.pr_number ?? '?'}`)
     if (review.pr_url) console.log(`URL: ${sanitize(review.pr_url)}`)
-    if (review.model) console.log(`Model: ${review.model}`)
+    if (review.model) console.log(`Model: ${sanitize(review.model)}`)
     if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
     if (tokenUsage) {
       console.log(`Tokens: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`)

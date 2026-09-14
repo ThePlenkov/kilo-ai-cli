@@ -1,5 +1,5 @@
-import React from 'react'
-import { Box, Text, useInput } from 'ink'
+import React, { useRef, useState } from 'react'
+import { Box, Text, useInput, useStdout } from 'ink'
 
 import {
   getBillingHistory,
@@ -120,30 +120,43 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
 
 /** KiloClaw → Billing history for a chosen instance (route param `id`, or the first subscription). */
 export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
   const paramId = ctx.route.params.id
+  const [truncated, setTruncated] = useState(false)
+  const seq = useRef(0)
   return (
     <QueryListScreen<Record<string, unknown>>
       focused={focused}
       fetch={async () => {
+        const mine = ++seq.current
         const { subscriptions } = await listPersonalSubscriptions(ctx.token)
         const instanceId = paramId ?? subscriptions[0]?.instanceId
         if (!instanceId) throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
         const entries: Record<string, unknown>[] = []
         let cursor: string | undefined
+        let more = false
         // Follow cursor pagination until hasMore=false (bounded to 20 pages).
         for (let i = 0; i < 20; i++) {
+          // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
           const page = await getBillingHistory(ctx.token, instanceId, undefined, cursor)
           entries.push(...page.entries)
-          if (!page.hasMore || !page.cursor) break
-          cursor = page.cursor
+          more = page.hasMore && !!page.cursor
+          if (!more) break
+          cursor = page.cursor ?? undefined
         }
+        if (mine === seq.current) setTruncated(more)
         return entries
       }}
-      banner={() => <Text dimColor>instance: {paramId ?? 'first subscription'}</Text>}
+      banner={() => (
+        <Box flexDirection="column">
+          <Text dimColor>instance: {paramId ?? 'first subscription'}</Text>
+          {truncated ? <Text color="yellow">⚠ history continues past the 20-page cap — older entries not shown</Text> : null}
+        </Box>
+      )}
       columns={[
         {
           label: 'Entry',
-          width: 90,
+          width: Math.max(30, (stdout?.columns ?? 80) - 38),
           value: (e) =>
             Object.entries(e)
               .map(([k, v]) => `${k}=${String(v)}`)

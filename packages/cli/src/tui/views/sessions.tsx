@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Box, Text, useInput } from 'ink'
+import React, { useRef, useState } from 'react'
+import { Box, Text, useInput, useStdout } from 'ink'
 import TextInput from 'ink-text-input'
 
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../../api/trpc.ts'
@@ -10,27 +10,40 @@ import type { ScreenProps } from '../types.ts'
 
 /** Cloud → Sessions: list of cloud CLI sessions. */
 export function SessionsScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
+  const [truncated, setTruncated] = useState(false)
+  const seq = useRef(0)
+  const avail = Math.max(40, (stdout?.columns ?? 80) - 34)
+  const narrow = avail < 80
   return (
     <QueryListScreen<CliSession>
       focused={focused}
       fetch={async () => {
+        const mine = ++seq.current
         const all: CliSession[] = []
         let cursor: string | undefined
+        let more = false
         // Follow nextCursor until the server stops paginating (bounded to 20 pages).
         for (let i = 0; i < 20; i++) {
+          // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
           const page = await fetchCloudSessions(ctx.token, { limit: 50, cursor }, ctx.organizationId)
           all.push(...page.cliSessions)
+          more = !!page.nextCursor
           if (!page.nextCursor) break
           cursor = page.nextCursor
         }
+        if (mine === seq.current) setTruncated(more)
         return all
       }}
       columns={[
         { label: 'ID', width: 14, value: (s) => s.session_id },
-        { label: 'Title', width: 44, value: (s) => s.title ?? '(untitled)' },
-        { label: 'Updated', width: 20, value: (s) => s.updated_at },
+        { label: 'Title', width: narrow ? avail - 24 : 44, value: (s) => s.title ?? '(untitled)' },
+        { label: 'Updated', width: 20, value: (s) => s.updated_at.slice(0, 16).replace('T', ' ') },
         { label: 'Ver', width: 4, align: 'right', value: (s) => String(s.version) },
       ]}
+      banner={() =>
+        truncated ? <Text color="yellow">⚠ more than 1,000 sessions — showing the most recent</Text> : null
+      }
       onSelect={(s) => ctx.navigate('session', { id: s.session_id })}
       onBack={ctx.goBack}
       emptyText="No sessions found."

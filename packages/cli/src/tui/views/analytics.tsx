@@ -57,7 +57,8 @@ export function AnalyticsSummaryScreen({ ctx, focused }: ScreenProps) {
 export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
   const { stdout } = useStdout()
   const width = Math.max(10, (stdout?.columns ?? 80) - 50)
-  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - 8)
+  // Reserve: app chrome (6) + title + both scroll markers + footer (5).
+  const maxVisible = Math.max(3, (stdout?.rows ?? 24) - 11)
   const { data, error, loading } = useQuery(
     () => getUsageTimeseries(ctx.token, { ...defaultFilters(ctx), metric: 'cost' }),
     [ctx.token],
@@ -77,17 +78,19 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
   if (rows.length === 0) return <Text>No timeseries data.</Text>
 
   const max = Math.max(...rows.map((p) => p.value), 1)
-  const visible = rows.slice(offset, offset + maxVisible)
+  // Clamp after data shrinks — a refresh may return fewer rows than `offset`.
+  const off = Math.min(offset, Math.max(0, rows.length - maxVisible))
+  const visible = rows.slice(off, off + maxVisible)
   return (
     <Box flexDirection="column">
       <Text bold dimColor>
         Cost per day (last 30 days)
       </Text>
-      {offset > 0 ? <Text dimColor>  ↑ {offset} more</Text> : null}
+      {off > 0 ? <Text dimColor>  ↑ {off} more</Text> : null}
       {visible.map((p, i) => {
         const len = Math.max(1, Math.round((p.value / max) * width))
         return (
-          <Box key={offset + i}>
+          <Box key={off + i}>
             <Box width={12}>
               <Text dimColor>{p.datetime.slice(0, 10)}</Text>
             </Box>
@@ -96,11 +99,11 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
           </Box>
         )
       })}
-      {offset + maxVisible < rows.length ? (
-        <Text dimColor>  ↓ {rows.length - offset - maxVisible} more</Text>
+      {off + maxVisible < rows.length ? (
+        <Text dimColor>  ↓ {rows.length - off - maxVisible} more</Text>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>[{offset + 1}-{Math.min(offset + maxVisible, rows.length)}/{rows.length}] ↑↓ scroll  Esc=back</Text>
+        <Text dimColor>[{off + 1}-{Math.min(off + maxVisible, rows.length)}/{rows.length}] ↑↓ scroll  Esc=back</Text>
       </Box>
     </Box>
   )

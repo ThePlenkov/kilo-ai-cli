@@ -36,8 +36,21 @@ const METRICS: UsageMetric[] = [
   'outputInputRatio',
 ]
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Reject date-only values that are not real calendar dates (e.g. 2026-02-30). */
+function assertValidDateOnly(s: string, flag: string): void {
+  const m = DATE_ONLY.exec(s)
+  if (!m) return
+  const d = new Date(`${s}T00:00:00Z`)
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+    throw new Error(`Invalid ${flag} value "${s}" — not a real calendar date`)
+  }
+}
+
 /** Parse a date ("2026-08-14") or ISO datetime; date-only values map to start of day. */
 function parseDateStart(s: string, flag: string): string {
+  assertValidDateOnly(s, flag)
   const d = new Date(s.includes('T') ? s : `${s}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
   return d.toISOString()
@@ -45,6 +58,7 @@ function parseDateStart(s: string, flag: string): string {
 
 /** Date-only --to values include the whole day (end-of-day). */
 function parseDateEnd(s: string, flag: string): string {
+  assertValidDateOnly(s, flag)
   const d = new Date(s.includes('T') ? s : `${s}T23:59:59.999Z`)
   if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
   return d.toISOString()

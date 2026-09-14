@@ -42,7 +42,29 @@ const res = await fetch(url, {
   }),
   signal: AbortSignal.timeout(15_000),
 })
-const text = await res.text()
+// Bound the response while reading — a huge payload must not exhaust memory.
+const MAX_BYTES = 10 * 1024 * 1024
+let text: string
+const reader = res.body?.getReader()
+if (reader) {
+  const chunks: Buffer[] = []
+  let size = 0
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop -- stream chunks are sequential by design
+    const { done, value } = await reader.read()
+    if (done || !value) break
+    size += value.byteLength
+    chunks.push(Buffer.from(value))
+    if (size >= MAX_BYTES) {
+      // eslint-disable-next-line no-await-in-loop -- cancelling after the cap
+      await reader.cancel()
+      break
+    }
+  }
+  text = Buffer.concat(chunks).toString('utf8')
+} else {
+  text = await res.text()
+}
 console.log(`HTTP ${res.status}`)
 if (!res.ok) process.exitCode = 1
 try {

@@ -2,12 +2,26 @@
  * Clean terminal output formatting — no ugly console.table borders.
  */
 
-/** Strip C0/C1 control characters and DEL from remote text before terminal output. */
+// Control characters built from char codes — no literals in regexes (Sonar S6324).
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+// Keep SGR color codes (our own chalk output); strip OSC hyperlinks, other CSI
+// sequences (cursor moves, clears), stray ESCs, then residual C0/C1/DEL chars.
+const UNSAFE_ANSI = new RegExp(
+  `(${ESC}\\[[0-9;:]*m)` +
+    `|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)` +
+    `|${ESC}\\[[0-9;:]*[A-Za-z]` +
+    `|${ESC}.?`,
+  'g',
+)
+const CTRL = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(26)}${String.fromCharCode(28)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
+  'g',
+)
+
+/** Strip dangerous control characters/sequences from remote text; SGR colors survive. */
 export function sanitize(s: string): string {
-  return Array.from(s, (c) => {
-    const code = c.codePointAt(0) ?? 0
-    return code < 32 || code === 127 || (code >= 128 && code < 160) ? '' : c
-  }).join('')
+  return s.replace(UNSAFE_ANSI, (_m, sgr: string | undefined) => sgr ?? '').replace(CTRL, '')
 }
 
 /** Pad or truncate a string to a fixed width. */

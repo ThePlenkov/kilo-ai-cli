@@ -27,8 +27,13 @@ export function PlansScreen({ ctx, focused }: ScreenProps) {
         { label: 'Status', width: 10, value: (s) => s.status, color: (s) => STATUS_COLORS[s.status] },
         { label: 'BYOK', width: 5, value: (s) => (s.hasInstalledByokKey ? 'yes' : 'no') },
         { label: 'Cancel@EOP', width: 10, value: (s) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
+        { label: 'Usage', width: 6, value: (s) => (s.canQueryUsage ? 'yes' : '—') },
       ]}
-      onSelect={(s) => ctx.navigate('plan-usage', { id: s.id })}
+      // Usage queries are rejected by the API when canQueryUsage is false.
+      onSelect={(s) => {
+        if (s.canQueryUsage) ctx.navigate('plan-usage', { id: s.id })
+      }}
+      help="Enter=usage (subscriptions with usage access)"
       onBack={ctx.goBack}
       emptyText="No coding plan subscriptions."
     />

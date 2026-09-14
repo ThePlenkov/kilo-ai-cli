@@ -341,17 +341,21 @@ async function main() {
         }
         extra = resolved
       } catch (e) {
-        rows.push({ cmd: c.cmd, cls: c.cls, status: 'SKIP', detail: `resolver failed: ${msg(e)}` })
+        // A resolver hitting the live API and throwing is a real failure —
+        // the matrix must not stay green on it.
+        rows.push({ cmd: c.cmd, cls: c.cls, status: 'FAIL', detail: `resolver failed: ${msg(e)}` })
         continue
       }
     }
 
     const { code, output } = run(c.cmd, extra)
+    let postError: string | null = null
     if (c.post) {
       try {
         await c.post(ctx)
       } catch (e) {
-        console.log(`  ⚠ post-restore failed for ${c.cmd}: ${msg(e)}`)
+        // Restore failure leaves real state mutated — surface it as FAIL.
+        postError = msg(e)
       }
     }
     const errLine = output
@@ -360,18 +364,20 @@ async function main() {
       .find((l) => /ERROR|Error:|error/i.test(l) && l.length > 3)
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
+    const status: Status = postError ? 'FAIL' : ok ? 'PASS' : expected ? 'SKIP' : 'FAIL'
     rows.push({
       cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
       cls: c.cls,
-      status: ok ? 'PASS' : expected ? 'SKIP' : 'FAIL',
-      detail: ok
-        ? (c.note ?? '')
-        : expected
-          ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
-          : truncate(errLine ?? `exit ${code}`, 160),
+      status,
+      detail: postError
+        ? `restore failed: ${truncate(postError, 160)}`
+        : ok
+          ? (c.note ?? '')
+          : expected
+            ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
+            : truncate(errLine ?? `exit ${code}`, 160),
     })
-    const label = ok ? 'PASS' : expected ? 'SKIP' : 'FAIL'
-    console.log(`${ok ? '✓' : expected ? '-' : '✗'} ${label} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`)
+    console.log(`${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`)
   }
 
   // Markdown matrix
@@ -396,14 +402,18 @@ function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** Redact resolved resource IDs (UUIDs, `xxx_<token>` style) so account identifiers don't land in the matrix/log. */
+/** Redact resolved resource IDs (UUIDs, `xxx_<token>` style, numeric) so account identifiers don't land in the matrix/log. */
 function maskArg(s: string): string {
-  return /^[0-9a-f]{8}-[0-9a-f-]{9,}/i.test(s) || /^[a-z]{2,5}_[A-Za-z0-9]{10,}$/.test(s) ? '<id>' : s
+  return /^[0-9a-f]{8}-[0-9a-f-]{9,}/i.test(s) ||
+    /^[a-z]{2,5}_[A-Za-z0-9]{10,}$/.test(s) ||
+    /^\d{6,}$/.test(s)
+    ? '<id>'
+    : s
 }
 
 /** Escape a value for embedding in a Markdown table cell (backslashes first). */
 function escapeMdCell(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
+  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' <br> ')
 }
 
 function truncate(s: string, n: number): string {

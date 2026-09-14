@@ -56,6 +56,9 @@ export function ReviewsScreen({ ctx, focused }: ScreenProps) {
 
 /** Cloud → review detail: review record + attempts table. */
 export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
+  const { stdout } = useStdout()
+  // Record view ~15 rows + attempts header/legend + footer → cap attempt rows.
+  const maxAttempts = Math.max(2, (stdout?.rows ?? 24) - 22)
   const id = ctx.route.params.id ?? ''
   const { data, error, loading, reload } = useQuery(() => getCodeReview(ctx.token, id), [ctx.token, id])
 
@@ -103,7 +106,8 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
         <Box flexDirection="column" marginTop={1}>
           <Text bold>Attempts ({attempts.length})</Text>
           <DataTable
-            rows={attempts}
+            // Cap rows so the table + record fit the height-clamped pane.
+            rows={attempts.slice(0, maxAttempts)}
             columns={[
               { label: '#', width: 3, align: 'right', value: (a) => String(a.attempt_number) },
               { label: 'Status', width: 12, value: (a) => a.status, color: (a) => STATUS_COLORS[a.status] },
@@ -112,6 +116,9 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
               { label: 'Error', width: 30, value: (a) => a.error_message ?? '-' },
             ]}
           />
+          {attempts.length > maxAttempts ? (
+            <Text dimColor>  … {attempts.length - maxAttempts} more attempts</Text>
+          ) : null}
         </Box>
       ) : null}
       <Box marginTop={1}>
