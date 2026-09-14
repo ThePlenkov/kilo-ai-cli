@@ -79,7 +79,13 @@ export const kiloclawBillingHistoryCommand = defineCommand({
         for (const entry of page.entries) console.log(JSON.stringify(entry))
         emitted += page.entries.length
         if (!page.hasMore || !page.cursor) {
-          if (emitted === 0) console.log('No billing history found.')
+          if (emitted === 0) {
+            console.log(
+              args.cursor
+                ? 'No more billing history entries after the given cursor.'
+                : 'No billing history found.',
+            )
+          }
           return
         }
         cursor = page.cursor ?? undefined

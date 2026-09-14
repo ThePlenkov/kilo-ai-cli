@@ -33,9 +33,9 @@ const url = new URL(`${KILO_API_BASE}/api/trpc/${procedure}`)
 if (inputJson) url.searchParams.set('input', inputJson)
 
 // Sanitize remote payloads before logging (Sonar S5145 — log injection).
-// Newlines are escaped so a single remote line cannot forge log entries.
-const safe = (s: string, n: number): string =>
-  s.slice(0, n).replace(/[^\x20-\x7E\n]/g, '.').replace(/\n/g, '\\n')
+const safe = (s: string, n: number): string => s.slice(0, n).replace(/[^\x20-\x7E\n]/g, '.')
+// Non-JSON output also escapes newlines so one remote line can't forge entries.
+const safeLine = (s: string, n: number): string => safe(s, n).replace(/\n/g, '\\n')
 
 const res = await fetch(url, {
   method: 'GET',
@@ -74,5 +74,5 @@ if (!res.ok) process.exitCode = 1
 try {
   console.log(safe(JSON.stringify(JSON.parse(text), null, 2), 12000))
 } catch {
-  console.log(safe(text, 4000))
+  console.log(safeLine(text, 4000))
 }

@@ -59,10 +59,10 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
   const { columns: termColumns, rows: termRows } = useTermSize()
   // Record view ~15 rows + attempts header/legend + footer → cap attempt rows.
   const maxAttempts = Math.max(2, termRows - 22)
-  // ~60-col panes cannot fit the full five-column attempts table — drop the
-  // timestamps and let the error column take the slack.
+  // The declared attempts table needs ~95 cols; below that DataTable would
+  // shrink the error column into unreadability — drop the timestamps first.
   const avail = Math.max(30, termColumns - 34)
-  const narrowAttempts = avail < 60
+  const narrowAttempts = avail < 95
   const id = ctx.route.params.id ?? ''
   const { data, error, loading, reload } = useQuery(() => getCodeReview(ctx.token, id), [ctx.token, id])
 
