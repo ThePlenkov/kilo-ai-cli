@@ -2,20 +2,51 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are applied to the latest published minor release on npm.
+Older releases do not receive backports while the project is on `0.x`.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 0.2.x   | :white_check_mark: |
+| < 0.2   | :x:                |
+
+Check your installed version with `kilo-ai-cli --version` and update via
+`npm install -g kilo-ai-cli@latest`.
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Report them privately through GitHub Security Advisories:
+
+<https://github.com/ThePlenkov/kilo-ai-cli/security/advisories/new>
+
+Include, where possible:
+
+- The affected version (`kilo-ai-cli --version`) and OS
+- Steps to reproduce or a proof of concept
+- The impact you believe the issue has
+
+### What to expect
+
+- **Acknowledgement** within 72 hours
+- **Initial assessment** within 7 days — accepted, declined, or needing
+  more information
+- **Status updates** at least every 14 days until resolution
+- If accepted, a fix is released and the advisory is published with
+  credit to the reporter (unless you prefer to stay anonymous)
+- If declined, you get a written explanation of the reasoning
+
+### Scope notes
+
+`kilo-ai-cli` stores OAuth tokens in `~/.kilo/credentials.json` with
+`0600` permissions and talks to `api.kilo.ai` over TLS. Issues worth
+reporting include, for example:
+
+- Token leakage into logs, stdout, or error output
+- Credential files written with overly broad permissions
+- Terminal/ANSI escape injection from server-supplied data
+- Dependency vulnerabilities with a demonstrated impact on this CLI
+
+Bugs in the Kilo.ai **service** itself (API, web app, cloud agents)
+should be reported to Kilo directly, not to this repository.
