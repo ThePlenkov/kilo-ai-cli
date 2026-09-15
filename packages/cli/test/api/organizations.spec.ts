@@ -108,6 +108,22 @@ describe('organizations API', () => {
     })
   })
 
+  it('createOrganization defaults role to owner when autoAddCreator is set', async () => {
+    fetchMock.mockResolvedValue(
+      mockMutationResponse({ organization: { id: 'o1', name: 'New Org' } }),
+    )
+    const result = await createOrganization('tok', { name: 'New Org', autoAddCreator: true })
+    expect(result.role).toBe('owner')
+  })
+
+  it('createOrganization reports unknown role when autoAddCreator is false', async () => {
+    fetchMock.mockResolvedValue(
+      mockMutationResponse({ organization: { id: 'o1', name: 'New Org' } }),
+    )
+    const result = await createOrganization('tok', { name: 'New Org', autoAddCreator: false })
+    expect(result.role).toBe('unknown')
+  })
+
   it('updateOrganization posts with organizationId and name', async () => {
     fetchMock.mockResolvedValue(
       mockMutationResponse({ organization: { id: 'o1', name: 'Updated' } }),

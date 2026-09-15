@@ -1,6 +1,6 @@
 # Live API smoke matrix
 
-Generated: 2026-09-15T11:24:00.343Z — `node packages/cli/scripts/live-smoke.ts`
+Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts`
 
 | Command | Class | Status | Detail |
 |---|---|---|---|
@@ -11,7 +11,7 @@ Generated: 2026-09-15T11:24:00.343Z — `node packages/cli/scripts/live-smoke.ts
 | `balance` | read | PASS |  |
 | `sessions list` | read | PASS |  |
 | `sessions get <id>` | read | PASS |  |
-| `sessions rename <id> smoke-rename-1789471396287` | idempotent | PASS | renames to a temp title, then restores the original |
+| `sessions rename <id> smoke-rename-1789477502807` | idempotent | PASS | renames to a temp title, then restores the original |
 | `org list` | read | PASS |  |
 | `org set <id>` | idempotent | PASS | sets active org, then restores credentials.json |
 | `org members <id>` | read | PASS |  |
@@ -63,12 +63,12 @@ Generated: 2026-09-15T11:24:00.343Z — `node packages/cli/scripts/live-smoke.ts
 | `security findings` | read | PASS |  |
 | `security finding <id>` | read | PASS |  |
 | `security stats` | read | PASS |  |
-| `security dashboard` | read | PASS |  |
+| `security dashboard` | read | PASS | transient timeout on first run — PASS on retry |
 | `security commands` | read | PASS |  |
-| `security command <id>` | read | PASS |  |
+| `security command` | read | SKIP | no active commands |
 | `security orphaned-repos` | read | PASS |  |
 | `security last-sync` | read | PASS |  |
-| `security sync` | idempotent | PASS | triggers a GitHub re-sync (no user state changed) |
+| `security sync` | manual | MANUAL | triggers GitHub sync |
 | `security analyze` | manual | MANUAL | starts a paid analysis |
 | `security dismiss` | manual | MANUAL | dismisses a finding |
 | `security remediate` | manual | MANUAL | may open real PRs |
@@ -79,4 +79,4 @@ Generated: 2026-09-15T11:24:00.343Z — `node packages/cli/scripts/live-smoke.ts
 | `security delete-findings` | never | MANUAL | destructive |
 | `tui` | never | MANUAL | interactive |
 
-**55 PASS · 0 FAIL · 2 SKIP · 17 MANUAL**
+**53 PASS · 0 FAIL · 3 SKIP · 18 MANUAL**

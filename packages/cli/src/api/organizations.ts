@@ -205,8 +205,7 @@ const CreatedOrganizationSchema = MutatedOrganizationSchema.transform(
   (r): Organization => ({
     id: r.organization.id,
     name: r.organization.name,
-    // With autoAddCreator the caller becomes the owner — a safe default.
-    role: r.organization.role ?? 'owner',
+    role: r.organization.role ?? 'unknown',
   }),
 )
 
@@ -224,7 +223,9 @@ export async function createOrganization(
   token: string,
   input: OrganizationCreateInput,
 ): Promise<Organization> {
-  return trpcMutate('organizations.create', token, CreatedOrganizationSchema, input)
+  const org = await trpcMutate('organizations.create', token, CreatedOrganizationSchema, input)
+  // With autoAddCreator the caller becomes the owner — a safe default.
+  return input.autoAddCreator && org.role === 'unknown' ? { ...org, role: 'owner' } : org
 }
 
 /** organizations.update */
