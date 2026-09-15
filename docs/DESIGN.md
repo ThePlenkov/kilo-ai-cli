@@ -123,6 +123,11 @@ tRPC queries use GET with `?input=<json>` and parse `{ result: { data: { json } 
 | `codingPlans.getUsage` | query | Get coding plan usage |
 | `byok.list` | query | List BYOK entries |
 | `codeReviews.*` | — | Code review management |
+| `personalReviewAgent.getReviewConfig` | query | Personal review agent config (model, style, actionRequired) |
+| `personalReviewAgent.saveReviewConfig` | mutation | Save personal review agent config |
+| `personalReviewAgent.toggleReviewAgent` | mutation | Enable/disable personal review agent |
+| `organizations.reviewAgent.getReviewConfig` | query | Org review agent config |
+| `organizations.reviewAgent.saveReviewConfig` | mutation | Save org review agent config |
 | `usageAnalytics.*` | — | Usage analytics |
 | `securityAgent.*` | — | Security agent findings |
 

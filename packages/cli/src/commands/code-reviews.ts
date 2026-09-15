@@ -6,13 +6,21 @@ import { defineCommand } from 'citty'
 
 import {
   getCodeReview,
-  getReviewConfig,
+  getOrgReviewAgentConfig,
+  getPersonalReviewConfig,
   listCodeReviews,
   listCodeReviewsForUser,
+  saveOrgReviewConfig,
+  savePersonalReviewConfig,
+  togglePersonalReviewAgent,
   toggleReviewAgent,
+  toSaveReviewConfigInput,
 } from '../api/code-reviews.ts'
+import type { ReviewAgentConfig } from '../api/types.ts'
 import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
+
+const PLATFORMS = ['github', 'gitlab'] as const
 
 function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>>) {
   if (reviews.length === 0) {
@@ -39,6 +47,37 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
       { key: 'model', label: 'Model', width: 24 },
     ],
   )
+}
+
+function printAgentConfig(config: ReviewAgentConfig, platform: string, scope: string) {
+  console.log(`Scope: ${scope}`)
+  console.log(`Platform: ${platform}`)
+  console.log(`Enabled: ${config.isEnabled ? 'yes' : 'no'}`)
+  if (config.modelSlug) console.log(`Model: ${sanitize(config.modelSlug)}`)
+  if (config.reviewStyle) console.log(`Style: ${sanitize(config.reviewStyle)}`)
+  if (config.gateThreshold) console.log(`Gate threshold: ${sanitize(config.gateThreshold)}`)
+  if (config.focusAreas?.length)
+    console.log(`Focus areas: ${config.focusAreas.map(sanitize).join(', ')}`)
+  if (config.repositorySelectionMode)
+    console.log(`Repositories: ${sanitize(config.repositorySelectionMode)}`)
+  const action = config.actionRequired
+  if (action) {
+    console.log(`\nNeeds attention: ${sanitize(action.reason)}`)
+    if (action.lastErrorMessage) console.log(sanitize(action.lastErrorMessage))
+  }
+}
+
+/** Resolve "platform" (personal) or "org platform" positional forms plus the --org flag. */
+function resolveScope(args: { scope?: string; platform?: string; org?: string }): {
+  platform: string
+  orgId?: string
+} {
+  const orgId = args.org ?? (args.platform ? args.scope : undefined)
+  const platform = args.platform ?? args.scope
+  if (!platform || !PLATFORMS.includes(platform as (typeof PLATFORMS)[number])) {
+    throw new Error(`Platform must be one of: ${PLATFORMS.join(', ')}`)
+  }
+  return { platform, orgId }
 }
 
 export const reviewsListCommand = defineCommand({
@@ -96,30 +135,108 @@ export const reviewsGetCommand = defineCommand({
 })
 
 export const reviewsConfigCommand = defineCommand({
-  meta: { name: 'config', description: 'Get review agent configuration' },
+  meta: {
+    name: 'config',
+    description:
+      'Show review agent configuration (personal: `config <platform>`; org: `config <org> <platform>` or --org)',
+  },
   args: {
-    org: { type: 'positional', description: 'Organization ID', required: true },
-    platform: { type: 'positional', description: 'Platform (github/gitlab)', required: true },
+    scope: {
+      type: 'positional',
+      description: 'Platform (github/gitlab), or Organization ID when a second arg is given',
+      required: true,
+    },
+    platform: {
+      type: 'positional',
+      description: 'Platform (github/gitlab) when the first arg is an Organization ID',
+      required: false,
+    },
+    org: { type: 'string', description: 'Organization ID (omit for personal config)' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const config = await getReviewConfig(token, args.org, args.platform)
-    console.log(`Platform: ${config.platform}`)
-    console.log(`Enabled: ${config.isEnabled ? 'yes' : 'no'}`)
-    if (config.repositoryName) console.log(`Repository: ${config.repositoryName}`)
+    const { platform, orgId } = resolveScope(args)
+    if (orgId) {
+      const config = await getOrgReviewAgentConfig(token, orgId, platform)
+      printAgentConfig(config, platform, `org ${orgId}`)
+    } else {
+      const config = await getPersonalReviewConfig(token, platform)
+      printAgentConfig(config, platform, 'personal')
+    }
   },
 })
 
 export const reviewsToggleCommand = defineCommand({
-  meta: { name: 'toggle', description: 'Toggle review agent on/off' },
+  meta: {
+    name: 'toggle',
+    description:
+      'Toggle review agent on/off (personal: `toggle <platform>`; org: `toggle <org> <platform>` or --org)',
+  },
   args: {
-    org: { type: 'positional', description: 'Organization ID', required: true },
-    platform: { type: 'positional', description: 'Platform (github/gitlab)', required: true },
+    scope: {
+      type: 'positional',
+      description: 'Platform (github/gitlab), or Organization ID when a second arg is given',
+      required: true,
+    },
+    platform: {
+      type: 'positional',
+      description: 'Platform (github/gitlab) when the first arg is an Organization ID',
+      required: false,
+    },
+    org: { type: 'string', description: 'Organization ID (omit for personal agent)' },
     enabled: { type: 'boolean', description: 'Enable or disable', required: true },
   },
   async run({ args }) {
     const { token } = await getToken()
-    await toggleReviewAgent(token, args.org, args.platform, args.enabled)
-    console.log(`Review agent ${args.enabled ? 'enabled' : 'disabled'} for ${args.platform}`)
+    const { platform, orgId } = resolveScope(args)
+    if (orgId) {
+      await toggleReviewAgent(token, orgId, platform, args.enabled)
+      console.log(
+        `Review agent ${args.enabled ? 'enabled' : 'disabled'} for ${platform} (org ${orgId})`,
+      )
+    } else {
+      await togglePersonalReviewAgent(token, platform, args.enabled)
+      console.log(
+        `Review agent ${args.enabled ? 'enabled' : 'disabled'} for ${platform} (personal)`,
+      )
+    }
+  },
+})
+
+export const reviewsSetModelCommand = defineCommand({
+  meta: {
+    name: 'set-model',
+    description:
+      'Set the review agent model, preserving other config (personal by default; --org for organization)',
+  },
+  args: {
+    platform: { type: 'positional', description: 'Platform (github/gitlab)', required: true },
+    model: { type: 'positional', description: 'Model slug (e.g. kilo-auto/free)', required: true },
+    org: { type: 'string', description: 'Organization ID (omit for personal agent)' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    const platform = args.platform
+    if (!PLATFORMS.includes(platform as (typeof PLATFORMS)[number])) {
+      throw new Error(`Platform must be one of: ${PLATFORMS.join(', ')}`)
+    }
+    const orgId = args.org
+    const config = orgId
+      ? await getOrgReviewAgentConfig(token, orgId, platform)
+      : await getPersonalReviewConfig(token, platform)
+    const input = toSaveReviewConfigInput(platform, config, { modelSlug: args.model })
+    if (orgId) {
+      await saveOrgReviewConfig(token, orgId, input)
+    } else {
+      await savePersonalReviewConfig(token, input)
+    }
+    console.log(
+      `Review agent model set to ${args.model} for ${platform} (${orgId ? `org ${orgId}` : 'personal'})`,
+    )
+    if (!config.isEnabled || config.actionRequired) {
+      console.log(
+        `Note: agent is disabled. Re-enable with: reviews toggle ${platform} --enabled${orgId ? ` --org ${orgId}` : ''}`,
+      )
+    }
   },
 })

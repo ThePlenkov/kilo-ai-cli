@@ -5,7 +5,14 @@
 
 import { z } from 'zod'
 import { trpcMutate, trpcQuery } from './client.ts'
-import type { CodeReview, CodeReviewAttempt, CodeReviewConfig, CodeReviewDetail } from './types.ts'
+import type {
+  CodeReview,
+  CodeReviewAttempt,
+  CodeReviewConfig,
+  CodeReviewDetail,
+  ReviewAgentConfig,
+  SaveReviewConfigInput,
+} from './types.ts'
 
 // --- Schemas ---
 
@@ -75,6 +82,67 @@ const CodeReviewConfigSchema: z.ZodType<CodeReviewConfig> = z.object({
   repositoryName: z.string().optional(),
 })
 
+const ManuallyAddedRepositorySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  full_name: z.string(),
+  private: z.boolean(),
+})
+
+const ReviewAgentConfigSchema: z.ZodType<ReviewAgentConfig> = z
+  .object({
+    isEnabled: z.boolean(),
+    reviewStyle: z.string().optional(),
+    focusAreas: z.array(z.string()).optional(),
+    customInstructions: z.string().nullish(),
+    modelSlug: z.string().optional(),
+    thinkingEffort: z.string().nullish(),
+    gateThreshold: z.string().nullish(),
+    repositorySelectionMode: z.string().optional(),
+    selectedRepositoryIds: z.array(z.number()).optional(),
+    manuallyAddedRepositories: z.array(ManuallyAddedRepositorySchema).optional(),
+    repositoryModelOverrides: z.array(z.unknown()).optional(),
+    disableReviewMd: z.boolean().optional(),
+    skipBotPullRequests: z.boolean().optional(),
+    reviewMemoryEnabled: z.boolean().optional(),
+    council: z.unknown().optional(),
+    councilEnabledRepositoryIds: z.array(z.number()).optional(),
+    actionRequired: z
+      .object({
+        reason: z.string(),
+        detectedAt: z.string().optional(),
+        lastSeenAt: z.string().optional(),
+        triggeringReviewId: z.string().optional(),
+        lastErrorMessage: z.string().optional(),
+        emailSentAt: z.string().optional(),
+      })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough() as z.ZodType<ReviewAgentConfig>
+
+/** Build a SaveReviewConfigInput from an existing config, overriding selected fields. */
+export function toSaveReviewConfigInput(
+  platform: string,
+  config: ReviewAgentConfig,
+  overrides: Partial<SaveReviewConfigInput> = {},
+): SaveReviewConfigInput {
+  return {
+    platform,
+    reviewStyle: config.reviewStyle ?? 'balanced',
+    focusAreas: config.focusAreas ?? [],
+    modelSlug: config.modelSlug ?? 'auto',
+    customInstructions: config.customInstructions ?? undefined,
+    thinkingEffort: config.thinkingEffort,
+    repositorySelectionMode: config.repositorySelectionMode,
+    selectedRepositoryIds: config.selectedRepositoryIds,
+    manuallyAddedRepositories: config.manuallyAddedRepositories,
+    disableReviewMd: config.disableReviewMd,
+    gateThreshold: config.gateThreshold ?? undefined,
+    ...overrides,
+  }
+}
+
 // --- Top-level procedures (personal scope) ---
 
 /** codeReviews.listForUser — personal code reviews, no org required. */
@@ -119,4 +187,39 @@ export async function getReviewConfig(token: string, organizationId: string, pla
 /** organizations.codeReviews.toggleReviewAgent */
 export async function toggleReviewAgent(token: string, organizationId: string, platform: string, isEnabled: boolean): Promise<void> {
   await trpcMutate('organizations.codeReviews.toggleReviewAgent', token, z.unknown(), { organizationId, platform, isEnabled })
+}
+
+// --- Personal review agent (personalReviewAgent.*) ---
+
+/** personalReviewAgent.getReviewConfig — full personal review agent config. */
+export async function getPersonalReviewConfig(token: string, platform: string): Promise<ReviewAgentConfig> {
+  return trpcQuery('personalReviewAgent.getReviewConfig', token, ReviewAgentConfigSchema, { platform })
+}
+
+/** personalReviewAgent.saveReviewConfig */
+export async function savePersonalReviewConfig(token: string, input: SaveReviewConfigInput): Promise<void> {
+  await trpcMutate('personalReviewAgent.saveReviewConfig', token, z.unknown(), input)
+}
+
+/** personalReviewAgent.toggleReviewAgent */
+export async function togglePersonalReviewAgent(token: string, platform: string, isEnabled: boolean): Promise<void> {
+  await trpcMutate('personalReviewAgent.toggleReviewAgent', token, z.unknown(), { platform, isEnabled })
+}
+
+// --- Organization review agent (organizations.reviewAgent.*) ---
+
+/** organizations.reviewAgent.getReviewConfig — full org review agent config. */
+export async function getOrgReviewAgentConfig(token: string, organizationId: string, platform: string): Promise<ReviewAgentConfig> {
+  return trpcQuery(
+    'organizations.reviewAgent.getReviewConfig',
+    token,
+    ReviewAgentConfigSchema,
+    { organizationId, platform },
+    { organizationId },
+  )
+}
+
+/** organizations.reviewAgent.saveReviewConfig */
+export async function saveOrgReviewConfig(token: string, organizationId: string, input: SaveReviewConfigInput): Promise<void> {
+  await trpcMutate('organizations.reviewAgent.saveReviewConfig', token, z.unknown(), { ...input, organizationId }, { organizationId })
 }

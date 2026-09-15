@@ -279,8 +279,11 @@ kilo-ai-cli cloud-agent gitlab-repos              # List connected GitLab reposi
 kilo-ai-cli reviews list                          # List your personal code reviews
 kilo-ai-cli reviews list <org>                    # List code reviews for an organization (or --org <id>)
 kilo-ai-cli reviews get <id>                      # Show a review with attempts and token usage
-kilo-ai-cli reviews config <org> <platform>       # Show review configuration (github/gitlab)
-kilo-ai-cli reviews toggle <org> <platform> --enabled <bool>   # Toggle code reviews on/off
+kilo-ai-cli reviews config <platform>             # Show personal review agent config (github/gitlab)
+kilo-ai-cli reviews config <org> <platform>       # Show org review agent config (or --org <id>)
+kilo-ai-cli reviews set-model <platform> <model>  # Set review agent model, e.g. kilo-auto/free
+kilo-ai-cli reviews toggle <platform> --enabled <bool>         # Toggle personal code reviews on/off
+kilo-ai-cli reviews toggle <org> <platform> --enabled <bool>   # Toggle org code reviews on/off
 ```
 
 ### analytics
