@@ -282,6 +282,7 @@ kilo-ai-cli reviews get <id>                      # Show a review with attempts 
 kilo-ai-cli reviews config <platform>             # Show personal review agent config (github/gitlab)
 kilo-ai-cli reviews config <org> <platform>       # Show org review agent config (or --org <id>)
 kilo-ai-cli reviews set-model <platform> <model>  # Set review agent model, e.g. kilo-auto/free
+kilo-ai-cli reviews set-model <platform> <model> --org <id>  # Set an organization review agent model
 kilo-ai-cli reviews toggle <platform> --enabled <bool>         # Toggle personal code reviews on/off
 kilo-ai-cli reviews toggle <org> <platform> --enabled <bool>   # Toggle org code reviews on/off
 ```
