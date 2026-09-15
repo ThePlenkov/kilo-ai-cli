@@ -70,8 +70,10 @@ jobs:
 
       - name: Guard release to main
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          [ "${{ github.ref_name }}" = "main" ] || { echo "Releases must run from main"; exit 1; }
+          [ "$REF_NAME" = "main" ] || { echo "Releases must run from main"; exit 1; }
 
       - name: Compute next version
         id: ver
@@ -83,7 +85,15 @@ jobs:
           case "$V" in
             patch|minor|major)
               BASE=$(npm view kilo-ai-cli version 2>/dev/null || echo 0.0.0)
-              V=$(npx --yes semver "$BASE" -i "$V")
+              MAINV=$(node -p "require('./packages/cli/package.json').version")
+              # npm ahead of main means a previous run published but never
+              # synced — reuse THAT version instead of minting another release.
+              if [ -n "$(npx --yes semver "$BASE" -r ">$MAINV" 2>/dev/null)" ]; then
+                V="$BASE"
+              else
+                HI=$(printf '%s\n%s\n' "$BASE" "$MAINV" | sort -V | tail -n1)
+                V=$(npx --yes semver "$HI" -i "$V")
+              fi
               ;;
             *)
               echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' ||
@@ -91,15 +101,14 @@ jobs:
               ;;
           esac
           echo "next=$V" >> "$GITHUB_OUTPUT"
-          # If the version is already on npm a rerun must not republish — it
-          # only needs to redo tag/branch/PR (self-healing after a partial run).
-          # An explicit version that is already published is a user error, not
-          # a partial run — refuse it.
+          # Already on npm → skip publish but still repair tag/branch/PR
+          # (self-heal after a partial run). Already published AND tagged →
+          # the release is complete — refuse to tag a foreign release.
           if npm view "kilo-ai-cli@$V" version >/dev/null 2>&1; then
-            case "$INPUT_VERSION" in
-              patch|minor|major) ;;
-              *) echo "kilo-ai-cli@$V is already published — pick another version"; exit 1 ;;
-            esac
+            if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
+              echo "kilo-ai-cli@$V is already published and tagged — nothing to do"
+              exit 1
+            fi
             echo "published=true" >> "$GITHUB_OUTPUT"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
