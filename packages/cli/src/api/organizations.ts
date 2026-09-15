@@ -91,7 +91,7 @@ const AvailableModelsSchema = z
       name: m.name,
       description: m.description,
       isFree: m.isFree,
-      contextLength: m.context_length,
+      contextLength: m.context_length ?? undefined,
     })),
   )
 
