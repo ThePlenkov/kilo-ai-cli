@@ -51,7 +51,7 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     return (
       <Box>
         <Text color="yellow">Loading finding details…</Text>
-        <Text dimColor> (Esc to go back)</Text>
+        <Text dimColor>{'  (Esc to go back)'}</Text>
       </Box>
     )
   }

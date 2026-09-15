@@ -68,6 +68,7 @@ async function readBody(response: Response, procedure: string): Promise<string> 
       if (value) {
         total += value.byteLength
         if (total > MAX_BODY_BYTES) {
+          await reader.cancel()
           throw new CloudTrpcError(
             'protocol',
             response.status,

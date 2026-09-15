@@ -11,7 +11,7 @@ export const profileCommand = defineCommand({
   meta: { name: 'profile', description: 'Show your kilo.ai profile' },
   async run() {
     const { token, organizationId } = await getToken()
-    const { profile, balance } = await fetchProfileWithBalance(token)
+    const { profile, balance } = await fetchProfileWithBalance(token, organizationId)
     console.log(`Email: ${profile.email}`)
     if (profile.name) console.log(`Name: ${profile.name}`)
     if (balance) console.log(`Balance: $${balance.balance.toFixed(2)}`)
