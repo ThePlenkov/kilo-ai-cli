@@ -33,19 +33,23 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
 
   useEffect(() => {
+    let stale = false
     const load = async () => {
       setLoading(true)
       setError(null)
       try {
         const f = await getFinding(token, findingId)
-        setFinding(f)
+        if (!stale) setFinding(f)
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
+        if (!stale) setError(e instanceof Error ? e.message : String(e))
       } finally {
-        setLoading(false)
+        if (!stale) setLoading(false)
       }
     }
     load()
+    return () => {
+      stale = true
+    }
   }, [token, findingId, reloadKey])
 
   const act = async (what: 'dismiss' | 'remediate') => {

@@ -57,8 +57,8 @@ interface Cmd {
   cls: Cls
   /** Resolve extra argv; return null to mark SKIP with the returned reason via `skipReason`. */
   args?: (ctx: Ctx) => Promise<string[] | null>
-  /** Runs after the command — used by idempotent mutations to restore state. */
-  post?: (ctx: Ctx) => Promise<void>
+  /** Runs after the command — used by idempotent mutations to restore state. Receives the child output. */
+  post?: (ctx: Ctx, output: string) => Promise<void>
   /** If the failure output matches, the command is reported SKIP (account-state limitation), not FAIL. */
   expectError?: RegExp
   skipReason?: string
@@ -118,10 +118,19 @@ async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
   return null
 }
 
-// Post-hook: cancel every cancellable remediation attempt left behind by
-// remediate/retry-remediation so no fix-PR work continues after the run.
-async function cancelRunningAttempts(ctx: Ctx): Promise<void> {
-  const r = await listFindings(ctx.token, { limit: 50 })
+// Post-hook for remediate/retry-remediation: cancel the attempt the command
+// just queued (parsed from its output — the attempt may not be listed yet)
+// and sweep findings for any other cancellable attempt left behind.
+async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
+  const attemptId = output.match(/attempt ([0-9a-f-]{36})/i)?.[1]
+  if (attemptId) {
+    try {
+      await cancelRemediation(ctx.token, attemptId)
+    } catch {
+      // Already finished/cancelled — the findings sweep below is the backstop.
+    }
+  }
+  const r = await listFindings(ctx.token, { limit: 100 })
   for (const f of r.findings) {
     const cap = f.remediationCapability ?? f.remediation_capability
     if (cap?.canCancel && cap.cancelAttemptId) {
@@ -420,7 +429,7 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     args: firstOpenFindingId,
     skipReason: 'no open findings',
-    post: cancelRunningAttempts,
+    post: cancelStartedAttempts,
     note: 'queues a remediation attempt, then cancels it',
   },
   {
@@ -428,7 +437,7 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     args: firstOpenFindingId,
     skipReason: 'no open findings',
-    post: cancelRunningAttempts,
+    post: cancelStartedAttempts,
     note: 'queues a remediation attempt, then cancels it',
   },
   {
@@ -588,7 +597,7 @@ async function main() {
     } finally {
       if (c.post) {
         try {
-          await c.post(ctx)
+          await c.post(ctx, output)
         } catch (e) {
           // Restore failure leaves real state mutated — surface it as FAIL.
           postError = msg(e)
