@@ -186,9 +186,18 @@ jobs:
           if [ "$(git rev-list --count origin/main..HEAD)" = "0" ]; then
             echo "Nothing to sync — main already at $V"
           elif [ "$N" = "0" ]; then
-            gh pr create \
+            # GITHUB_TOKEN can't create PRs when the repo disables
+            # "Allow GitHub Actions to create pull requests" — degrade that
+            # specific denial to a warning (the release already succeeded),
+            # but keep failing on transient/validation errors.
+            if ! ERR=$(gh pr create \
               --title "chore: release $V" \
               --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
               --base main \
-              --head "chore/release-$V"
+              --head "chore/release-$V" 2>&1); then
+              echo "$ERR"
+              echo "$ERR" | grep -qi 'not permitted to create' ||
+                exit 1
+              echo "::warning::Could not open the sync PR — open it manually: https://github.com/${{ github.repository }}/compare/main...chore/release-$V"
+            fi
           fi
