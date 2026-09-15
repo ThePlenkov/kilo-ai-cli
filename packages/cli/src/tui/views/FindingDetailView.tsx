@@ -1,7 +1,11 @@
 import { Box, Text, useInput } from 'ink'
 import React, { useEffect, useState } from 'react'
 
-import { getFinding } from '../../api/security-agent.ts'
+import {
+  dismissFinding,
+  getFinding,
+  startRemediation,
+} from '../../api/security-agent.ts'
 import type { SecurityFinding } from '../../api/types.ts'
 
 export interface FindingDetailViewProps {
@@ -23,6 +27,10 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const [finding, setFinding] = useState<SecurityFinding | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [confirm, setConfirm] = useState<'dismiss' | 'remediate' | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -38,11 +46,62 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       }
     }
     load()
-  }, [token, findingId])
+  }, [token, findingId, reloadKey])
+
+  const act = async (what: 'dismiss' | 'remediate') => {
+    setBusy(true)
+    try {
+      if (what === 'dismiss') {
+        await dismissFinding(token, findingId)
+        setNotice({ text: 'Finding dismissed', error: false })
+      } else {
+        const { commandId } = await startRemediation(token, findingId)
+        setNotice({ text: `Remediation started (command ${commandId})`, error: false })
+      }
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      setNotice({
+        text: `${what === 'dismiss' ? 'Dismiss' : 'Remediate'} failed: ${e instanceof Error ? e.message : String(e)}`,
+        error: true,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   useInput(
-    (_input, key) => {
-      if (key.escape) onBack()
+    (input, key) => {
+      if (key.escape) {
+        if (confirm) setConfirm(null)
+        else onBack()
+        return
+      }
+      if (busy || loading || !finding) return
+      const want = input === 'd' ? 'dismiss' : input === 'r' ? 'remediate' : null
+      if (!want) return
+      if (confirm === want) {
+        setConfirm(null)
+        void act(want)
+        return
+      }
+      if (want === 'dismiss' && finding.status === 'dismissed') {
+        setNotice({ text: 'Already dismissed', error: false })
+        return
+      }
+      if (want === 'remediate') {
+        const cap = (finding.remediationCapability ?? finding.remediation_capability) as
+          | Record<string, unknown>
+          | undefined
+        if (cap && cap.canStart === false) {
+          setNotice({
+            text: `Cannot start remediation${cap.startReason ? `: ${String(cap.startReason)}` : ''}`,
+            error: true,
+          })
+          return
+        }
+      }
+      setConfirm(want)
+      setNotice(null)
     },
     { isActive: focused },
   )
@@ -195,8 +254,26 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         {updated ? <Field label="Updated" value={updated} dim /> : null}
       </Box>
 
+      {notice ? (
+        <Box marginTop={1}>
+          <Text color={notice.error ? 'red' : 'green'}>{notice.text}</Text>
+        </Box>
+      ) : null}
+
+      {confirm ? (
+        <Box marginTop={1}>
+          <Text color="yellow">
+            {confirm === 'dismiss' ? 'Dismiss this finding' : 'Start remediation (may open a PR)'}{' '}
+            — press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
+          </Text>
+        </Box>
+      ) : null}
+
       <Box marginTop={1}>
-        <Text dimColor>Esc to go back to findings list</Text>
+        <Text dimColor>
+          {finding.status === 'dismissed' ? '' : 'd=dismiss '}
+          r=remediate Esc=back
+        </Text>
       </Box>
     </Box>
   )
