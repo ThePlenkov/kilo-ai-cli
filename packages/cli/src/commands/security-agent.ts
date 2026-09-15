@@ -36,9 +36,17 @@ export const securityStatusCommand = defineCommand({
     const { token } = await getToken()
     const status = await getPermissionStatus(token)
     printSummary([
-      { label: 'Granted', value: status.granted ? 'yes' : 'no' },
-      { label: 'Permissions', value: status.permissions?.join(', ') || '(none)' },
-      { label: 'Pending', value: status.pendingRequests ?? 0 },
+      { label: 'Integration connected', value: status.hasIntegration ? 'yes' : 'no' },
+      { label: 'Permissions granted', value: status.hasPermissions ? 'yes' : 'no' },
+      ...(status.reauthorizeUrl ? [{ label: 'Reauthorize', value: status.reauthorizeUrl }] : []),
+      ...(status.authInvalidAt
+        ? [
+            {
+              label: 'Auth invalid',
+              value: `${status.authInvalidAt} (${status.authInvalidReason ?? 'unknown'})`,
+            },
+          ]
+        : []),
     ])
   },
 })
@@ -265,7 +273,7 @@ export const securityDashboardCommand = defineCommand({
       } else if (typeof value === 'object' && value !== null) {
         console.log(`  ${key}:`)
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          console.log(`    ${k}: ${v}`)
+          console.log(`    ${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
         }
       } else {
         console.log(`  ${key.padEnd(16)} ${value}`)

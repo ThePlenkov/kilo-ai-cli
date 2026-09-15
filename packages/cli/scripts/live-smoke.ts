@@ -19,13 +19,21 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { listAppBuilderProjects } from '../src/api/app-builder.ts'
-import { listCodeReviewsForUser } from '../src/api/code-reviews.ts'
-import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
-import { listOrganizations } from '../src/api/organizations.ts'
 import {
+  getOrgReviewAgentConfig,
+  getPersonalReviewConfig,
+  listCodeReviewsForUser,
+  togglePersonalReviewAgent,
+  toggleReviewAgent,
+} from '../src/api/code-reviews.ts'
+import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
+import { listOrganizations, updateOrganization } from '../src/api/organizations.ts'
+import {
+  getSecurityConfig,
   getSecurityRepositories,
   listActiveCommands,
   listFindings,
+  setSecurityEnabled,
 } from '../src/api/security-agent.ts'
 import {
   fetchCloudSession,
@@ -33,6 +41,7 @@ import {
   fetchCodingPlanSubscriptions,
   renameCloudSession,
 } from '../src/api/trpc.ts'
+import type { KiloAuth } from '../src/api/types.ts'
 import { createTokenStore } from '../src/auth/token-store.ts'
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -127,6 +136,16 @@ const dates = [
 
 /** Stashed session id + original title for the idempotent rename test. */
 let renameTarget: { id: string; title: string } | null = null
+/** Auth read at startup — restored after `org set` rewrites credentials.json. */
+let savedAuth: KiloAuth | null = null
+/** Org id + name captured before `org update` renames it. */
+let orgRenameTarget: { id: string; name: string } | null = null
+/** Original enabled flags for the review-agent toggle tests. */
+const toggleRestore: Record<string, boolean> = {}
+/** Org id captured by the org toggle resolver — `post` must restore that exact org, not re-resolve. */
+let toggleOrgId: string | null = null
+/** Original security-agent enabled flag. */
+let securityWasEnabled: boolean | null = null
 
 // ---------------------------------------------------------------------------
 // Command inventory — mirrors src/cli.ts
@@ -165,10 +184,16 @@ const COMMANDS: Cmd[] = [
   { cmd: 'org list', cls: 'read' },
   {
     cmd: 'org set',
-    cls: 'manual',
+    cls: 'idempotent',
     args: firstOrgId,
     skipReason: 'no orgs on account',
-    note: 'rewrites credentials.json accountId',
+    post: async (c) => {
+      // `org set` rewrites credentials.json accountId — restore the startup auth
+      // and the in-memory org scope used by later resolvers.
+      if (savedAuth) await createTokenStore().set(savedAuth)
+      c.organizationId = savedAuth?.type === 'oauth' ? savedAuth.accountId : undefined
+    },
+    note: 'sets active org, then restores credentials.json',
   },
   { cmd: 'org members', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org usage', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
@@ -185,13 +210,23 @@ const COMMANDS: Cmd[] = [
   },
   {
     cmd: 'org update',
-    cls: 'manual',
+    cls: 'idempotent',
     args: async (c) => {
-      const org = await firstOrgId(c)
-      return org ? [...org, '--name', 'live-smoke-renamed'] : null
+      const orgs = await listOrganizations(c.token)
+      const org = orgs[0]
+      if (!org?.id || !org.name) return null
+      orgRenameTarget = { id: org.id, name: org.name }
+      return [org.id, '--name', 'live-smoke-renamed']
+    },
+    post: async (c) => {
+      if (orgRenameTarget)
+        await updateOrganization(c.token, {
+          organizationId: orgRenameTarget.id,
+          name: orgRenameTarget.name,
+        })
     },
     skipReason: 'no orgs on account',
-    note: 'renames an org',
+    note: 'renames org, then restores the original name',
   },
 
   { cmd: 'plans list', cls: 'read' },
@@ -249,21 +284,62 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'reviews config',
     cls: 'read',
+    args: async () => ['github'],
+    note: 'personal scope',
+  },
+  {
+    cmd: 'reviews config',
+    cls: 'read',
     args: async (c) => {
       const org = await firstOrgId(c)
       return org ? [...org, 'github'] : null
     },
     skipReason: 'no orgs on account',
+    note: 'org scope',
   },
   {
     cmd: 'reviews toggle',
-    cls: 'manual',
+    cls: 'idempotent',
+    args: async (c) => {
+      const cfg = await getPersonalReviewConfig(c.token, 'github')
+      toggleRestore['personal:github'] = cfg.isEnabled
+      return ['github', '--enabled', String(!cfg.isEnabled)]
+    },
+    post: async (c) => {
+      const orig = toggleRestore['personal:github']
+      if (orig !== undefined) await togglePersonalReviewAgent(c.token, 'github', orig)
+    },
+    note: 'personal: flips agent state, then restores it',
+  },
+  {
+    cmd: 'reviews toggle',
+    cls: 'idempotent',
     args: async (c) => {
       const org = await firstOrgId(c)
-      return org ? [...org, 'github', 'false'] : null
+      if (!org) return null
+      const cfg = await getOrgReviewAgentConfig(c.token, org[0]!, 'github')
+      toggleRestore[`org:${org[0]}:github`] = cfg.isEnabled
+      toggleOrgId = org[0]!
+      return [...org, 'github', '--enabled', String(!cfg.isEnabled)]
+    },
+    post: async (c) => {
+      const orig = toggleOrgId ? toggleRestore[`org:${toggleOrgId}:github`] : undefined
+      if (toggleOrgId && orig !== undefined)
+        await toggleReviewAgent(c.token, toggleOrgId, 'github', orig)
     },
     skipReason: 'no orgs on account',
-    note: 'enables/disables review agent',
+    note: 'org: flips agent state, then restores it',
+  },
+  {
+    cmd: 'reviews set-model',
+    cls: 'idempotent',
+    args: async (c) => {
+      // Writing the current model slug back exercises the save path with no state change.
+      const cfg = await getPersonalReviewConfig(c.token, 'github')
+      return cfg.modelSlug ? ['github', cfg.modelSlug] : null
+    },
+    skipReason: 'no model configured on personal agent',
+    note: 'personal: writes current model back (no-op value)',
   },
 
   { cmd: 'analytics summary', cls: 'read' },
@@ -327,8 +403,23 @@ const COMMANDS: Cmd[] = [
     args: firstCommandId,
     skipReason: 'no active commands',
   },
-  { cmd: 'security enable', cls: 'manual' },
-  { cmd: 'security disable', cls: 'manual' },
+  {
+    cmd: 'security enable',
+    cls: 'idempotent',
+    args: async (c) => {
+      const cfg = await getSecurityConfig(c.token)
+      securityWasEnabled = cfg.isEnabled ?? cfg.is_enabled ?? false
+      // Enabling a disabled agent triggers real repo ingestion — only run the
+      // command when it's a no-op (already enabled).
+      return securityWasEnabled ? [] : null
+    },
+    skipReason: 'agent disabled — enabling would trigger ingestion',
+    post: async (c) => {
+      if (securityWasEnabled !== null) await setSecurityEnabled(c.token, securityWasEnabled)
+    },
+    note: 'enables agent, then restores original state',
+  },
+  { cmd: 'security disable', cls: 'manual', note: 'restore path covered by security enable post' },
   { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
 
   { cmd: 'tui', cls: 'never', note: 'interactive' },
@@ -390,6 +481,15 @@ async function main() {
     console.error('Not authenticated — run `kilo-ai-cli auth login` first.')
     process.exit(1)
   }
+  savedAuth = auth
+  // With a listener installed, Ctrl-C doesn't hard-kill the process — the flag
+  // lets the loop finish the current command's restore hook before stopping.
+  // A second Ctrl-C force-exits so a hung restore can't trap the runner.
+  let interrupted = false
+  process.on('SIGINT', () => {
+    if (interrupted) process.exit(130)
+    interrupted = true
+  })
   const ctx: Ctx = {
     token: auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.key : auth.token,
     organizationId: auth.type === 'oauth' ? auth.accountId : undefined,
@@ -428,14 +528,25 @@ async function main() {
       }
     }
 
-    const { code, output } = run(c.cmd, extra)
+    // Ctrl-C during arg resolution must not launch a (possibly side-effecting)
+    // command — check again right before spawning.
+    if (interrupted) break
+
+    // Restore hooks run in `finally` — a throw or a Ctrl-C mid-command must not
+    // leave live state (credentials, toggles, names) mutated.
+    let code = 1
+    let output = ''
     let postError: string | null = null
-    if (c.post) {
-      try {
-        await c.post(ctx)
-      } catch (e) {
-        // Restore failure leaves real state mutated — surface it as FAIL.
-        postError = msg(e)
+    try {
+      ;({ code, output } = run(c.cmd, extra))
+    } finally {
+      if (c.post) {
+        try {
+          await c.post(ctx)
+        } catch (e) {
+          // Restore failure leaves real state mutated — surface it as FAIL.
+          postError = msg(e)
+        }
       }
     }
     const errLine = output
@@ -460,6 +571,10 @@ async function main() {
     console.log(
       `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
     )
+    if (interrupted) {
+      console.log('\nInterrupted — restore hooks ran; stopping early.')
+      break
+    }
   }
 
   // Markdown matrix

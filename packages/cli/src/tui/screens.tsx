@@ -39,7 +39,7 @@ import {
 } from './views/orgs.tsx'
 import { PlansScreen, PlanUsageScreen } from './views/plans.tsx'
 import { ProfileScreen } from './views/profile.tsx'
-import { ReviewDetailScreen, ReviewsScreen } from './views/reviews.tsx'
+import { ReviewAgentScreen, ReviewDetailScreen, ReviewsScreen } from './views/reviews.tsx'
 import { StatsView } from './views/StatsView.tsx'
 import {
   SecurityCommandsScreen,
@@ -108,6 +108,7 @@ export const SCREENS: ScreenDef[] = [
     component: ReviewDetailScreen,
     hidden: true,
   },
+  { name: 'review-agent', group: 'Cloud', title: 'Review Agent', component: ReviewAgentScreen },
   { name: 'security-findings', group: 'Security', title: 'Findings', component: FindingsScreen },
   {
     name: 'security-finding',

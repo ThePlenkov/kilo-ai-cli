@@ -392,10 +392,10 @@ export interface OrganizationWithMembers extends Organization {
 }
 
 export interface OrganizationUsageStats {
-  totalCreditsUsed: number
-  creditsUsedThisPeriod: number
-  activeSessions: number
-  totalMembers: number
+  totalCost: number
+  totalRequestCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
 }
 
 export interface CreditTransaction {
@@ -407,8 +407,8 @@ export interface CreditTransaction {
 }
 
 export interface OrganizationSeats {
-  total: number
-  used: number
+  totalSeats: number
+  usedSeats: number
 }
 
 export interface OrganizationInvoice {
@@ -422,6 +422,8 @@ export interface OrganizationInvoice {
 export interface OrganizationCreateInput {
   name: string
   companyDomain?: string | null
+  /** When false the creator is not added as an owner — pass true so the org is usable. */
+  autoAddCreator?: boolean
 }
 
 export interface OrganizationUpdateInput {
@@ -436,8 +438,9 @@ export interface OrganizationUpdateInput {
 export interface AvailableModel {
   id: string
   name: string
-  provider: string
-  isEnabled: boolean
+  description?: string
+  isFree?: boolean
+  contextLength?: number
 }
 
 // ============================================================================
@@ -556,9 +559,12 @@ export interface AppBuilderEligibility {
 // ============================================================================
 
 export interface SecurityAgentPermissionStatus {
-  granted?: boolean
-  permissions?: string[]
-  pendingRequests?: number
+  hasIntegration?: boolean
+  hasPermissions?: boolean
+  integrationId?: string | null
+  reauthorizeUrl?: string | null
+  authInvalidAt?: string | null
+  authInvalidReason?: string | null
   [key: string]: unknown
 }
 
@@ -684,8 +690,8 @@ export interface SecurityAgentAnalysis {
   repositoryId?: string
   repository_id?: string
   status?: string
-  startedAt?: string
-  started_at?: string
+  startedAt?: string | null
+  started_at?: string | null
   completedAt?: string | null
   completed_at?: string | null
   findingsCount?: number
@@ -699,8 +705,8 @@ export interface SecurityAgentCommand {
   status?: string
   repositoryId?: string
   repository_id?: string
-  startedAt?: string
-  started_at?: string
+  startedAt?: string | null
+  started_at?: string | null
   completedAt?: string | null
   completed_at?: string | null
   output?: string | null

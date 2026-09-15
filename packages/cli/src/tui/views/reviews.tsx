@@ -1,10 +1,22 @@
 import { Box, Text, useInput } from 'ink'
-import React from 'react'
+import TextInput from 'ink-text-input'
+import React, { useState } from 'react'
 
-import { getCodeReview, listCodeReviews, listCodeReviewsForUser } from '../../api/code-reviews.ts'
+import {
+  getCodeReview,
+  getOrgReviewAgentConfig,
+  getPersonalReviewConfig,
+  listCodeReviews,
+  listCodeReviewsForUser,
+  saveOrgReviewConfig,
+  savePersonalReviewConfig,
+  togglePersonalReviewAgent,
+  toggleReviewAgent,
+  toSaveReviewConfigInput,
+} from '../../api/code-reviews.ts'
 import type { CodeReview } from '../../api/types.ts'
 import type { Column } from '../components.tsx'
-import { DataTable, QueryListScreen, RecordView } from '../components.tsx'
+import { clean, DataTable, QueryListScreen, RecordView } from '../components.tsx'
 import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
@@ -152,6 +164,189 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
       <Box marginTop={1}>
         <Text dimColor>r=refresh Esc=back</Text>
       </Box>
+    </Box>
+  )
+}
+
+const PLATFORMS = ['github', 'gitlab'] as const
+type Platform = (typeof PLATFORMS)[number]
+
+/** Cloud → Review Agent: view config, toggle enabled, set model. */
+export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
+  const [platform, setPlatform] = useState<Platform>('github')
+  const [editing, setEditing] = useState(false)
+  const [model, setModel] = useState('')
+  const [confirmToggle, setConfirmToggle] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
+  const [useOrg, setUseOrg] = useState(true)
+  const orgId = ctx.organizationId
+  const effOrg = useOrg ? orgId : undefined
+
+  const {
+    data: result,
+    error,
+    loading,
+    reload,
+  } = useQuery(
+    async () => ({
+      platform,
+      org: effOrg,
+      config: effOrg
+        ? await getOrgReviewAgentConfig(ctx.token, effOrg, platform)
+        : await getPersonalReviewConfig(ctx.token, platform),
+    }),
+    [ctx.token, effOrg, platform],
+  )
+  // During a platform/scope reload `result` still holds the previous fetch —
+  // only trust it when it was fetched for the current platform and scope.
+  const config =
+    result && result.platform === platform && result.org === effOrg ? result.config : undefined
+
+  const fail = (e: unknown, what: string) =>
+    setNotice({
+      text: `${what} failed: ${e instanceof Error ? e.message : String(e)}`,
+      error: true,
+    })
+
+  const doToggle = async () => {
+    if (!config || loading) return
+    setBusy(true)
+    try {
+      const next = !config.isEnabled
+      if (effOrg) await toggleReviewAgent(ctx.token, effOrg, platform, next)
+      else await togglePersonalReviewAgent(ctx.token, platform, next)
+      setNotice({ text: `Agent ${next ? 'enabled' : 'disabled'} (${platform})`, error: false })
+      reload()
+    } catch (e) {
+      fail(e, 'Toggle')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useInput(
+    (input, key) => {
+      if (editing) {
+        if (key.escape) setEditing(false)
+        return
+      }
+      if (key.escape) {
+        if (confirmToggle) setConfirmToggle(false)
+        else ctx.goBack()
+        return
+      }
+      if (busy) return
+      if (input === 'r') {
+        reload()
+        return
+      }
+      // While (re)loading, `config` may describe the previous platform/scope —
+      // don't let mutations act on stale state.
+      if (loading) return
+      if (input === 'p') {
+        setPlatform((p) => (p === 'github' ? 'gitlab' : 'github'))
+        setConfirmToggle(false)
+        setNotice(null)
+      }
+      if (input === 'o' && orgId) {
+        setUseOrg((v) => !v)
+        setConfirmToggle(false)
+        setNotice(null)
+      }
+      if (input === 'm') {
+        setModel(config?.modelSlug ?? '')
+        setEditing(true)
+        setConfirmToggle(false)
+      }
+      if (input === 't') {
+        if (!config || confirmToggle) {
+          if (confirmToggle) {
+            setConfirmToggle(false)
+            void doToggle()
+          }
+          return
+        }
+        setConfirmToggle(true)
+      }
+    },
+    { isActive: focused },
+  )
+
+  if (loading && !config) return <Text color="yellow">Loading review agent config…</Text>
+  if (error) {
+    return (
+      <Box flexDirection="column">
+        <Text color="red">Error: {clean(error)}</Text>
+        <Text dimColor>p=switch platform r=retry Esc=back</Text>
+      </Box>
+    )
+  }
+  if (!config) return null
+
+  const scope = effOrg ? `org ${effOrg}` : 'personal'
+  return (
+    <Box flexDirection="column">
+      <RecordView
+        data={{
+          scope,
+          platform,
+          enabled: config.isEnabled ? 'yes' : 'no',
+          model: config.modelSlug ?? '-',
+          style: config.reviewStyle ?? '-',
+          'gate threshold': config.gateThreshold ?? '-',
+          'focus areas': config.focusAreas?.length ? config.focusAreas.join(', ') : '-',
+          repositories: config.repositorySelectionMode ?? '-',
+        }}
+      />
+      {config.actionRequired ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">Needs attention: {clean(config.actionRequired.reason)}</Text>
+          {config.actionRequired.lastErrorMessage ? (
+            <Text color="yellow">{clean(config.actionRequired.lastErrorMessage)}</Text>
+          ) : null}
+        </Box>
+      ) : null}
+      {notice ? <Text color={notice.error ? 'red' : 'green'}>{clean(notice.text)}</Text> : null}
+      {editing ? (
+        <Box marginTop={1}>
+          <Text>Model slug: </Text>
+          <TextInput
+            value={model}
+            onChange={setModel}
+            focus={focused}
+            onSubmit={async (v) => {
+              setEditing(false)
+              if (!v.trim() || v.trim() === config.modelSlug) return
+              setBusy(true)
+              try {
+                const input = toSaveReviewConfigInput(platform, config, { modelSlug: v.trim() })
+                if (effOrg) await saveOrgReviewConfig(ctx.token, effOrg, input)
+                else await savePersonalReviewConfig(ctx.token, input)
+                setNotice({ text: `Model set to ${v.trim()} (${platform})`, error: false })
+                reload()
+              } catch (e) {
+                fail(e, 'Set model')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          />
+        </Box>
+      ) : confirmToggle ? (
+        <Box marginTop={1}>
+          <Text color="yellow">
+            {config.isEnabled ? 'Disable' : 'Enable'} review agent for {platform} ({scope})? Press t
+            to confirm, Esc to cancel.
+          </Text>
+        </Box>
+      ) : (
+        <Box marginTop={1}>
+          <Text dimColor>
+            p=platform{orgId ? ' o=scope' : ''} t=toggle m=set model r=refresh Esc=back
+          </Text>
+        </Box>
+      )}
     </Box>
   )
 }

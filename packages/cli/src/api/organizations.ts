@@ -28,18 +28,27 @@ const OrganizationMemberSchema = z.object({
   role: z.string(),
 })
 
-const OrganizationWithMembersSchema: z.ZodType<OrganizationWithMembers> = z.object({
-  id: z.string(),
-  name: z.string(),
-  role: z.string(),
-  members: z.array(OrganizationMemberSchema),
-})
+const OrganizationWithMembersSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    callerRole: z.string(),
+    members: z.array(OrganizationMemberSchema),
+  })
+  .transform(
+    (o): OrganizationWithMembers => ({
+      id: o.id,
+      name: o.name,
+      role: o.callerRole,
+      members: o.members,
+    }),
+  )
 
 const UsageStatsSchema: z.ZodType<OrganizationUsageStats> = z.object({
-  totalCreditsUsed: z.number(),
-  creditsUsedThisPeriod: z.number(),
-  activeSessions: z.number(),
-  totalMembers: z.number(),
+  totalCost: z.number(),
+  totalRequestCount: z.number(),
+  totalInputTokens: z.number(),
+  totalOutputTokens: z.number(),
 })
 
 const CreditTransactionSchema: z.ZodType<CreditTransaction> = z.object({
@@ -51,8 +60,8 @@ const CreditTransactionSchema: z.ZodType<CreditTransaction> = z.object({
 })
 
 const SeatsSchema: z.ZodType<OrganizationSeats> = z.object({
-  total: z.number(),
-  used: z.number(),
+  totalSeats: z.number(),
+  usedSeats: z.number(),
 })
 
 const InvoiceSchema: z.ZodType<OrganizationInvoice> = z.object({
@@ -63,24 +72,54 @@ const InvoiceSchema: z.ZodType<OrganizationInvoice> = z.object({
   url: z.string().optional(),
 })
 
-const AvailableModelSchema: z.ZodType<AvailableModel> = z.object({
-  id: z.string(),
-  name: z.string(),
-  provider: z.string(),
-  isEnabled: z.boolean(),
-})
+/** Response is `{ data: [...] }` — item field names come from the OpenRouter-style catalog. */
+const AvailableModelsSchema = z
+  .object({
+    data: z.array(
+      z.looseObject({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        isFree: z.boolean().optional(),
+        context_length: z.number().nullish(),
+      }),
+    ),
+  })
+  .transform((r): AvailableModel[] =>
+    r.data.map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      isFree: m.isFree,
+      contextLength: m.context_length ?? undefined,
+    })),
+  )
 
 const SecurityAgentPermissionStatusSchema: z.ZodType<SecurityAgentPermissionStatus> = z.object({
-  granted: z.boolean(),
-  permissions: z.array(z.string()),
-  pendingRequests: z.number(),
+  hasIntegration: z.boolean().optional(),
+  hasPermissions: z.boolean().optional(),
+  integrationId: z.string().nullish(),
+  reauthorizeUrl: z.string().nullish(),
+  authInvalidAt: z.string().nullish(),
+  authInvalidReason: z.string().nullish(),
 })
 
 // --- Top-level queries ---
 
+/** organizations.list returns UserOrganizationWithSeats — map to the flat Organization shape. */
+const UserOrganizationSchema = z
+  .object({
+    organizationId: z.string(),
+    organizationName: z.string(),
+    role: z.string(),
+  })
+  .transform(
+    (o): Organization => ({ id: o.organizationId, name: o.organizationName, role: o.role }),
+  )
+
 /** organizations.list */
 export async function listOrganizations(token: string): Promise<Organization[]> {
-  return trpcQuery('organizations.list', token, z.array(OrganizationSchema))
+  return trpcQuery('organizations.list', token, z.array(UserOrganizationSchema))
 }
 
 /** organizations.withMembers */
@@ -153,12 +192,40 @@ export async function getOrganizationInvoices(
 
 // --- Top-level mutations ---
 
+/** create/update return `{ organization: {...} }` — unwrap to the flat Organization shape. */
+const MutatedOrganizationSchema = z.object({
+  organization: z.looseObject({
+    id: z.string(),
+    name: z.string(),
+    role: z.string().optional(),
+  }),
+})
+
+const CreatedOrganizationSchema = MutatedOrganizationSchema.transform(
+  (r): Organization => ({
+    id: r.organization.id,
+    name: r.organization.name,
+    role: r.organization.role ?? 'unknown',
+  }),
+)
+
+const UpdatedOrganizationSchema = MutatedOrganizationSchema.transform(
+  (r): Organization => ({
+    id: r.organization.id,
+    name: r.organization.name,
+    // The update response doesn't carry the caller's role — don't claim 'owner'.
+    role: r.organization.role ?? 'unknown',
+  }),
+)
+
 /** organizations.create */
 export async function createOrganization(
   token: string,
   input: OrganizationCreateInput,
 ): Promise<Organization> {
-  return trpcMutate('organizations.create', token, OrganizationSchema, input)
+  const org = await trpcMutate('organizations.create', token, CreatedOrganizationSchema, input)
+  // With autoAddCreator the caller becomes the owner — a safe default.
+  return input.autoAddCreator && org.role === 'unknown' ? { ...org, role: 'owner' } : org
 }
 
 /** organizations.update */
@@ -166,7 +233,7 @@ export async function updateOrganization(
   token: string,
   input: OrganizationUpdateInput,
 ): Promise<Organization> {
-  return trpcMutate('organizations.update', token, OrganizationSchema, input)
+  return trpcMutate('organizations.update', token, UpdatedOrganizationSchema, input)
 }
 
 /** organizations.updateCompanyDomain */
@@ -188,12 +255,9 @@ export async function listAvailableModels(
   token: string,
   organizationId: string,
 ): Promise<AvailableModel[]> {
-  return trpcQuery(
-    'organizations.settings.listAvailableModels',
-    token,
-    z.array(AvailableModelSchema),
-    { organizationId },
-  )
+  return trpcQuery('organizations.settings.listAvailableModels', token, AvailableModelsSchema, {
+    organizationId,
+  })
 }
 
 /** organizations.settings.updateAllowLists */
