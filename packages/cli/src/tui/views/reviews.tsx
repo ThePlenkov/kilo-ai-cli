@@ -179,7 +179,9 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   const [confirmToggle, setConfirmToggle] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
+  const [useOrg, setUseOrg] = useState(true)
   const orgId = ctx.organizationId
+  const effOrg = useOrg ? orgId : undefined
 
   const {
     data: config,
@@ -188,10 +190,10 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
     reload,
   } = useQuery(
     () =>
-      orgId
-        ? getOrgReviewAgentConfig(ctx.token, orgId, platform)
+      effOrg
+        ? getOrgReviewAgentConfig(ctx.token, effOrg, platform)
         : getPersonalReviewConfig(ctx.token, platform),
-    [ctx.token, orgId, platform],
+    [ctx.token, effOrg, platform],
   )
 
   const fail = (e: unknown, what: string) =>
@@ -201,11 +203,11 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
     })
 
   const doToggle = async () => {
-    if (!config) return
+    if (!config || loading) return
     setBusy(true)
     try {
       const next = !config.isEnabled
-      if (orgId) await toggleReviewAgent(ctx.token, orgId, platform, next)
+      if (effOrg) await toggleReviewAgent(ctx.token, effOrg, platform, next)
       else await togglePersonalReviewAgent(ctx.token, platform, next)
       setNotice({ text: `Agent ${next ? 'enabled' : 'disabled'} (${platform})`, error: false })
       reload()
@@ -228,8 +230,20 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
         return
       }
       if (busy) return
+      if (input === 'r') {
+        reload()
+        return
+      }
+      // While (re)loading, `config` may describe the previous platform/scope —
+      // don't let mutations act on stale state.
+      if (loading) return
       if (input === 'p') {
         setPlatform((p) => (p === 'github' ? 'gitlab' : 'github'))
+        setConfirmToggle(false)
+        setNotice(null)
+      }
+      if (input === 'o' && orgId) {
+        setUseOrg((v) => !v)
         setConfirmToggle(false)
         setNotice(null)
       }
@@ -248,7 +262,6 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
         }
         setConfirmToggle(true)
       }
-      if (input === 'r') reload()
     },
     { isActive: focused },
   )
@@ -264,7 +277,7 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   }
   if (!config) return null
 
-  const scope = orgId ? `org ${orgId}` : 'personal'
+  const scope = effOrg ? `org ${effOrg}` : 'personal'
   return (
     <Box flexDirection="column">
       <RecordView
@@ -301,7 +314,7 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
               setBusy(true)
               try {
                 const input = toSaveReviewConfigInput(platform, config, { modelSlug: v.trim() })
-                if (orgId) await saveOrgReviewConfig(ctx.token, orgId, input)
+                if (effOrg) await saveOrgReviewConfig(ctx.token, effOrg, input)
                 else await savePersonalReviewConfig(ctx.token, input)
                 setNotice({ text: `Model set to ${v.trim()} (${platform})`, error: false })
                 reload()
@@ -322,7 +335,9 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
         </Box>
       ) : (
         <Box marginTop={1}>
-          <Text dimColor>p=platform t=toggle m=set model r=refresh Esc=back</Text>
+          <Text dimColor>
+            p=platform{orgId ? ' o=scope' : ''} t=toggle m=set model r=refresh Esc=back
+          </Text>
         </Box>
       )}
     </Box>

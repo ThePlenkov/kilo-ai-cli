@@ -189,7 +189,7 @@ export function OrgModelsScreen({ ctx, focused }: ScreenProps) {
         {
           label: 'Free',
           width: 6,
-          value: (m: { isFree?: boolean }) => (m.isFree ? 'yes' : 'no'),
+          value: (m: { isFree?: boolean }) => (m.isFree == null ? '-' : m.isFree ? 'yes' : 'no'),
           color: (m: { isFree?: boolean }) => (m.isFree ? 'green' : 'gray'),
         },
         {

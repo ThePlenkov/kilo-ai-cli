@@ -185,9 +185,11 @@ const COMMANDS: Cmd[] = [
     cls: 'idempotent',
     args: firstOrgId,
     skipReason: 'no orgs on account',
-    post: async () => {
-      // `org set` rewrites credentials.json accountId — restore the startup auth.
+    post: async (c) => {
+      // `org set` rewrites credentials.json accountId — restore the startup auth
+      // and the in-memory org scope used by later resolvers.
       if (savedAuth) await createTokenStore().set(savedAuth)
+      c.organizationId = savedAuth?.type === 'oauth' ? savedAuth.accountId : undefined
     },
     note: 'sets active org, then restores credentials.json',
   },
@@ -479,6 +481,12 @@ async function main() {
     process.exit(1)
   }
   savedAuth = auth
+  // With a listener installed, Ctrl-C doesn't hard-kill the process — the flag
+  // lets the loop finish the current command's restore hook before stopping.
+  let interrupted = false
+  process.on('SIGINT', () => {
+    interrupted = true
+  })
   const ctx: Ctx = {
     token: auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.key : auth.token,
     organizationId: auth.type === 'oauth' ? auth.accountId : undefined,
@@ -517,14 +525,21 @@ async function main() {
       }
     }
 
-    const { code, output } = run(c.cmd, extra)
+    // Restore hooks run in `finally` — a throw or a Ctrl-C mid-command must not
+    // leave live state (credentials, toggles, names) mutated.
+    let code = 1
+    let output = ''
     let postError: string | null = null
-    if (c.post) {
-      try {
-        await c.post(ctx)
-      } catch (e) {
-        // Restore failure leaves real state mutated — surface it as FAIL.
-        postError = msg(e)
+    try {
+      ;({ code, output } = run(c.cmd, extra))
+    } finally {
+      if (c.post) {
+        try {
+          await c.post(ctx)
+        } catch (e) {
+          // Restore failure leaves real state mutated — surface it as FAIL.
+          postError = msg(e)
+        }
       }
     }
     const errLine = output
@@ -549,6 +564,10 @@ async function main() {
     console.log(
       `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
     )
+    if (interrupted) {
+      console.log('\nInterrupted — restore hooks ran; stopping early.')
+      break
+    }
   }
 
   // Markdown matrix
