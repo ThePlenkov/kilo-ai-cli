@@ -165,7 +165,7 @@ export const orgModelsCommand = defineCommand({
       models.map((m) => ({
         id: m.id,
         name: m.name,
-        free: m.isFree ? 'yes' : 'no',
+        free: m.isFree == null ? '-' : m.isFree ? 'yes' : 'no',
         context: m.contextLength ?? '-',
       })),
       [
