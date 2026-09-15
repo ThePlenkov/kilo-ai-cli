@@ -1,5 +1,10 @@
 name: Release
 
+# One release at a time — concurrent dispatches would resolve the same
+# next version and race on the tag/branch.
+concurrency:
+  group: release
+
 on:
   push:
     tags:
@@ -71,15 +76,26 @@ jobs:
       - name: Compute next version
         id: ver
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          V="${{ inputs.version }}"
+          V="$INPUT_VERSION"
           case "$V" in
             patch|minor|major)
-              BASE=$(npm view kilo-ai-cli version)
+              BASE=$(npm view kilo-ai-cli version 2>/dev/null || echo 0.0.0)
               V=$(npx --yes semver "$BASE" -i "$V")
+              ;;
+            *)
+              echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' ||
+                { echo "Invalid version: $V"; exit 1; }
               ;;
           esac
           echo "next=$V" >> "$GITHUB_OUTPUT"
+          # If the version is already on npm a rerun must not republish — it
+          # only needs to redo tag/branch/PR (self-healing after a partial run).
+          npm view "kilo-ai-cli@$V" version >/dev/null 2>&1 &&
+            echo "published=true" >> "$GITHUB_OUTPUT" ||
+            echo "published=false" >> "$GITHUB_OUTPUT"
 
       # Tag pushes take the version from the tag; dispatches stamp the computed
       # version so the artifact always matches the released number.
@@ -104,8 +120,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "chore/release-$V"
           git add packages/cli/package.json package-lock.json
-          git commit -m "chore: release $V"
-          git tag "v$V"
+          # A rerun after the sync PR merged has nothing to commit — that's fine.
+          git diff --cached --quiet || git commit -m "chore: release $V"
+          git rev-parse -q --verify "refs/tags/v$V" >/dev/null || git tag "v$V"
 
       - name: Typecheck
         run: npm run typecheck
@@ -124,7 +141,7 @@ jobs:
         run: npm pack
 
       - name: Publish to npm (OIDC)
-        if: ${{ github.event_name == 'push' || inputs.dry-run == 'false' }}
+        if: ${{ github.event_name == 'push' || (inputs.dry-run == 'false' && steps.ver.outputs.published == 'false') }}
         working-directory: packages/cli
         run: npm publish --provenance --access public
 
@@ -141,9 +158,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           V="${{ steps.ver.outputs.next }}"
-          git push origin "v$V" "chore/release-$V"
-          gh pr create \
-            --title "chore: release $V" \
-            --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
-            --base main \
-            --head "chore/release-$V"
+          # Idempotent: a rerun skips whatever already exists on the remote.
+          git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1 ||
+            git push origin "v$V"
+          git ls-remote --exit-code --heads origin "chore/release-$V" >/dev/null 2>&1 ||
+            git push origin "chore/release-$V"
+          if [ "$(gh pr list --head "chore/release-$V" --state open --json number -q 'length')" = "0" ]; then
+            gh pr create \
+              --title "chore: release $V" \
+              --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
+              --base main \
+              --head "chore/release-$V"
+          fi
