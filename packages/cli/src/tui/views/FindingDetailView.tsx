@@ -241,7 +241,11 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
           Analysis
         </Text>
         {analysisStatus ? (
-          <Field label="Status" value={analysisStatus} color={ANALYSIS_COLORS[analysisStatus]} />
+          <Field
+            label="Status"
+            value={analysisStatus}
+            color={ANALYSIS_COLORS[analysisStatus] ?? 'yellow'}
+          />
         ) : (
           <Text dimColor>No analysis run yet</Text>
         )}

@@ -137,8 +137,10 @@ async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
   if (attemptId) {
     try {
       await cancelRemediation(ctx.token, attemptId)
-    } catch {
-      // Already finished/cancelled — the findings sweep below is the backstop.
+    } catch (e) {
+      // Only a terminal-state rejection is benign — anything else (network,
+      // auth, unknown id) means the attempt may still be running, so surface it.
+      if (!/not.*(running|cancellable)|already|finished|completed|terminal/i.test(msg(e))) throw e
     }
   }
   for (const f of await allFindings(ctx)) {
