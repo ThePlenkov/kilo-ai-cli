@@ -1,7 +1,13 @@
 import { Box, Text, useInput } from 'ink'
 import React, { useEffect, useState } from 'react'
 
-import { dismissFinding, getFinding, startRemediation } from '../../api/security-agent.ts'
+import {
+  DISMISS_REASONS,
+  type DismissReason,
+  dismissFinding,
+  getFinding,
+  startRemediation,
+} from '../../api/security-agent.ts'
 import type {
   RemediationCapability as RemediationCapabilityType,
   RemediationSummary as RemediationSummaryType,
@@ -29,6 +35,7 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
   const [confirm, setConfirm] = useState<'dismiss' | 'remediate' | null>(null)
+  const [dismissReason, setDismissReason] = useState<DismissReason>('tolerable_risk')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
 
@@ -56,8 +63,8 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     setBusy(true)
     try {
       if (what === 'dismiss') {
-        await dismissFinding(token, findingId, 'inaccurate')
-        setNotice({ text: 'Finding dismissed', error: false })
+        await dismissFinding(token, findingId, dismissReason)
+        setNotice({ text: `Finding dismissed (${dismissReason})`, error: false })
       } else {
         const { attemptId } = await startRemediation(token, findingId)
         setNotice({ text: `Remediation started (attempt ${attemptId})`, error: false })
@@ -81,6 +88,14 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         return
       }
       if (busy || loading || !finding) return
+      // While armed for dismiss, digits pick the dismissal reason.
+      if (confirm === 'dismiss') {
+        const idx = Number(input) - 1
+        if (idx >= 0 && idx < DISMISS_REASONS.length) {
+          setDismissReason(DISMISS_REASONS[idx]!)
+          return
+        }
+      }
       const want = input === 'd' ? 'dismiss' : input === 'r' ? 'remediate' : null
       if (!want) return
       if (confirm === want) {
@@ -88,8 +103,8 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         void act(want)
         return
       }
-      if (want === 'dismiss' && finding.status === 'dismissed') {
-        setNotice({ text: 'Already dismissed', error: false })
+      if (want === 'dismiss' && finding.status !== 'open') {
+        setNotice({ text: `Cannot dismiss — finding is ${finding.status}`, error: true })
         return
       }
       if (want === 'remediate') {
@@ -263,17 +278,24 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       ) : null}
 
       {confirm ? (
-        <Box marginTop={1}>
+        <Box marginTop={1} flexDirection="column">
           <Text color="yellow">
-            {confirm === 'dismiss' ? 'Dismiss this finding' : 'Start remediation (may open a PR)'} —
-            press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
+            {confirm === 'dismiss'
+              ? `Dismiss this finding — reason: ${dismissReason}`
+              : 'Start remediation (may open a PR)'}{' '}
+            — press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
           </Text>
+          {confirm === 'dismiss' ? (
+            <Text dimColor>
+              reason: {DISMISS_REASONS.map((r, i) => `${i + 1}=${r}`).join('  ')}
+            </Text>
+          ) : null}
         </Box>
       ) : null}
 
       <Box marginTop={1}>
         <Text dimColor>
-          {finding.status === 'dismissed' ? '' : 'd=dismiss '}
+          {finding.status === 'open' ? 'd=dismiss ' : ''}
           r=remediate Esc=back
         </Text>
       </Box>
@@ -306,6 +328,7 @@ function Field({
 
 function RemediationSummary({ summary }: { summary: RemediationSummaryType }) {
   const attempt = summary.latestAttempt
+  const prUrl = summary.prUrl ?? attempt?.prUrl
   return (
     <Box flexDirection="column">
       {summary.status ? (
@@ -315,7 +338,7 @@ function RemediationSummary({ summary }: { summary: RemediationSummaryType }) {
           color={summary.status === 'running' ? 'yellow' : undefined}
         />
       ) : null}
-      {summary.prUrl ? <Field label="PR" value={summary.prUrl} color="cyan" /> : null}
+      {prUrl ? <Field label="PR" value={prUrl} color="cyan" /> : null}
       {attempt?.branchName ? <Field label="Branch" value={attempt.branchName} dim /> : null}
       {attempt?.status ? <Field label="Attempt" value={attempt.status} dim /> : null}
       {summary.outcomeSummary ? <Field label="Outcome" value={summary.outcomeSummary} /> : null}

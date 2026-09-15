@@ -64,6 +64,10 @@ jobs:
         env:
           KILO_CREDENTIALS_JSON: ${{ secrets.KILO_CREDENTIALS_JSON }}
         run: |
+          [ -n "$KILO_CREDENTIALS_JSON" ] || {
+            echo "::error::KILO_CREDENTIALS_JSON secret is not configured — set it to the contents of ~/.kilo/credentials.json from a test account."
+            exit 1
+          }
           mkdir -p ~/.kilo
           printf '%s' "$KILO_CREDENTIALS_JSON" > ~/.kilo/credentials.json
           chmod 600 ~/.kilo/credentials.json

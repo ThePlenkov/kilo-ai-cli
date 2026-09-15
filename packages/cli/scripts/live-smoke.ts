@@ -103,15 +103,25 @@ async function firstFindingId(ctx: Ctx): Promise<string[] | null> {
 
 // Mutations need an `open` finding — dismissed/ignored findings are rejected.
 async function firstOpenFindingId(ctx: Ctx): Promise<string[] | null> {
-  const r = await listFindings(ctx.token, { limit: 30 })
-  const f = r.findings.find((f) => f.status === 'open')
-  return f ? [f.id] : null
+  const r = await listFindings(ctx.token, { status: 'open', limit: 1 })
+  return r.findings[0]?.id ? [r.findings[0].id] : null
+}
+
+// Collect every finding, paging through the list — sweeps must not stop at
+// the first page or they can miss running remediation attempts.
+async function allFindings(ctx: Ctx) {
+  const page = 100
+  const out: Awaited<ReturnType<typeof listFindings>>['findings'] = []
+  for (let offset = 0; ; offset += page) {
+    const r = await listFindings(ctx.token, { limit: page, offset })
+    out.push(...r.findings)
+    if (r.findings.length < page) return out
+  }
 }
 
 // The running remediation attempt id lives in remediationCapability.cancelAttemptId.
 async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
-  const r = await listFindings(ctx.token, { limit: 50 })
-  for (const f of r.findings) {
+  for (const f of await allFindings(ctx)) {
     const cap = f.remediationCapability ?? f.remediation_capability
     if (cap?.canCancel && cap.cancelAttemptId) return [cap.cancelAttemptId]
   }
@@ -119,8 +129,9 @@ async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
 }
 
 // Post-hook for remediate/retry-remediation: cancel the attempt the command
-// just queued (parsed from its output — the attempt may not be listed yet)
-// and sweep findings for any other cancellable attempt left behind.
+// just queued — parsed from its output (the attempt may not be listed yet) —
+// plus any attempt that appeared since the resolver's snapshot. Attempts that
+// existed before the command ran are left alone.
 async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
   const attemptId = output.match(/attempt ([0-9a-f-]{36})/i)?.[1]
   if (attemptId) {
@@ -130,13 +141,27 @@ async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
       // Already finished/cancelled — the findings sweep below is the backstop.
     }
   }
-  const r = await listFindings(ctx.token, { limit: 100 })
-  for (const f of r.findings) {
+  for (const f of await allFindings(ctx)) {
     const cap = f.remediationCapability ?? f.remediation_capability
-    if (cap?.canCancel && cap.cancelAttemptId) {
-      await cancelRemediation(ctx.token, cap.cancelAttemptId)
+    const id = cap?.cancelAttemptId
+    if (cap?.canCancel && id && id !== attemptId && !preExistingAttempts.has(id)) {
+      await cancelRemediation(ctx.token, id)
     }
   }
+}
+
+// Attempts present before a remediate/retry command runs — the post hook only
+// cancels ones it started.
+let preExistingAttempts = new Set<string>()
+async function openFindingAndSnapshot(ctx: Ctx): Promise<string[] | null> {
+  const id = await firstOpenFindingId(ctx)
+  if (!id) return null
+  preExistingAttempts = new Set(
+    (await allFindings(ctx))
+      .map((f) => (f.remediationCapability ?? f.remediation_capability)?.cancelAttemptId)
+      .filter((v): v is string => typeof v === 'string'),
+  )
+  return id
 }
 
 async function firstCommandId(ctx: Ctx): Promise<string[] | null> {
@@ -239,8 +264,10 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'org create',
     cls: 'manual',
-    args: async () => ['live-smoke-org'],
-    note: 'creates a real org on the account',
+    // No delete-org procedure exists — each run leaves one test org behind;
+    // the timestamp keeps names distinct for manual cleanup.
+    args: async () => [`live-smoke-${Date.now()}`],
+    note: 'creates a real org (no delete API — cannot restore)',
   },
   {
     cmd: 'org update',
@@ -418,16 +445,9 @@ const COMMANDS: Cmd[] = [
     note: 'queues finding analysis',
   },
   {
-    cmd: 'security dismiss',
-    cls: 'manual',
-    args: async (c) => (await firstOpenFindingId(c))?.concat('--reason', 'inaccurate') ?? null,
-    skipReason: 'no open findings',
-    note: 'dismisses a finding (one-way)',
-  },
-  {
     cmd: 'security remediate',
     cls: 'manual',
-    args: firstOpenFindingId,
+    args: openFindingAndSnapshot,
     skipReason: 'no open findings',
     post: cancelStartedAttempts,
     note: 'queues a remediation attempt, then cancels it',
@@ -435,7 +455,7 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'security retry-remediation',
     cls: 'manual',
-    args: firstOpenFindingId,
+    args: openFindingAndSnapshot,
     skipReason: 'no open findings',
     post: cancelStartedAttempts,
     note: 'queues a remediation attempt, then cancels it',
@@ -445,6 +465,15 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     args: runningAttemptId,
     skipReason: 'no running remediation attempt',
+  },
+  // Dismiss runs last among finding mutations — it consumes the shared
+  // open-finding fixture and cannot be undone (no reopen procedure).
+  {
+    cmd: 'security dismiss',
+    cls: 'manual',
+    args: async (c) => (await firstOpenFindingId(c))?.concat('--reason', 'inaccurate') ?? null,
+    skipReason: 'no open findings',
+    note: 'dismisses a finding (one-way)',
   },
   {
     cmd: 'security enable',

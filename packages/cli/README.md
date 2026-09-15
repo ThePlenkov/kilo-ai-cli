@@ -325,15 +325,16 @@ kilo-ai-cli security last-sync                     # Show last sync time
 # Findings
 kilo-ai-cli security findings [options]            # List findings
 kilo-ai-cli security finding <id>                  # Get finding details
-kilo-ai-cli security dismiss <id>                   # Dismiss a finding
+kilo-ai-cli security dismiss <id> --reason <r>     # Dismiss a finding (one-way; reason:
+                                                 #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
 kilo-ai-cli security delete-findings <repo>        # Delete all findings for a repo (interactive)
 kilo-ai-cli security delete-findings <repo> --yes  # Delete without confirmation prompt
 
 # Analysis & remediation
-kilo-ai-cli security analyze <repo>                 # Start security analysis for a repository
-kilo-ai-cli security remediate <finding-id>         # Start remediation for a finding
-kilo-ai-cli security retry-remediation <cmd-id>     # Retry a failed remediation
-kilo-ai-cli security cancel-remediation <cmd-id>   # Cancel an in-progress remediation
+kilo-ai-cli security analyze <finding-id>           # Queue codebase analysis for a finding
+kilo-ai-cli security remediate <finding-id>         # Start remediation for a finding (may open a PR)
+kilo-ai-cli security retry-remediation <finding-id> # Retry remediation for a finding
+kilo-ai-cli security cancel-remediation <attempt-id> # Cancel a running remediation attempt
 
 # Stats & dashboard
 kilo-ai-cli security stats                          # Show security agent statistics
@@ -381,7 +382,7 @@ The `tui` command launches a full-screen interactive terminal UI built with [Ink
 - **Organizations** — org list with members/usage/credits/seats/invoices/models/security detail
 - **Account** — BYOK keys
 
-Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh. Mutating keys confirm first (press the key twice, or **Esc** to cancel): `d`/`r` on a finding, `t`/`m` on the review-agent screen. The hint line at the bottom of each screen shows its actual keys. The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
+Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh. Mutating keys confirm first (press the key twice, or **Esc** to cancel): `d`/`r` on a finding (dismiss additionally lets digits `1`–`5` pick the reason), `t` on the review-agent screen (`m` opens the model editor immediately). The hint line at the bottom of each screen shows its actual keys. The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
 
 ---
 
@@ -451,7 +452,7 @@ npx nx test kilo-ai-cli        # Run vitest
 
 ### Live API smoke test
 
-`packages/cli/scripts/live-smoke.ts` exercises every CLI command against the real API and writes a coverage matrix to `LIVE-MATRIX.md`:
+`packages/cli/scripts/live-smoke.ts` catalogues every CLI command and executes all read/idempotent ones against the real API, writing a coverage matrix to `LIVE-MATRIX.md`:
 
 ```bash
 node packages/cli/scripts/live-smoke.ts                     # read + reversible idempotent commands

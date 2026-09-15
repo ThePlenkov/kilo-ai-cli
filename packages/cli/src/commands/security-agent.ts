@@ -231,7 +231,16 @@ export const securityFindingCommand = defineCommand({
     if (cvss) console.log(`  CVSS:       ${cvss}`)
     if (sla) console.log(`  SLA due:    ${sla}`)
     if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
-    if (remediation) console.log(`  Remediation: ${remediation}`)
+    if (typeof remediation === 'string') {
+      console.log(`  Remediation: ${remediation}`)
+    } else if (remediation) {
+      console.log(`  Remediation: ${remediation.status ?? 'unknown'}`)
+      const prUrl = remediation.prUrl ?? remediation.latestAttempt?.prUrl
+      if (prUrl) console.log(`    PR: ${prUrl}`)
+      if (remediation.latestAttempt?.branchName)
+        console.log(`    Branch: ${remediation.latestAttempt.branchName}`)
+      if (remediation.outcomeSummary) console.log(`    Outcome: ${remediation.outcomeSummary}`)
+    }
     if (created) console.log(`  Created:    ${created}`)
     if (updated) console.log(`  Updated:    ${updated}`)
   },
