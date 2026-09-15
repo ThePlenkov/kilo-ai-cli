@@ -26,6 +26,12 @@ const PermissionStatusSchema = z
     granted: z.boolean().optional(),
     permissions: z.array(z.string()).optional(),
     pendingRequests: z.number().optional(),
+    hasIntegration: z.boolean().optional(),
+    hasPermissions: z.boolean().optional(),
+    integrationId: z.string().nullish(),
+    reauthorizeUrl: z.string().nullish(),
+    authInvalidAt: z.string().nullish(),
+    authInvalidReason: z.string().nullish(),
   })
   .passthrough()
 
