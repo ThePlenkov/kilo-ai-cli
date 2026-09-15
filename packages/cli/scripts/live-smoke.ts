@@ -133,7 +133,7 @@ async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
 // plus any attempt that appeared since the resolver's snapshot. Attempts that
 // existed before the command ran are left alone.
 async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
-  const attemptId = output.match(/attempt ([0-9a-f-]{36})/i)?.[1]
+  const attemptId = /attempt ([0-9a-f-]{36})/i.exec(output)?.[1]
   if (attemptId) {
     try {
       await cancelRemediation(ctx.token, attemptId)

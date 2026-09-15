@@ -21,6 +21,16 @@ export interface FindingDetailViewProps {
   focused: boolean
 }
 
+const ACTION_KEYS: Record<string, 'dismiss' | 'remediate' | undefined> = {
+  d: 'dismiss',
+  r: 'remediate',
+}
+
+const ANALYSIS_COLORS: Record<string, string> = {
+  completed: 'green',
+  failed: 'red',
+}
+
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'red',
   high: 'yellow',
@@ -80,6 +90,16 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     }
   }
 
+  const blockedReason = (want: 'dismiss' | 'remediate'): string | null => {
+    if (!finding) return null
+    if (want === 'dismiss') {
+      return finding.status === 'open' ? null : `finding is ${finding.status}`
+    }
+    const cap = finding.remediationCapability ?? finding.remediation_capability
+    if (cap?.canStart === false) return cap.startReason ?? 'not allowed'
+    return null
+  }
+
   useInput(
     (input, key) => {
       if (key.escape) {
@@ -96,26 +116,20 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
           return
         }
       }
-      const want = input === 'd' ? 'dismiss' : input === 'r' ? 'remediate' : null
+      const want = ACTION_KEYS[input]
       if (!want) return
       if (confirm === want) {
         setConfirm(null)
         void act(want)
         return
       }
-      if (want === 'dismiss' && finding.status !== 'open') {
-        setNotice({ text: `Cannot dismiss — finding is ${finding.status}`, error: true })
+      const blocked = blockedReason(want)
+      if (blocked) {
+        setNotice({
+          text: `Cannot ${want} — ${blocked}`,
+          error: true,
+        })
         return
-      }
-      if (want === 'remediate') {
-        const cap = finding.remediationCapability ?? finding.remediation_capability
-        if (cap && cap.canStart === false) {
-          setNotice({
-            text: `Cannot start remediation${cap.startReason ? `: ${cap.startReason}` : ''}`,
-            error: true,
-          })
-          return
-        }
       }
       setConfirm(want)
       setNotice(null)
@@ -227,17 +241,7 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
           Analysis
         </Text>
         {analysisStatus ? (
-          <Field
-            label="Status"
-            value={analysisStatus}
-            color={
-              analysisStatus === 'completed'
-                ? 'green'
-                : analysisStatus === 'failed'
-                  ? 'red'
-                  : 'yellow'
-            }
-          />
+          <Field label="Status" value={analysisStatus} color={ANALYSIS_COLORS[analysisStatus]} />
         ) : (
           <Text dimColor>No analysis run yet</Text>
         )}
@@ -326,7 +330,7 @@ function Field({
   )
 }
 
-function RemediationSummary({ summary }: { summary: RemediationSummaryType }) {
+function RemediationSummary({ summary }: Readonly<{ summary: RemediationSummaryType }>) {
   const attempt = summary.latestAttempt
   const prUrl = summary.prUrl ?? attempt?.prUrl
   return (
@@ -346,7 +350,7 @@ function RemediationSummary({ summary }: { summary: RemediationSummaryType }) {
   )
 }
 
-function RemediationCapability({ cap }: { cap: RemediationCapabilityType }) {
+function RemediationCapability({ cap }: Readonly<{ cap: RemediationCapabilityType }>) {
   const canStart = cap.canStart
   const startReason = cap.startReason
   const canRetry = cap.canRetry

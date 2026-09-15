@@ -27,6 +27,7 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
+import type { SecurityFinding } from '../api/types.ts'
 import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
@@ -231,16 +232,7 @@ export const securityFindingCommand = defineCommand({
     if (cvss) console.log(`  CVSS:       ${cvss}`)
     if (sla) console.log(`  SLA due:    ${sla}`)
     if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
-    if (typeof remediation === 'string') {
-      console.log(`  Remediation: ${remediation}`)
-    } else if (remediation) {
-      console.log(`  Remediation: ${remediation.status ?? 'unknown'}`)
-      const prUrl = remediation.prUrl ?? remediation.latestAttempt?.prUrl
-      if (prUrl) console.log(`    PR: ${prUrl}`)
-      if (remediation.latestAttempt?.branchName)
-        console.log(`    Branch: ${remediation.latestAttempt.branchName}`)
-      if (remediation.outcomeSummary) console.log(`    Outcome: ${remediation.outcomeSummary}`)
-    }
+    printRemediation(remediation)
     if (created) console.log(`  Created:    ${created}`)
     if (updated) console.log(`  Updated:    ${updated}`)
   },
@@ -303,6 +295,20 @@ export const securitySyncCommand = defineCommand({
   },
 })
 
+function printRemediation(remediation: SecurityFinding['remediationSummary']): void {
+  if (typeof remediation === 'string') {
+    console.log(`  Remediation: ${remediation}`)
+    return
+  }
+  if (!remediation) return
+  console.log(`  Remediation: ${remediation.status ?? 'unknown'}`)
+  const prUrl = remediation.prUrl ?? remediation.latestAttempt?.prUrl
+  if (prUrl) console.log(`    PR: ${prUrl}`)
+  if (remediation.latestAttempt?.branchName)
+    console.log(`    Branch: ${remediation.latestAttempt.branchName}`)
+  if (remediation.outcomeSummary) console.log(`    Outcome: ${remediation.outcomeSummary}`)
+}
+
 export const securityDismissCommand = defineCommand({
   meta: { name: 'dismiss', description: 'Dismiss a security finding (one-way)' },
   args: {
@@ -314,7 +320,8 @@ export const securityDismissCommand = defineCommand({
   },
   async run({ args }) {
     if (args.reason && !(DISMISS_REASONS as readonly string[]).includes(args.reason)) {
-      throw new Error(`Invalid --reason "${args.reason}". Allowed: ${DISMISS_REASONS.join(', ')}`)
+      const allowed = DISMISS_REASONS.join(', ')
+      throw new Error(`Invalid --reason "${args.reason}". Allowed: ${allowed}`)
     }
     const { token } = await getToken()
     await dismissFinding(token, args.id, args.reason as DismissReason | undefined)
