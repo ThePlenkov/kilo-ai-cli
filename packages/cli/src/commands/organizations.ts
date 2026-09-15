@@ -3,9 +3,8 @@
  */
 
 import { defineCommand } from 'citty'
-
+import { listOrganizations } from '../api/organizations.ts'
 import { fetchProfile } from '../api/profile.ts'
-import { fetchOrganizations } from '../api/trpc.ts'
 import type { KiloAuth } from '../api/types.ts'
 import { createTokenStore } from '../auth/token-store.ts'
 import { printTable } from './format.ts'
@@ -46,7 +45,7 @@ export const orgSetCommand = defineCommand({
   async run({ args }) {
     const { token, auth } = await getToken()
     // Verify the org exists by listing organizations
-    const orgs = await fetchOrganizations(token)
+    const orgs = await listOrganizations(token)
     const org = orgs.find((o) => o.id === args.id)
     if (!org) {
       console.error(`Organization ${args.id} not found.`)

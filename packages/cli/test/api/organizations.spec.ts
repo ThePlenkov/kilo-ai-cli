@@ -23,23 +23,26 @@ describe('organizations API', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
-  it('listOrganizations calls organizations.list', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ id: 'o1', name: 'Org', role: 'owner' }]))
+  it('listOrganizations maps UserOrganizationWithSeats fields', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse([{ organizationId: 'o1', organizationName: 'Org', role: 'owner' }]),
+    )
     const result = await listOrganizations('tok')
-    expect(result).toHaveLength(1)
+    expect(result).toEqual([{ id: 'o1', name: 'Org', role: 'owner' }])
     expect(fetchMock.mock.calls[0]![0]).toContain('organizations.list')
   })
 
-  it('getOrganizationWithMembers passes organizationId', async () => {
+  it('getOrganizationWithMembers maps callerRole', async () => {
     fetchMock.mockResolvedValue(
       mockResponse({
         id: 'o1',
         name: 'Org',
-        role: 'owner',
+        callerRole: 'owner',
         members: [{ id: 'm1', email: 'user@test.com', role: 'admin' }],
       }),
     )
     const result = await getOrganizationWithMembers('tok', 'o1')
+    expect(result.role).toBe('owner')
     expect(result.members).toHaveLength(1)
   })
 
@@ -54,14 +57,14 @@ describe('organizations API', () => {
   it('getOrganizationUsageStats returns stats', async () => {
     fetchMock.mockResolvedValue(
       mockResponse({
-        totalCreditsUsed: 100,
-        creditsUsedThisPeriod: 50,
-        activeSessions: 3,
-        totalMembers: 5,
+        totalCost: 100,
+        totalRequestCount: 50,
+        totalInputTokens: 3000,
+        totalOutputTokens: 5000,
       }),
     )
     const result = await getOrganizationUsageStats('tok', 'o1')
-    expect(result.totalCreditsUsed).toBe(100)
+    expect(result.totalCost).toBe(100)
   })
 
   it('getCreditTransactions returns transactions', async () => {
@@ -75,10 +78,10 @@ describe('organizations API', () => {
   })
 
   it('getOrganizationSeats returns seats', async () => {
-    fetchMock.mockResolvedValue(mockResponse({ total: 10, used: 5 }))
+    fetchMock.mockResolvedValue(mockResponse({ totalSeats: 10, usedSeats: 5 }))
     const result = await getOrganizationSeats('tok', 'o1')
-    expect(result.total).toBe(10)
-    expect(result.used).toBe(5)
+    expect(result.totalSeats).toBe(10)
+    expect(result.usedSeats).toBe(5)
   })
 
   it('getOrganizationInvoices passes period', async () => {
@@ -90,39 +93,53 @@ describe('organizations API', () => {
   })
 
   it('createOrganization posts with name and domain', async () => {
-    fetchMock.mockResolvedValue(mockMutationResponse({ id: 'o1', name: 'New Org', role: 'owner' }))
+    fetchMock.mockResolvedValue(
+      mockMutationResponse({ organization: { id: 'o1', name: 'New Org' } }),
+    )
     const result = await createOrganization('tok', {
       name: 'New Org',
       companyDomain: 'example.com',
+      autoAddCreator: true,
     })
     expect(result.id).toBe('o1')
     const init = fetchMock.mock.calls[0]![1] as { body: string }
     expect(JSON.parse(init.body)).toEqual({
-      '0': { name: 'New Org', companyDomain: 'example.com' },
+      '0': { name: 'New Org', companyDomain: 'example.com', autoAddCreator: true },
     })
   })
 
   it('updateOrganization posts with organizationId and name', async () => {
-    fetchMock.mockResolvedValue(mockMutationResponse({ id: 'o1', name: 'Updated', role: 'owner' }))
+    fetchMock.mockResolvedValue(
+      mockMutationResponse({ organization: { id: 'o1', name: 'Updated' } }),
+    )
     const result = await updateOrganization('tok', { organizationId: 'o1', name: 'Updated' })
     expect(result.name).toBe('Updated')
   })
 
-  it('listAvailableModels calls organizations.settings.listAvailableModels', async () => {
+  it('listAvailableModels unwraps the data envelope', async () => {
     fetchMock.mockResolvedValue(
-      mockResponse([{ id: 'm1', name: 'gpt-4', provider: 'openai', isEnabled: true }]),
+      mockResponse({ data: [{ id: 'm1', name: 'gpt-4', isFree: false, context_length: 8192 }] }),
     )
     const result = await listAvailableModels('tok', 'o1')
-    expect(result).toHaveLength(1)
+    expect(result).toEqual([
+      { id: 'm1', name: 'gpt-4', description: undefined, isFree: false, contextLength: 8192 },
+    ])
     expect(fetchMock.mock.calls[0]![0]).toContain('organizations.settings.listAvailableModels')
   })
 
   it('getSecurityAgentPermissionStatus calls organizations.securityAgent.getPermissionStatus', async () => {
     fetchMock.mockResolvedValue(
-      mockResponse({ granted: true, permissions: ['read'], pendingRequests: 0 }),
+      mockResponse({
+        hasIntegration: true,
+        hasPermissions: true,
+        integrationId: 'i1',
+        reauthorizeUrl: null,
+        authInvalidAt: null,
+        authInvalidReason: null,
+      }),
     )
     const result = await getSecurityAgentPermissionStatus('tok', 'o1')
-    expect(result.granted).toBe(true)
+    expect(result.hasPermissions).toBe(true)
     expect(fetchMock.mock.calls[0]![0]).toContain('organizations.securityAgent.getPermissionStatus')
   })
 })

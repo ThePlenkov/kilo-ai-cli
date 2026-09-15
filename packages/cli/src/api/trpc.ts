@@ -167,7 +167,5 @@ export async function renameCloudSession(
   )
 }
 
-/** List organizations via tRPC: organizations.list */
-export async function fetchOrganizations(token: string): Promise<Organization[]> {
-  return trpcQuery('organizations.list', token, z.array(OrganizationSchema))
-}
+// `organizations.list` lives in ./organizations.ts (listOrganizations) — the
+// response items are UserOrganizationWithSeats, not this flat schema.

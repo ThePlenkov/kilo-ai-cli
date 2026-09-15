@@ -6,7 +6,6 @@ import {
   fetchCloudSessions,
   fetchCodingPlanSubscriptions,
   fetchCodingPlanUsage,
-  fetchOrganizations,
   renameCloudSession,
 } from '../../src/api/trpc.ts'
 
@@ -191,27 +190,11 @@ describe('tRPC wrappers', () => {
     })
   })
 
-  it('fetchOrganizations calls organizations.list', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse(
-        trpcEnvelope([
-          { id: 'org-1', name: 'Org', role: 'owner' },
-          { id: 'org-2', name: 'Org2', role: 'member' },
-        ]),
-      ),
-    )
-    const result = await fetchOrganizations('tok')
-    expect(result).toHaveLength(2)
-    expect(result[0]!.id).toBe('org-1')
-    const url = fetchMock.mock.calls[0]![0] as string
-    expect(url).toBe(`${KILO_API_BASE}/api/trpc/organizations.list`)
-  })
-
   it('propagates schema validation failures as CloudTrpcError("schema")', async () => {
     fetchMock.mockResolvedValue(
-      mockResponse(trpcEnvelope([{ id: 'org-1', name: 'Org' /* missing role */ }])),
+      mockResponse(trpcEnvelope([{ id: 'sub-1' /* missing planId/planName/... */ }])),
     )
-    await expect(fetchOrganizations('tok')).rejects.toMatchObject({
+    await expect(fetchCodingPlanSubscriptions('tok')).rejects.toMatchObject({
       name: 'CloudTrpcError',
       kind: 'schema',
     })
@@ -219,7 +202,7 @@ describe('tRPC wrappers', () => {
 
   it('propagates network errors as CloudTrpcError("network")', async () => {
     fetchMock.mockRejectedValue(new Error('boom'))
-    await expect(fetchOrganizations('tok')).rejects.toMatchObject({
+    await expect(fetchCodingPlanSubscriptions('tok')).rejects.toMatchObject({
       name: 'CloudTrpcError',
       kind: 'network',
     })

@@ -125,7 +125,7 @@ describe('code-reviews API', () => {
     fetchMock.mockResolvedValue(mockMutationResponse(null))
     await toggleReviewAgent('tok', 'org1', 'github', true)
     const url = fetchMock.mock.calls[0]![0] as string
-    expect(url).toContain('organizations.codeReviews.toggleReviewAgent')
+    expect(url).toContain('organizations.reviewAgent.toggleReviewAgent')
     const init = fetchMock.mock.calls[0]![1] as { body: string }
     expect(JSON.parse(init.body)).toEqual({
       '0': { organizationId: 'org1', platform: 'github', isEnabled: true },

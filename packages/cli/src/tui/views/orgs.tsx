@@ -186,12 +186,16 @@ export function OrgModelsScreen({ ctx, focused }: ScreenProps) {
       columns={[
         { label: 'ID', width: 36, value: (m: { id: string }) => m.id },
         { label: 'Name', width: 28, value: (m: { name: string }) => m.name },
-        { label: 'Provider', width: 16, value: (m: { provider: string }) => m.provider },
         {
-          label: 'Enabled',
-          width: 8,
-          value: (m: { isEnabled: boolean }) => (m.isEnabled ? 'yes' : 'no'),
-          color: (m: { isEnabled: boolean }) => (m.isEnabled ? 'green' : 'gray'),
+          label: 'Free',
+          width: 6,
+          value: (m: { isFree?: boolean }) => (m.isFree ? 'yes' : 'no'),
+          color: (m: { isFree?: boolean }) => (m.isFree ? 'green' : 'gray'),
+        },
+        {
+          label: 'Context',
+          width: 10,
+          value: (m: { contextLength?: number }) => String(m.contextLength ?? '-'),
         },
       ]}
       onBack={ctx.goBack}

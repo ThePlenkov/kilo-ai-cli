@@ -203,14 +203,14 @@ export async function getReviewConfig(
   })
 }
 
-/** organizations.codeReviews.toggleReviewAgent */
+/** organizations.reviewAgent.toggleReviewAgent */
 export async function toggleReviewAgent(
   token: string,
   organizationId: string,
   platform: string,
   isEnabled: boolean,
 ): Promise<void> {
-  await trpcMutate('organizations.codeReviews.toggleReviewAgent', token, z.unknown(), {
+  await trpcMutate('organizations.reviewAgent.toggleReviewAgent', token, z.unknown(), {
     organizationId,
     platform,
     isEnabled,
