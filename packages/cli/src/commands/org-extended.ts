@@ -43,10 +43,10 @@ export const orgUsageCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const stats = await getOrganizationUsageStats(token, args.id)
-    console.log(`Total credits used: $${stats.totalCreditsUsed.toFixed(2)}`)
-    console.log(`Credits this period: $${stats.creditsUsedThisPeriod.toFixed(2)}`)
-    console.log(`Active sessions: ${stats.activeSessions}`)
-    console.log(`Total members: ${stats.totalMembers}`)
+    console.log(`Total cost: $${stats.totalCost.toFixed(2)}`)
+    console.log(`Requests: ${stats.totalRequestCount}`)
+    console.log(`Input tokens: ${stats.totalInputTokens}`)
+    console.log(`Output tokens: ${stats.totalOutputTokens}`)
   },
 })
 
@@ -85,9 +85,9 @@ export const orgSeatsCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const seats = await getOrganizationSeats(token, args.id)
-    console.log(`Total seats: ${seats.total}`)
-    console.log(`Used seats: ${seats.used}`)
-    console.log(`Available: ${seats.total - seats.used}`)
+    console.log(`Total seats: ${seats.totalSeats}`)
+    console.log(`Used seats: ${seats.usedSeats}`)
+    console.log(`Available: ${seats.totalSeats - seats.usedSeats}`)
   },
 })
 
@@ -132,6 +132,7 @@ export const orgCreateCommand = defineCommand({
     const org = await createOrganization(token, {
       name: args.name,
       companyDomain: args.domain ?? null,
+      autoAddCreator: true,
     })
     console.log(`Created organization: ${org.name} (${org.id})`)
   },
@@ -164,14 +165,14 @@ export const orgModelsCommand = defineCommand({
       models.map((m) => ({
         id: m.id,
         name: m.name,
-        provider: m.provider,
-        enabled: m.isEnabled ? 'yes' : 'no',
+        free: m.isFree ? 'yes' : 'no',
+        context: m.contextLength ?? '-',
       })),
       [
-        { key: 'id', label: 'ID', width: 12 },
+        { key: 'id', label: 'ID', width: 24 },
         { key: 'name', label: 'Name', width: 30 },
-        { key: 'provider', label: 'Provider', width: 14 },
-        { key: 'enabled', label: 'Enabled', width: 8 },
+        { key: 'free', label: 'Free', width: 6 },
+        { key: 'context', label: 'Context', width: 10, align: 'right' },
       ],
     )
   },
@@ -183,8 +184,12 @@ export const orgSecurityCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const status = await getSecurityAgentPermissionStatus(token, args.id)
-    console.log(`Granted: ${status.granted ? 'yes' : 'no'}`)
-    console.log(`Permissions: ${status.permissions?.join(', ') || '(none)'}`)
-    console.log(`Pending requests: ${status.pendingRequests ?? 0}`)
+    console.log(`Integration connected: ${status.hasIntegration ? 'yes' : 'no'}`)
+    console.log(`Permissions granted: ${status.hasPermissions ? 'yes' : 'no'}`)
+    if (status.reauthorizeUrl) console.log(`Reauthorize: ${status.reauthorizeUrl}`)
+    if (status.authInvalidAt)
+      console.log(
+        `Auth invalid since ${status.authInvalidAt}: ${status.authInvalidReason ?? 'unknown'}`,
+      )
   },
 })
