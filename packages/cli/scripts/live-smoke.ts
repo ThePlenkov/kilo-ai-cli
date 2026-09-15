@@ -366,12 +366,7 @@ const COMMANDS: Cmd[] = [
   { cmd: 'security command', cls: 'read', args: firstCommandId, skipReason: 'no active commands' },
   { cmd: 'security orphaned-repos', cls: 'read' },
   { cmd: 'security last-sync', cls: 'read' },
-  {
-    cmd: 'security sync',
-    cls: 'idempotent',
-    note: 'triggers a GitHub re-sync (no user state changed)',
-    expectError: /no repositories|not connected/i,
-  },
+  { cmd: 'security sync', cls: 'manual', note: 'triggers GitHub sync' },
   {
     cmd: 'security analyze',
     cls: 'manual',
@@ -411,8 +406,11 @@ const COMMANDS: Cmd[] = [
     args: async (c) => {
       const cfg = await getSecurityConfig(c.token)
       securityWasEnabled = cfg.isEnabled ?? cfg.is_enabled ?? false
-      return []
+      // Enabling a disabled agent triggers real repo ingestion — only run the
+      // command when it's a no-op (already enabled).
+      return securityWasEnabled ? [] : null
     },
+    skipReason: 'agent disabled — enabling would trigger ingestion',
     post: async (c) => {
       if (securityWasEnabled !== null) await setSecurityEnabled(c.token, securityWasEnabled)
     },

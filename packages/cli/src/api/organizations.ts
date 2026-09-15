@@ -81,7 +81,7 @@ const AvailableModelsSchema = z
         name: z.string(),
         description: z.string().optional(),
         isFree: z.boolean().optional(),
-        context_length: z.number().optional(),
+        context_length: z.number().nullish(),
       }),
     ),
   })
@@ -193,28 +193,38 @@ export async function getOrganizationInvoices(
 // --- Top-level mutations ---
 
 /** create/update return `{ organization: {...} }` — unwrap to the flat Organization shape. */
-const MutatedOrganizationSchema = z
-  .object({
-    organization: z.looseObject({
-      id: z.string(),
-      name: z.string(),
-      role: z.string().optional(),
-    }),
-  })
-  .transform(
-    (r): Organization => ({
-      id: r.organization.id,
-      name: r.organization.name,
-      role: r.organization.role ?? 'owner',
-    }),
-  )
+const MutatedOrganizationSchema = z.object({
+  organization: z.looseObject({
+    id: z.string(),
+    name: z.string(),
+    role: z.string().optional(),
+  }),
+})
+
+const CreatedOrganizationSchema = MutatedOrganizationSchema.transform(
+  (r): Organization => ({
+    id: r.organization.id,
+    name: r.organization.name,
+    // With autoAddCreator the caller becomes the owner — a safe default.
+    role: r.organization.role ?? 'owner',
+  }),
+)
+
+const UpdatedOrganizationSchema = MutatedOrganizationSchema.transform(
+  (r): Organization => ({
+    id: r.organization.id,
+    name: r.organization.name,
+    // The update response doesn't carry the caller's role — don't claim 'owner'.
+    role: r.organization.role ?? 'unknown',
+  }),
+)
 
 /** organizations.create */
 export async function createOrganization(
   token: string,
   input: OrganizationCreateInput,
 ): Promise<Organization> {
-  return trpcMutate('organizations.create', token, MutatedOrganizationSchema, input)
+  return trpcMutate('organizations.create', token, CreatedOrganizationSchema, input)
 }
 
 /** organizations.update */
@@ -222,7 +232,7 @@ export async function updateOrganization(
   token: string,
   input: OrganizationUpdateInput,
 ): Promise<Organization> {
-  return trpcMutate('organizations.update', token, MutatedOrganizationSchema, input)
+  return trpcMutate('organizations.update', token, UpdatedOrganizationSchema, input)
 }
 
 /** organizations.updateCompanyDomain */

@@ -184,17 +184,24 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   const effOrg = useOrg ? orgId : undefined
 
   const {
-    data: config,
+    data: result,
     error,
     loading,
     reload,
   } = useQuery(
-    () =>
-      effOrg
-        ? getOrgReviewAgentConfig(ctx.token, effOrg, platform)
-        : getPersonalReviewConfig(ctx.token, platform),
+    async () => ({
+      platform,
+      org: effOrg,
+      config: effOrg
+        ? await getOrgReviewAgentConfig(ctx.token, effOrg, platform)
+        : await getPersonalReviewConfig(ctx.token, platform),
+    }),
     [ctx.token, effOrg, platform],
   )
+  // During a platform/scope reload `result` still holds the previous fetch —
+  // only trust it when it was fetched for the current platform and scope.
+  const config =
+    result && result.platform === platform && result.org === effOrg ? result.config : undefined
 
   const fail = (e: unknown, what: string) =>
     setNotice({
@@ -310,7 +317,7 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
             focus={focused}
             onSubmit={async (v) => {
               setEditing(false)
-              if (!v.trim() || v === config.modelSlug) return
+              if (!v.trim() || v.trim() === config.modelSlug) return
               setBusy(true)
               try {
                 const input = toSaveReviewConfigInput(platform, config, { modelSlug: v.trim() })
