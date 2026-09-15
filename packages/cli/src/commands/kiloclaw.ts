@@ -18,7 +18,7 @@ import {
   removeMyPin,
   startKiloCliRun,
 } from '../api/kiloclaw.ts'
-import { printTable, sanitize } from './format.ts'
+import { printTable, sanitize, sanitizeLines } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const kiloclawInstancesCommand = defineCommand({
@@ -165,7 +165,7 @@ export const kiloclawChangelogCommand = defineCommand({
       console.log(
         `\n## ${sanitize(entry.date)} [${sanitize(entry.category)}]${entry.deployHint ? ` (${sanitize(entry.deployHint)})` : ''}`,
       )
-      console.log(`  ${sanitize(entry.description)}`)
+      console.log(`  ${sanitizeLines(entry.description)}`)
     }
   },
 })

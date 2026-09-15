@@ -23,6 +23,14 @@ export function sanitize(s: string): string {
   return s.replace(ANSI_ALL, '').replace(CTRL, '')
 }
 
+/** Like {@link sanitize} but preserves line breaks — each line is sanitized. */
+export function sanitizeLines(s: string): string {
+  return s
+    .split('\n')
+    .map((line) => sanitize(line))
+    .join('\n')
+}
+
 /** Pad or truncate a string to a fixed width. */
 function pad(str: string, width: number): string {
   if (str.length > width) return str.slice(0, width - 1) + '…'
