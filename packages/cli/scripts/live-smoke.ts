@@ -481,8 +481,10 @@ async function main() {
   savedAuth = auth
   // With a listener installed, Ctrl-C doesn't hard-kill the process — the flag
   // lets the loop finish the current command's restore hook before stopping.
+  // A second Ctrl-C force-exits so a hung restore can't trap the runner.
   let interrupted = false
   process.on('SIGINT', () => {
+    if (interrupted) process.exit(130)
     interrupted = true
   })
   const ctx: Ctx = {
@@ -522,6 +524,10 @@ async function main() {
         continue
       }
     }
+
+    // Ctrl-C during arg resolution must not launch a (possibly side-effecting)
+    // command — check again right before spawning.
+    if (interrupted) break
 
     // Restore hooks run in `finally` — a throw or a Ctrl-C mid-command must not
     // leave live state (credentials, toggles, names) mutated.
