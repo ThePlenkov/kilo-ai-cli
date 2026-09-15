@@ -6,8 +6,13 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version to release (x.y.z, or patch|minor|major vs npm latest)'
+        required: false
+        default: 'patch'
+        type: string
       dry-run:
-        description: 'Dry run (skip actual npm publish)'
+        description: 'Dry run (verify only — no tag, publish, or sync PR)'
         required: false
         default: 'true'
         type: choice
@@ -15,9 +20,12 @@ on:
           - 'true'
           - 'false'
 
-# Required for npm OIDC trusted publishing
+# contents:write — push release tag + version-sync branch
+# pull-requests:write — open the version-sync PR
+# id-token:write — npm OIDC trusted publishing
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   id-token: write
 
 jobs:
@@ -32,7 +40,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: true
-          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -56,6 +63,50 @@ jobs:
           bun install --frozen-lockfile --ignore-scripts
           bun run build
 
+      - name: Guard release to main
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
+        run: |
+          [ "${{ github.ref_name }}" = "main" ] || { echo "Releases must run from main"; exit 1; }
+
+      - name: Compute next version
+        id: ver
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          V="${{ inputs.version }}"
+          case "$V" in
+            patch|minor|major)
+              BASE=$(npm view kilo-ai-cli version)
+              V=$(npx --yes semver "$BASE" -i "$V")
+              ;;
+          esac
+          echo "next=$V" >> "$GITHUB_OUTPUT"
+
+      # Tag pushes take the version from the tag; dispatches stamp the computed
+      # version so the artifact always matches the released number.
+      - name: Stamp package version
+        working-directory: packages/cli
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="${{ steps.ver.outputs.next }}"
+          fi
+          npm version "$V" --no-git-tag-version --allow-same-version
+
+      # Commit the bump on a sync branch and tag it before building, so the tag
+      # points at a commit whose package.json matches the published version.
+      # Pushed only after publish succeeds — a failed run leaves no residue.
+      - name: Commit bump and tag
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
+        run: |
+          V="${{ steps.ver.outputs.next }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "chore/release-$V"
+          git add packages/cli/package.json package-lock.json
+          git commit -m "chore: release $V"
+          git tag "v$V"
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -73,11 +124,26 @@ jobs:
         run: npm pack
 
       - name: Publish to npm (OIDC)
-        if: ${{ github.event_name == 'push' || github.event.inputs.dry-run == 'false' }}
+        if: ${{ github.event_name == 'push' || inputs.dry-run == 'false' }}
         working-directory: packages/cli
         run: npm publish --provenance --access public
 
       - name: Publish to npm (dry run)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'true' }}
         working-directory: packages/cli
         run: npm publish --provenance --access public --dry-run
+
+      # main requires PRs — push the bump branch + tag and open the sync PR so
+      # the repo version catches up through the normal merge flow.
+      - name: Push tag and open version-sync PR
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ steps.ver.outputs.next }}"
+          git push origin "v$V" "chore/release-$V"
+          gh pr create \
+            --title "chore: release $V" \
+            --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
+            --base main \
+            --head "chore/release-$V"
