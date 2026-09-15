@@ -2,11 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getCodeReview,
+  getOrgReviewAgentConfig,
+  getPersonalReviewConfig,
   getReviewConfig,
   listCodeReviews,
   listCodeReviewsForUser,
   listGitLabRepositories,
+  saveOrgReviewConfig,
+  savePersonalReviewConfig,
+  togglePersonalReviewAgent,
   toggleReviewAgent,
+  toSaveReviewConfigInput,
 } from '../../src/api/code-reviews.ts'
 import { mockMutationResponse, mockResponse, setupFetchMock } from './helpers.ts'
 
@@ -109,5 +115,107 @@ describe('code-reviews API', () => {
     expect(url).toContain('organizations.codeReviews.toggleReviewAgent')
     const init = fetchMock.mock.calls[0]![1] as { body: string }
     expect(JSON.parse(init.body)).toEqual({ '0': { organizationId: 'org1', platform: 'github', isEnabled: true } })
+  })
+
+  it('getPersonalReviewConfig calls personalReviewAgent.getReviewConfig', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse({
+        isEnabled: false,
+        reviewStyle: 'lenient',
+        focusAreas: [],
+        modelSlug: '~google/gemini-flash-latest',
+        actionRequired: { reason: 'selected_model_unavailable', lastErrorMessage: 'model gone' },
+      }),
+    )
+    const result = await getPersonalReviewConfig('tok', 'github')
+    expect(result.modelSlug).toBe('~google/gemini-flash-latest')
+    expect(result.actionRequired?.reason).toBe('selected_model_unavailable')
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('personalReviewAgent.getReviewConfig')
+    expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({ platform: 'github' })
+  })
+
+  it('savePersonalReviewConfig posts to personalReviewAgent.saveReviewConfig', async () => {
+    fetchMock.mockResolvedValue(mockMutationResponse(null))
+    const input = {
+      platform: 'github',
+      reviewStyle: 'lenient',
+      focusAreas: [],
+      modelSlug: 'kilo-auto/free',
+    }
+    await savePersonalReviewConfig('tok', input)
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('personalReviewAgent.saveReviewConfig')
+    const init = fetchMock.mock.calls[0]![1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ '0': input })
+  })
+
+  it('togglePersonalReviewAgent posts platform and isEnabled', async () => {
+    fetchMock.mockResolvedValue(mockMutationResponse(null))
+    await togglePersonalReviewAgent('tok', 'gitlab', false)
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('personalReviewAgent.toggleReviewAgent')
+    const init = fetchMock.mock.calls[0]![1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ '0': { platform: 'gitlab', isEnabled: false } })
+  })
+
+  it('getOrgReviewAgentConfig calls organizations.reviewAgent.getReviewConfig', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ isEnabled: true, modelSlug: 'kilo-auto/free' }))
+    const result = await getOrgReviewAgentConfig('tok', 'org1', 'github')
+    expect(result.isEnabled).toBe(true)
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('organizations.reviewAgent.getReviewConfig')
+    expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({
+      organizationId: 'org1',
+      platform: 'github',
+    })
+  })
+
+  it('saveOrgReviewConfig posts organizationId with input', async () => {
+    fetchMock.mockResolvedValue(mockMutationResponse(null))
+    const input = {
+      platform: 'github',
+      reviewStyle: 'balanced',
+      focusAreas: [],
+      modelSlug: 'auto',
+    }
+    await saveOrgReviewConfig('tok', 'org1', input)
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('organizations.reviewAgent.saveReviewConfig')
+    const init = fetchMock.mock.calls[0]![1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ '0': { ...input, organizationId: 'org1' } })
+  })
+
+  it('toSaveReviewConfigInput preserves config and applies overrides', () => {
+    const input = toSaveReviewConfigInput(
+      'github',
+      {
+        isEnabled: false,
+        reviewStyle: 'strict',
+        focusAreas: ['security'],
+        modelSlug: 'old/model',
+        customInstructions: 'be nice',
+        disableReviewMd: false,
+      },
+      { modelSlug: 'kilo-auto/free' },
+    )
+    expect(input).toMatchObject({
+      platform: 'github',
+      reviewStyle: 'strict',
+      focusAreas: ['security'],
+      modelSlug: 'kilo-auto/free',
+      customInstructions: 'be nice',
+      disableReviewMd: false,
+    })
+  })
+
+  it('toSaveReviewConfigInput falls back to defaults for missing fields', () => {
+    const input = toSaveReviewConfigInput('gitlab', { isEnabled: true })
+    expect(input).toMatchObject({
+      platform: 'gitlab',
+      reviewStyle: 'balanced',
+      focusAreas: [],
+      modelSlug: 'auto',
+    })
   })
 })

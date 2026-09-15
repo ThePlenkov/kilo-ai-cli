@@ -328,6 +328,54 @@ export interface CodeReviewConfig {
   repositoryName?: string
 }
 
+/** personalReviewAgent.getReviewConfig / organizations.reviewAgent.getReviewConfig — camelCase server shape. */
+export interface ReviewAgentActionRequired {
+  reason: string
+  detectedAt?: string
+  lastSeenAt?: string
+  triggeringReviewId?: string
+  lastErrorMessage?: string
+  emailSentAt?: string
+  [key: string]: unknown
+}
+
+export interface ReviewAgentConfig {
+  isEnabled: boolean
+  reviewStyle?: string
+  focusAreas?: string[]
+  customInstructions?: string | null
+  modelSlug?: string
+  thinkingEffort?: string | null
+  gateThreshold?: string | null
+  repositorySelectionMode?: string
+  selectedRepositoryIds?: number[]
+  manuallyAddedRepositories?: { id: number; name: string; full_name: string; private: boolean }[]
+  repositoryModelOverrides?: unknown[]
+  disableReviewMd?: boolean
+  skipBotPullRequests?: boolean
+  reviewMemoryEnabled?: boolean
+  council?: unknown
+  councilEnabledRepositoryIds?: number[]
+  actionRequired?: ReviewAgentActionRequired | null
+  [key: string]: unknown
+}
+
+/** Input for personalReviewAgent.saveReviewConfig / organizations.reviewAgent.saveReviewConfig. */
+export interface SaveReviewConfigInput {
+  platform: string
+  reviewStyle: string
+  focusAreas: string[]
+  modelSlug: string
+  customInstructions?: string
+  thinkingEffort?: string | null
+  repositorySelectionMode?: string
+  selectedRepositoryIds?: number[]
+  manuallyAddedRepositories?: { id: number; name: string; full_name: string; private: boolean }[]
+  disableReviewMd?: boolean
+  gateThreshold?: string
+  autoConfigureWebhooks?: boolean
+}
+
 // ============================================================================
 // tRPC Types — Organizations (extended)
 // ============================================================================

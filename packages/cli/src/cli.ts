@@ -47,6 +47,7 @@ import {
   reviewsConfigCommand,
   reviewsGetCommand,
   reviewsListCommand,
+  reviewsSetModelCommand,
   reviewsToggleCommand,
 } from './commands/code-reviews.ts'
 import {
@@ -183,6 +184,7 @@ export const mainCommand = defineCommand({
         get: reviewsGetCommand,
         config: reviewsConfigCommand,
         toggle: reviewsToggleCommand,
+        'set-model': reviewsSetModelCommand,
       },
     }),
     analytics: defineCommand({
