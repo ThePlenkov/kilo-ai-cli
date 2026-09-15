@@ -10,11 +10,11 @@ A command-line interface for the [kilo.ai](https://kilo.ai) cloud platform. Auth
 - **BYOK** — list bring-your-own-key entries
 - **KiloClaw** — manage instances, billing, subscriptions, changelog, versions, file trees, run lifecycle
 - **Cloud Agent** — inspect sessions and connected GitHub/GitLab repositories
-- **Code Reviews** — list reviews, view/toggle review configuration
+- **Code Reviews** — list reviews, view/toggle/set-model review-agent configuration (personal + org)
 - **Usage Analytics** — summary, timeseries, breakdown, and table views
 - **App Builder** — list apps, check eligibility, deploy
 - **Security Agent** — enable/disable, list repos and findings, view finding details, stats, dashboard, sync, dismiss, analyze, remediate, retry/cancel remediation, list commands, orphaned repos, last sync, bulk delete findings
-- **TUI** — interactive terminal UI for the security agent (Ink/React)
+- **TUI** — website-style interactive terminal UI covering all areas, with mutations (Ink/React)
 
 ---
 
@@ -275,16 +275,17 @@ kilo-ai-cli cloud-agent gitlab-repos              # List connected GitLab reposi
 
 ### reviews
 
+The review agent has **personal** and **organization** scopes: pass the platform (`github`/`gitlab`) alone for personal, or an org ID plus platform (or `--org <id>`) for an organization.
+
 ```text
 kilo-ai-cli reviews list                          # List your personal code reviews
-kilo-ai-cli reviews list <org>                    # List code reviews for an organization (or --org <id>)
+kilo-ai-cli reviews list --org <org-id>           # List code reviews for an organization
 kilo-ai-cli reviews get <id>                      # Show a review with attempts and token usage
-kilo-ai-cli reviews config <platform>             # Show personal review agent config (github/gitlab)
-kilo-ai-cli reviews config <org> <platform>       # Show org review agent config (or --org <id>)
-kilo-ai-cli reviews set-model <platform> <model>  # Set review agent model, e.g. kilo-auto/free
-kilo-ai-cli reviews set-model <platform> <model> --org <id>  # Set an organization review agent model
-kilo-ai-cli reviews toggle <platform> --enabled <bool>         # Toggle personal code reviews on/off
-kilo-ai-cli reviews toggle <org> <platform> --enabled <bool>   # Toggle org code reviews on/off
+kilo-ai-cli reviews config <platform>             # Personal review-agent config
+kilo-ai-cli reviews config <org> <platform>       # Org review-agent config (or --org <id> <platform>)
+kilo-ai-cli reviews toggle <platform> --enabled <bool>       # Toggle personal review agent
+kilo-ai-cli reviews toggle <org> <platform> --enabled <bool> # Toggle org review agent
+kilo-ai-cli reviews set-model <platform> <slug>   # Set review-agent model (personal; --org for org)
 ```
 
 ### analytics
@@ -324,15 +325,16 @@ kilo-ai-cli security last-sync                     # Show last sync time
 # Findings
 kilo-ai-cli security findings [options]            # List findings
 kilo-ai-cli security finding <id>                  # Get finding details
-kilo-ai-cli security dismiss <id>                   # Dismiss a finding
+kilo-ai-cli security dismiss <id> --reason <r>     # Dismiss a finding (one-way; reason:
+                                                 #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
 kilo-ai-cli security delete-findings <repo>        # Delete all findings for a repo (interactive)
 kilo-ai-cli security delete-findings <repo> --yes  # Delete without confirmation prompt
 
 # Analysis & remediation
-kilo-ai-cli security analyze <repo>                 # Start security analysis for a repository
-kilo-ai-cli security remediate <finding-id>         # Start remediation for a finding
-kilo-ai-cli security retry-remediation <cmd-id>     # Retry a failed remediation
-kilo-ai-cli security cancel-remediation <cmd-id>   # Cancel an in-progress remediation
+kilo-ai-cli security analyze <finding-id>           # Queue codebase analysis for a finding
+kilo-ai-cli security remediate <finding-id>         # Start remediation for a finding (may open a PR)
+kilo-ai-cli security retry-remediation <finding-id> # Retry remediation for a finding
+kilo-ai-cli security cancel-remediation <attempt-id> # Cancel a running remediation attempt
 
 # Stats & dashboard
 kilo-ai-cli security stats                          # Show security agent statistics
@@ -373,14 +375,14 @@ kilo-ai-cli tui                                    # Launch interactive TUI for 
 The `tui` command launches a full-screen interactive terminal UI built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs). It mirrors the website's navigation as a sidebar on the left with a content pane on the right:
 
 - **Dashboard** — profile, balance, organizations
-- **Cloud** — sessions (detail + rename), cloud-agent repos, session lookup, code reviews, app builder
-- **Security** — findings (filter/detail), repositories, stats, dashboard, commands, config, permissions
+- **Cloud** — sessions (detail + rename), cloud-agent repos, session lookup, code reviews, **review-agent config** (platform switch, model edit, personal/org toggle), app builder
+- **Security** — findings (filter/detail with **d**=dismiss / **r**=remediate + confirm), repositories, stats, dashboard, commands, config, permissions
 - **Usage** — analytics summary/timeseries/breakdown/table, coding plans
 - **KiloClaw** — instances, agents, billing, history, subscriptions, changelog, version, files
 - **Organizations** — org list with members/usage/credits/seats/invoices/models/security detail
 - **Account** — BYOK keys
 
-Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh (the hint line at the bottom of each screen shows its actual keys). The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
+Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected screen, **Esc** go back (from a nested screen to the parent, from a root screen back to the sidebar), **q** quits while the sidebar is focused. Refresh is screen-specific — most list and record screens use **r**, while session detail uses **r** to rename and **R** to refresh. Mutating keys confirm first (press the key twice, or **Esc** to cancel): `d`/`r` on a finding (dismiss additionally lets digits `1`–`5` pick the reason), `t` on the review-agent screen (`m` opens the model editor immediately). The hint line at the bottom of each screen shows its actual keys. The layout adapts to the terminal size: the sidebar scrolls when it doesn't fit and lists show `↑/↓ N more` markers.
 
 ---
 
@@ -447,6 +449,17 @@ npx nx build kilo-ai-cli
 ```bash
 npx nx test kilo-ai-cli        # Run vitest
 ```
+
+### Live API smoke test
+
+`packages/cli/scripts/live-smoke.ts` catalogues every CLI command and executes all read/idempotent ones against the real API, writing a coverage matrix to `LIVE-MATRIX.md`:
+
+```bash
+node packages/cli/scripts/live-smoke.ts                     # read + reversible idempotent commands
+node packages/cli/scripts/live-smoke.ts --include-manual    # also side-effecting commands (org create, analyze, remediate…)
+```
+
+Idempotent mutations restore state after themselves (credentials, org names, toggles). Commands that spend credits, open PRs, or delete data stay `manual`/`never` — run `--include-manual` only on an account where that's acceptable.
 
 ### Typecheck
 

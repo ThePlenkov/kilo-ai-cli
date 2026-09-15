@@ -6,6 +6,8 @@ import { defineCommand } from 'citty'
 
 import {
   cancelRemediation,
+  DISMISS_REASONS,
+  type DismissReason,
   deleteFindingsByRepository,
   dismissFinding,
   getCommandStatus,
@@ -25,6 +27,7 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
+import type { SecurityFinding } from '../api/types.ts'
 import { confirm } from './confirm.ts'
 import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
@@ -229,7 +232,7 @@ export const securityFindingCommand = defineCommand({
     if (cvss) console.log(`  CVSS:       ${cvss}`)
     if (sla) console.log(`  SLA due:    ${sla}`)
     if (analysisStatus) console.log(`  Analysis:   ${analysisStatus}`)
-    if (remediation) console.log(`  Remediation: ${remediation}`)
+    printRemediation(remediation)
     if (created) console.log(`  Created:    ${created}`)
     if (updated) console.log(`  Updated:    ${updated}`)
   },
@@ -292,56 +295,77 @@ export const securitySyncCommand = defineCommand({
   },
 })
 
+function printRemediation(remediation: SecurityFinding['remediationSummary']): void {
+  if (typeof remediation === 'string') {
+    console.log(`  Remediation: ${remediation}`)
+    return
+  }
+  if (!remediation) return
+  console.log(`  Remediation: ${remediation.status ?? 'unknown'}`)
+  const prUrl = remediation.prUrl ?? remediation.latestAttempt?.prUrl
+  if (prUrl) console.log(`    PR: ${prUrl}`)
+  if (remediation.latestAttempt?.branchName)
+    console.log(`    Branch: ${remediation.latestAttempt.branchName}`)
+  if (remediation.outcomeSummary) console.log(`    Outcome: ${remediation.outcomeSummary}`)
+}
+
 export const securityDismissCommand = defineCommand({
-  meta: { name: 'dismiss', description: 'Dismiss a security finding' },
+  meta: { name: 'dismiss', description: 'Dismiss a security finding (one-way)' },
   args: {
     id: { type: 'positional', description: 'Finding ID', required: true },
-    reason: { type: 'string', description: 'Reason for dismissal' },
+    reason: {
+      type: 'string',
+      description: `Reason for dismissal (${DISMISS_REASONS.join('/')})`,
+    },
   },
   async run({ args }) {
+    if (args.reason && !(DISMISS_REASONS as readonly string[]).includes(args.reason)) {
+      const allowed = DISMISS_REASONS.join(', ')
+      throw new Error(`Invalid --reason "${args.reason}". Allowed: ${allowed}`)
+    }
     const { token } = await getToken()
-    await dismissFinding(token, args.id, args.reason)
+    await dismissFinding(token, args.id, args.reason as DismissReason | undefined)
     console.log(`Finding ${args.id} dismissed.`)
   },
 })
 
 export const securityAnalyzeCommand = defineCommand({
-  meta: { name: 'analyze', description: 'Start security analysis for a repository' },
-  args: { repo: { type: 'positional', description: 'Repository ID', required: true } },
+  meta: { name: 'analyze', description: 'Start security analysis for a finding' },
+  args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const result = await startAnalysis(token, args.repo)
-    console.log(`Analysis started: ${result.analysisId}`)
+    const result = await startAnalysis(token, args.id)
+    console.log(`Analysis queued${result.commandId ? ` (command ${result.commandId})` : ''}.`)
   },
 })
 
 export const securityRemediateCommand = defineCommand({
-  meta: { name: 'remediate', description: 'Start remediation for a finding' },
+  meta: { name: 'remediate', description: 'Start remediation for a finding (may open a PR)' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
     const result = await startRemediation(token, args.id)
-    console.log(`Remediation started: ${result.commandId}`)
+    console.log(`Remediation started (attempt ${result.attemptId}).`)
   },
 })
 
 export const securityRetryRemediationCommand = defineCommand({
-  meta: { name: 'retry-remediation', description: 'Retry a failed remediation' },
-  args: { id: { type: 'positional', description: 'Command ID', required: true } },
+  meta: { name: 'retry-remediation', description: 'Retry remediation for a finding' },
+  args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
     await retryRemediation(token, args.id)
-    console.log(`Retrying remediation: ${args.id}`)
+    console.log(`Retrying remediation for finding ${args.id}.`)
   },
 })
 
 export const securityCancelRemediationCommand = defineCommand({
   meta: { name: 'cancel-remediation', description: 'Cancel an in-progress remediation' },
-  args: { id: { type: 'positional', description: 'Command ID', required: true } },
+  args: { id: { type: 'positional', description: 'Attempt ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
     await cancelRemediation(token, args.id)
-    console.log(`Cancelled remediation: ${args.id}`)
+    console.log(`Cancelled remediation attempt ${args.id}.`)
   },
 })
 

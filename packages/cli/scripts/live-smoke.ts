@@ -29,8 +29,8 @@ import {
 import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
 import { listOrganizations, updateOrganization } from '../src/api/organizations.ts'
 import {
+  cancelRemediation,
   getSecurityConfig,
-  getSecurityRepositories,
   listActiveCommands,
   listFindings,
   setSecurityEnabled,
@@ -57,8 +57,8 @@ interface Cmd {
   cls: Cls
   /** Resolve extra argv; return null to mark SKIP with the returned reason via `skipReason`. */
   args?: (ctx: Ctx) => Promise<string[] | null>
-  /** Runs after the command — used by idempotent mutations to restore state. */
-  post?: (ctx: Ctx) => Promise<void>
+  /** Runs after the command — used by idempotent mutations to restore state. Receives the child output. */
+  post?: (ctx: Ctx, output: string) => Promise<void>
   /** If the failure output matches, the command is reported SKIP (account-state limitation), not FAIL. */
   expectError?: RegExp
   skipReason?: string
@@ -101,15 +101,74 @@ async function firstFindingId(ctx: Ctx): Promise<string[] | null> {
   return r.findings[0]?.id ? [r.findings[0].id] : null
 }
 
+// Mutations need an `open` finding — dismissed/ignored findings are rejected.
+async function firstOpenFindingId(ctx: Ctx): Promise<string[] | null> {
+  const r = await listFindings(ctx.token, { status: 'open', limit: 1 })
+  return r.findings[0]?.id ? [r.findings[0].id] : null
+}
+
+// Collect every finding, paging through the list — sweeps must not stop at
+// the first page or they can miss running remediation attempts.
+async function allFindings(ctx: Ctx) {
+  const page = 100
+  const out: Awaited<ReturnType<typeof listFindings>>['findings'] = []
+  for (let offset = 0; ; offset += page) {
+    const r = await listFindings(ctx.token, { limit: page, offset })
+    out.push(...r.findings)
+    if (r.findings.length < page) return out
+  }
+}
+
+// The running remediation attempt id lives in remediationCapability.cancelAttemptId.
+async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
+  for (const f of await allFindings(ctx)) {
+    const cap = f.remediationCapability ?? f.remediation_capability
+    if (cap?.canCancel && cap.cancelAttemptId) return [cap.cancelAttemptId]
+  }
+  return null
+}
+
+// Post-hook for remediate/retry-remediation: cancel the attempt the command
+// just queued — parsed from its output (the attempt may not be listed yet) —
+// plus any attempt that appeared since the resolver's snapshot. Attempts that
+// existed before the command ran are left alone.
+async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
+  const attemptId = /attempt ([0-9a-f-]{36})/i.exec(output)?.[1]
+  if (attemptId) {
+    try {
+      await cancelRemediation(ctx.token, attemptId)
+    } catch (e) {
+      // Only a terminal-state rejection is benign — anything else (network,
+      // auth, unknown id) means the attempt may still be running, so surface it.
+      if (!/not.*(running|cancellable)|already|finished|completed|terminal/i.test(msg(e))) throw e
+    }
+  }
+  for (const f of await allFindings(ctx)) {
+    const cap = f.remediationCapability ?? f.remediation_capability
+    const id = cap?.cancelAttemptId
+    if (cap?.canCancel && id && id !== attemptId && !preExistingAttempts.has(id)) {
+      await cancelRemediation(ctx.token, id)
+    }
+  }
+}
+
+// Attempts present before a remediate/retry command runs — the post hook only
+// cancels ones it started.
+let preExistingAttempts = new Set<string>()
+async function openFindingAndSnapshot(ctx: Ctx): Promise<string[] | null> {
+  const id = await firstOpenFindingId(ctx)
+  if (!id) return null
+  preExistingAttempts = new Set(
+    (await allFindings(ctx))
+      .map((f) => (f.remediationCapability ?? f.remediation_capability)?.cancelAttemptId)
+      .filter((v): v is string => typeof v === 'string'),
+  )
+  return id
+}
+
 async function firstCommandId(ctx: Ctx): Promise<string[] | null> {
   const cmds = await listActiveCommands(ctx.token)
   return cmds[0]?.id ? [cmds[0].id] : null
-}
-
-async function firstSecurityRepoId(ctx: Ctx): Promise<string[] | null> {
-  const repos = await getSecurityRepositories(ctx.token)
-  const id = repos[0]?.id
-  return id != null ? [String(id)] : null
 }
 
 async function firstReviewId(ctx: Ctx): Promise<string[] | null> {
@@ -146,6 +205,8 @@ const toggleRestore: Record<string, boolean> = {}
 let toggleOrgId: string | null = null
 /** Original security-agent enabled flag. */
 let securityWasEnabled: boolean | null = null
+
+let disableWasEnabled: boolean | null = null
 
 // ---------------------------------------------------------------------------
 // Command inventory — mirrors src/cli.ts
@@ -205,8 +266,10 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'org create',
     cls: 'manual',
-    args: async () => ['live-smoke-org'],
-    note: 'creates a real org on the account',
+    // No delete-org procedure exists — each run leaves one test org behind;
+    // the timestamp keeps names distinct for manual cleanup.
+    args: async () => [`live-smoke-${Date.now()}`],
+    note: 'creates a real org (no delete API — cannot restore)',
   },
   {
     cmd: 'org update',
@@ -263,10 +326,16 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     args: async () => ['live smoke test prompt'],
     note: 'spins up a paid run',
+    expectError: /requires an active subscription/i,
   },
   { cmd: 'kiloclaw run-status', cls: 'never', note: 'no run id fixture — needs run-start first' },
   { cmd: 'kiloclaw run-cancel', cls: 'never', note: 'needs a live run id' },
-  { cmd: 'kiloclaw unpin', cls: 'manual', note: 'removes version pin' },
+  {
+    cmd: 'kiloclaw unpin',
+    cls: 'manual',
+    note: 'removes version pin',
+    expectError: /requires an active subscription/i,
+  },
 
   { cmd: 'cloud-agent session', cls: 'never', note: 'no cloud-agent session id fixture' },
   { cmd: 'cloud-agent github-repos', cls: 'read' },
@@ -373,35 +442,40 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'security analyze',
     cls: 'manual',
-    args: firstSecurityRepoId,
-    skipReason: 'no security repos',
-    note: 'starts a paid analysis',
-  },
-  {
-    cmd: 'security dismiss',
-    cls: 'manual',
-    args: firstFindingId,
-    skipReason: 'no findings',
-    note: 'dismisses a finding',
+    args: firstOpenFindingId,
+    skipReason: 'no open findings',
+    note: 'queues finding analysis',
   },
   {
     cmd: 'security remediate',
     cls: 'manual',
-    args: firstFindingId,
-    skipReason: 'no findings',
-    note: 'may open real PRs',
+    args: openFindingAndSnapshot,
+    skipReason: 'no open findings',
+    post: cancelStartedAttempts,
+    note: 'queues a remediation attempt, then cancels it',
   },
   {
     cmd: 'security retry-remediation',
     cls: 'manual',
-    args: firstCommandId,
-    skipReason: 'no active commands',
+    args: openFindingAndSnapshot,
+    skipReason: 'no open findings',
+    post: cancelStartedAttempts,
+    note: 'queues a remediation attempt, then cancels it',
   },
   {
     cmd: 'security cancel-remediation',
     cls: 'manual',
-    args: firstCommandId,
-    skipReason: 'no active commands',
+    args: runningAttemptId,
+    skipReason: 'no running remediation attempt',
+  },
+  // Dismiss runs last among finding mutations — it consumes the shared
+  // open-finding fixture and cannot be undone (no reopen procedure).
+  {
+    cmd: 'security dismiss',
+    cls: 'manual',
+    args: async (c) => (await firstOpenFindingId(c))?.concat('--reason', 'inaccurate') ?? null,
+    skipReason: 'no open findings',
+    note: 'dismisses a finding (one-way)',
   },
   {
     cmd: 'security enable',
@@ -419,7 +493,19 @@ const COMMANDS: Cmd[] = [
     },
     note: 'enables agent, then restores original state',
   },
-  { cmd: 'security disable', cls: 'manual', note: 'restore path covered by security enable post' },
+  {
+    cmd: 'security disable',
+    cls: 'idempotent',
+    args: async (c) => {
+      const cfg = await getSecurityConfig(c.token)
+      disableWasEnabled = cfg.isEnabled ?? cfg.is_enabled ?? false
+      return []
+    },
+    post: async (c) => {
+      if (disableWasEnabled !== null) await setSecurityEnabled(c.token, disableWasEnabled)
+    },
+    note: 'disables agent, then restores original state',
+  },
   { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
 
   { cmd: 'tui', cls: 'never', note: 'interactive' },
@@ -542,7 +628,7 @@ async function main() {
     } finally {
       if (c.post) {
         try {
-          await c.post(ctx)
+          await c.post(ctx, output)
         } catch (e) {
           // Restore failure leaves real state mutated — surface it as FAIL.
           postError = msg(e)

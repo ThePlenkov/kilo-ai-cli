@@ -193,35 +193,41 @@ describe('security-agent API (personal level)', () => {
 
     it('dismissFinding posts with findingId and reason', async () => {
       fetchMock.mockResolvedValue(mockMutationResponse(null))
-      await dismissFinding('tok', 'f1', 'false positive')
+      await dismissFinding('tok', 'f1', 'inaccurate')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1', reason: 'false positive' } })
+      expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1', reason: 'inaccurate' } })
     })
 
-    it('startAnalysis returns analysisId', async () => {
-      fetchMock.mockResolvedValue(mockMutationResponse({ analysisId: 'a1' }))
-      const result = await startAnalysis('tok', 'r1')
-      expect(result.analysisId).toBe('a1')
-    })
-
-    it('startRemediation returns commandId', async () => {
-      fetchMock.mockResolvedValue(mockMutationResponse({ commandId: 'c1' }))
-      const result = await startRemediation('tok', 'f1')
+    it('startAnalysis posts with findingId and returns commandId', async () => {
+      fetchMock.mockResolvedValue(mockMutationResponse({ success: true, commandId: 'c1' }))
+      const result = await startAnalysis('tok', 'f1')
+      const init = fetchMock.mock.calls[0]![1] as { body: string }
+      expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1' } })
       expect(result.commandId).toBe('c1')
     })
 
-    it('retryRemediation posts with commandId', async () => {
-      fetchMock.mockResolvedValue(mockMutationResponse(null))
-      await retryRemediation('tok', 'c1')
+    it('startRemediation posts with findingId and returns attemptId', async () => {
+      fetchMock.mockResolvedValue(
+        mockMutationResponse({ success: true, attemptId: 'a1', attemptNumber: 1 }),
+      )
+      const result = await startRemediation('tok', 'f1')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { commandId: 'c1' } })
+      expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1' } })
+      expect(result.attemptId).toBe('a1')
     })
 
-    it('cancelRemediation posts with commandId', async () => {
+    it('retryRemediation posts with findingId', async () => {
       fetchMock.mockResolvedValue(mockMutationResponse(null))
-      await cancelRemediation('tok', 'c1')
+      await retryRemediation('tok', 'f1')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { commandId: 'c1' } })
+      expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1' } })
+    })
+
+    it('cancelRemediation posts with attemptId', async () => {
+      fetchMock.mockResolvedValue(mockMutationResponse(null))
+      await cancelRemediation('tok', 'a1')
+      const init = fetchMock.mock.calls[0]![1] as { body: string }
+      expect(JSON.parse(init.body)).toEqual({ '0': { attemptId: 'a1' } })
     })
 
     it('deleteFindingsByRepository posts with repositoryId', async () => {

@@ -640,10 +640,10 @@ export interface SecurityFinding {
   analysis_completed_at?: string | null
   analysisError?: string | null
   analysis_error?: string | null
-  remediationSummary?: string | null
-  remediation_summary?: string | null
-  remediationCapability?: Record<string, unknown> | null
-  remediation_capability?: Record<string, unknown> | null
+  remediationSummary?: string | RemediationSummary | null
+  remediation_summary?: string | RemediationSummary | null
+  remediationCapability?: RemediationCapability | null
+  remediation_capability?: RemediationCapability | null
   firstDetectedAt?: string | null
   first_detected_at?: string | null
   lastSyncedAt?: string | null
@@ -652,6 +652,39 @@ export interface SecurityFinding {
   created_at?: string | null
   updatedAt?: string | null
   updated_at?: string | null
+  [key: string]: unknown
+}
+
+export interface RemediationAttempt {
+  id: string
+  status?: string | null
+  attemptNumber?: number | null
+  branchName?: string | null
+  prUrl?: string | null
+  prNumber?: number | null
+  failureCode?: string | null
+  [key: string]: unknown
+}
+
+export interface RemediationSummary {
+  id?: string
+  status?: string | null
+  latestAttemptId?: string | null
+  prUrl?: string | null
+  prNumber?: number | null
+  outcomeSummary?: string | null
+  latestAttempt?: RemediationAttempt | null
+  [key: string]: unknown
+}
+
+export interface RemediationCapability {
+  canStart?: boolean | null
+  startReason?: string | null
+  canRetry?: boolean | null
+  retryReason?: string | null
+  canCancel?: boolean | null
+  cancelReason?: string | null
+  cancelAttemptId?: string | null
   [key: string]: unknown
 }
 

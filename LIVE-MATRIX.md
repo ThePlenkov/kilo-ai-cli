@@ -1,6 +1,6 @@
 # Live API smoke matrix
 
-Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts`
+Generated: 2026-09-15T15:46:12.539Z — `node packages/cli/scripts/live-smoke.ts`
 
 | Command | Class | Status | Detail |
 |---|---|---|---|
@@ -11,7 +11,7 @@ Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts
 | `balance` | read | PASS |  |
 | `sessions list` | read | PASS |  |
 | `sessions get <id>` | read | PASS |  |
-| `sessions rename <id> smoke-rename-1789477502807` | idempotent | PASS | renames to a temp title, then restores the original |
+| `sessions rename <id> smoke-rename-1789487113563` | idempotent | PASS | renames to a temp title, then restores the original |
 | `org list` | read | PASS |  |
 | `org set <id>` | idempotent | PASS | sets active org, then restores credentials.json |
 | `org members <id>` | read | PASS |  |
@@ -21,7 +21,7 @@ Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts
 | `org invoices <id>` | read | PASS |  |
 | `org models <id>` | read | PASS |  |
 | `org security <id>` | read | PASS |  |
-| `org create` | manual | MANUAL | creates a real org on the account |
+| `org create live-smoke-org` | manual | PASS | creates a real org on the account |
 | `org update <id> --name live-smoke-renamed` | idempotent | PASS | renames org, then restores the original name |
 | `plans list` | read | PASS |  |
 | `plans usage <id>` | read | SKIP | expected failure: ERROR  [codingPlans.getUsage] Procedure error (HTTP 412) — the API rejected the request. Detail: Coding Plan subscription is not eligible for usage. |
@@ -34,10 +34,10 @@ Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts
 | `kiloclaw changelog` | read | PASS |  |
 | `kiloclaw version` | read | PASS |  |
 | `kiloclaw file-tree` | read | SKIP | expected failure: ERROR  [kiloclaw.fileTree] Procedure error (HTTP 403) — the API rejected the request. Detail: KiloClaw access requires an active subscription or trial. |
-| `kiloclaw run-start` | manual | MANUAL | spins up a paid run |
+| `kiloclaw run-start live smoke test prompt` | manual | SKIP | expected failure: ERROR  [kiloclaw.startKiloCliRun] Procedure error (HTTP 403) — the API rejected the request. Detail: KiloClaw access requires an active subscription or trial. |
 | `kiloclaw run-status` | never | MANUAL | no run id fixture — needs run-start first |
 | `kiloclaw run-cancel` | never | MANUAL | needs a live run id |
-| `kiloclaw unpin` | manual | MANUAL | removes version pin |
+| `kiloclaw unpin` | manual | SKIP | expected failure: ERROR  [kiloclaw.removeMyPin] Procedure error (HTTP 403) — the API rejected the request. Detail: KiloClaw access requires an active subscription or trial. |
 | `cloud-agent session` | never | MANUAL | no cloud-agent session id fixture |
 | `cloud-agent github-repos` | read | PASS |  |
 | `cloud-agent gitlab-repos` | read | PASS |  |
@@ -56,27 +56,27 @@ Generated: 2026-09-15T13:06:03.389Z — `node packages/cli/scripts/live-smoke.ts
 | `analytics table --from 2026-09-08 --to 2026-09-15` | read | PASS |  |
 | `app-builder list` | read | PASS |  |
 | `app-builder eligibility` | read | PASS |  |
-| `app-builder deploy` | manual | MANUAL | deploys a project |
+| `app-builder deploy` | manual | SKIP | no app-builder projects |
 | `security status` | read | PASS |  |
 | `security config` | read | PASS |  |
 | `security repos` | read | PASS |  |
 | `security findings` | read | PASS |  |
 | `security finding <id>` | read | PASS |  |
 | `security stats` | read | PASS |  |
-| `security dashboard` | read | PASS | transient timeout on first run — PASS on retry |
+| `security dashboard` | read | PASS |  |
 | `security commands` | read | PASS |  |
 | `security command` | read | SKIP | no active commands |
 | `security orphaned-repos` | read | PASS |  |
 | `security last-sync` | read | PASS |  |
-| `security sync` | manual | MANUAL | triggers GitHub sync |
-| `security analyze` | manual | MANUAL | starts a paid analysis |
-| `security dismiss` | manual | MANUAL | dismisses a finding |
-| `security remediate` | manual | MANUAL | may open real PRs |
-| `security retry-remediation` | manual | MANUAL | side-effecting |
-| `security cancel-remediation` | manual | MANUAL | side-effecting |
+| `security sync` | manual | PASS | triggers GitHub sync |
+| `security analyze <id>` | manual | PASS | queues finding analysis |
+| `security dismiss <id> --reason inaccurate` | manual | PASS | dismisses a finding (one-way) |
+| `security remediate <id>` | manual | PASS | queues a remediation attempt, then cancels it |
+| `security retry-remediation <id>` | manual | PASS | queues a remediation attempt, then cancels it |
+| `security cancel-remediation` | manual | SKIP | no running remediation attempt |
 | `security enable` | idempotent | PASS | enables agent, then restores original state |
-| `security disable` | manual | MANUAL | restore path covered by security enable post |
+| `security disable` | idempotent | PASS | disables agent, then restores original state |
 | `security delete-findings` | never | MANUAL | destructive |
 | `tui` | never | MANUAL | interactive |
 
-**53 PASS · 0 FAIL · 3 SKIP · 18 MANUAL**
+**60 PASS · 0 FAIL · 7 SKIP · 7 MANUAL**
