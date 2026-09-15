@@ -273,7 +273,7 @@ export const securityDashboardCommand = defineCommand({
       } else if (typeof value === 'object' && value !== null) {
         console.log(`  ${key}:`)
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          console.log(`    ${k}: ${v}`)
+          console.log(`    ${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
         }
       } else {
         console.log(`  ${key.padEnd(16)} ${value}`)
