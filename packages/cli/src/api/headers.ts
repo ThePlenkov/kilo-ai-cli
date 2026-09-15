@@ -3,6 +3,7 @@
  * Mirrors @kilocode/kilo-gateway/src/headers.ts
  */
 
+import pkg from '../../package.json' with { type: 'json' }
 import {
   CONTENT_TYPE,
   DEFAULT_EDITOR_NAME,
@@ -14,7 +15,6 @@ import {
   HEADER_TASKID,
   USER_AGENT_BASE,
 } from './constants.ts'
-import pkg from '../../package.json' with { type: 'json' }
 
 function cliVersion(): string {
   return process.env[ENV_VERSION] || pkg.version

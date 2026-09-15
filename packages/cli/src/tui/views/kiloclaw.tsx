@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import React, { useRef, useState } from 'react'
 
 import {
   getBillingHistory,
@@ -15,8 +15,8 @@ import {
   readFile,
 } from '../../api/kiloclaw.ts'
 import type { KiloclawFileTreeNode } from '../../api/types.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
 import { QueryListScreen, QueryRecordScreen, RecordView, TextScreen } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -81,7 +81,11 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
       getPersonalBillingSummary(ctx.token),
       getReferralRewardSummary(ctx.token).catch(() => null),
     ])
-    return { ...billing, referralTotal: referral?.totalRewards, referralPending: referral?.pendingRewards }
+    return {
+      ...billing,
+      referralTotal: referral?.totalRewards,
+      referralPending: referral?.pendingRewards,
+    }
   }, [ctx.token])
 
   useInput(
@@ -99,14 +103,22 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
     <Box flexDirection="column">
       <RecordView
         data={{
-          access: data.hasAccess ? 'yes' : `no${data.accessReason ? ` (${data.accessReason})` : ''}`,
+          access: data.hasAccess
+            ? 'yes'
+            : `no${data.accessReason ? ` (${data.accessReason})` : ''}`,
           creditBalance:
             data.creditBalanceMicrodollars != null
               ? `$${(data.creditBalanceMicrodollars / 1e6).toFixed(2)}`
               : '-',
-          currentSubscription: data.hasCurrentPersonalSubscription == null ? 'unknown' : data.hasCurrentPersonalSubscription ? 'yes' : 'no',
+          currentSubscription:
+            data.hasCurrentPersonalSubscription == null
+              ? 'unknown'
+              : data.hasCurrentPersonalSubscription
+                ? 'yes'
+                : 'no',
           trialEligible: data.trialEligible == null ? 'unknown' : data.trialEligible ? 'yes' : 'no',
-          kiloPass: data.hasActiveKiloPass == null ? 'unknown' : data.hasActiveKiloPass ? 'active' : 'none',
+          kiloPass:
+            data.hasActiveKiloPass == null ? 'unknown' : data.hasActiveKiloPass ? 'active' : 'none',
           referralRewards: data.referralTotal,
           referralPending: data.referralPending,
         }}
@@ -131,7 +143,8 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
         const mine = ++seq.current
         const { subscriptions } = await listPersonalSubscriptions(ctx.token)
         const instanceId = paramId ?? subscriptions[0]?.instanceId
-        if (!instanceId) throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
+        if (!instanceId)
+          throw new Error('No KiloClaw subscription — billing history needs an instance ID.')
         const entries: Record<string, unknown>[] = []
         let cursor: string | undefined
         let more = false
@@ -150,7 +163,11 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
       banner={() => (
         <Box flexDirection="column">
           <Text dimColor>instance: {paramId ?? 'first subscription'}</Text>
-          {truncated ? <Text color="yellow">⚠ history continues past the 20-page cap — older entries not shown</Text> : null}
+          {truncated ? (
+            <Text color="yellow">
+              ⚠ history continues past the 20-page cap — older entries not shown
+            </Text>
+          ) : null}
         </Box>
       )}
       columns={[
@@ -177,7 +194,11 @@ export function KiloclawSubscriptionsScreen({ ctx, focused }: ScreenProps) {
       fetch={async () => (await listPersonalSubscriptions(ctx.token)).subscriptions}
       columns={[
         { label: 'Instance ID', width: 14, value: (s: { instanceId: string }) => s.instanceId },
-        { label: 'Name', width: 22, value: (s: { instanceName?: string }) => s.instanceName ?? '-' },
+        {
+          label: 'Name',
+          width: 22,
+          value: (s: { instanceName?: string }) => s.instanceName ?? '-',
+        },
         { label: 'Plan', width: 12, value: (s: { plan: string }) => s.plan },
         {
           label: 'Status',
@@ -185,9 +206,15 @@ export function KiloclawSubscriptionsScreen({ ctx, focused }: ScreenProps) {
           value: (s: { status: string }) => s.status,
           color: (s: { status: string }) => STATUS_COLORS[s.status],
         },
-        { label: 'Cancel@EOP', width: 10, value: (s: { cancelAtPeriodEnd: boolean }) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
+        {
+          label: 'Cancel@EOP',
+          width: 10,
+          value: (s: { cancelAtPeriodEnd: boolean }) => (s.cancelAtPeriodEnd ? 'yes' : 'no'),
+        },
       ]}
-      onSelect={(s: { instanceId: string }) => ctx.navigate('kiloclaw-history', { id: s.instanceId })}
+      onSelect={(s: { instanceId: string }) =>
+        ctx.navigate('kiloclaw-history', { id: s.instanceId })
+      }
       onBack={ctx.goBack}
       emptyText="No KiloClaw subscriptions."
     />
@@ -201,7 +228,10 @@ export function KiloclawChangelogScreen({ ctx, focused }: ScreenProps) {
       focused={focused}
       fetch={async () =>
         (await getChangelog(ctx.token))
-          .map((e) => `${e.date} [${e.category}]${e.deployHint ? ` (${e.deployHint})` : ''}\n  ${e.description}`)
+          .map(
+            (e) =>
+              `${e.date} [${e.category}]${e.deployHint ? ` (${e.deployHint})` : ''}\n  ${e.description}`,
+          )
           .join('\n\n')
       }
       onBack={ctx.goBack}

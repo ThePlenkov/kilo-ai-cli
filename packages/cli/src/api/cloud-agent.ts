@@ -38,46 +38,79 @@ const TerminalSchema: z.ZodType<CloudAgentTerminal> = z.object({
 // --- Queries ---
 
 /** cloudAgentNext.getSession */
-export async function getCloudAgentSession(token: string, sessionId: string): Promise<CloudAgentSession> {
+export async function getCloudAgentSession(
+  token: string,
+  sessionId: string,
+): Promise<CloudAgentSession> {
   return trpcQuery('cloudAgentNext.getSession', token, SessionSchema, { sessionId })
 }
 
 /** cloudAgentNext.listGitHubRepositories — returns { repositories: [...] } */
-export async function listGitHubRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  const r = await trpcQuery('cloudAgentNext.listGitHubRepositories', token, RepoListSchema, { forceRefresh: forceRefresh ?? false })
+export async function listGitHubRepositories(
+  token: string,
+  forceRefresh?: boolean,
+): Promise<CloudAgentRepository[]> {
+  const r = await trpcQuery('cloudAgentNext.listGitHubRepositories', token, RepoListSchema, {
+    forceRefresh: forceRefresh ?? false,
+  })
   return r.repositories
 }
 
 /** cloudAgentNext.listGitLabRepositories — returns { repositories: [...] } */
-export async function listGitLabRepositories(token: string, forceRefresh?: boolean): Promise<CloudAgentRepository[]> {
-  const r = await trpcQuery('cloudAgentNext.listGitLabRepositories', token, RepoListSchema, { forceRefresh: forceRefresh ?? false })
+export async function listGitLabRepositories(
+  token: string,
+  forceRefresh?: boolean,
+): Promise<CloudAgentRepository[]> {
+  const r = await trpcQuery('cloudAgentNext.listGitLabRepositories', token, RepoListSchema, {
+    forceRefresh: forceRefresh ?? false,
+  })
   return r.repositories
 }
 
 // --- Mutations ---
 
 /** cloudAgentNext.prepareSession */
-export async function prepareSession(token: string, input: Record<string, unknown>): Promise<{ preparedSessionId: string }> {
-  return trpcMutate('cloudAgentNext.prepareSession', token, z.object({ preparedSessionId: z.string() }), input)
+export async function prepareSession(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<{ preparedSessionId: string }> {
+  return trpcMutate(
+    'cloudAgentNext.prepareSession',
+    token,
+    z.object({ preparedSessionId: z.string() }),
+    input,
+  )
 }
 
 /** cloudAgentNext.initiateFromPreparedSession */
-export async function initiateFromPreparedSession(token: string, input: Record<string, unknown>): Promise<CloudAgentSession> {
+export async function initiateFromPreparedSession(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<CloudAgentSession> {
   return trpcMutate('cloudAgentNext.initiateFromPreparedSession', token, SessionSchema, input)
 }
 
 /** cloudAgentNext.sendMessage */
-export async function sendMessage(token: string, input: Record<string, unknown>): Promise<{ messageId: string }> {
+export async function sendMessage(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<{ messageId: string }> {
   return trpcMutate('cloudAgentNext.sendMessage', token, z.object({ messageId: z.string() }), input)
 }
 
 /** cloudAgentNext.createTerminal */
-export async function createTerminal(token: string, input: Record<string, unknown>): Promise<CloudAgentTerminal> {
+export async function createTerminal(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<CloudAgentTerminal> {
   return trpcMutate('cloudAgentNext.createTerminal', token, TerminalSchema, input)
 }
 
 /** cloudAgentNext.refreshTerminalTicket */
-export async function refreshTerminalTicket(token: string, input: Record<string, unknown>): Promise<CloudAgentTerminal> {
+export async function refreshTerminalTicket(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<CloudAgentTerminal> {
   return trpcMutate('cloudAgentNext.refreshTerminalTicket', token, TerminalSchema, input)
 }
 
@@ -92,17 +125,36 @@ export async function closeTerminal(token: string, input: Record<string, unknown
 }
 
 /** cloudAgentNext.getImageUploadUrl */
-export async function getImageUploadUrl(token: string, input: Record<string, unknown>): Promise<{ uploadUrl: string }> {
-  return trpcMutate('cloudAgentNext.getImageUploadUrl', token, z.object({ uploadUrl: z.string() }), input)
+export async function getImageUploadUrl(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<{ uploadUrl: string }> {
+  return trpcMutate(
+    'cloudAgentNext.getImageUploadUrl',
+    token,
+    z.object({ uploadUrl: z.string() }),
+    input,
+  )
 }
 
 /** cloudAgentNext.getAttachmentUploadUrl */
-export async function getAttachmentUploadUrl(token: string, input: Record<string, unknown>): Promise<{ uploadUrl: string }> {
-  return trpcMutate('cloudAgentNext.getAttachmentUploadUrl', token, z.object({ uploadUrl: z.string() }), input)
+export async function getAttachmentUploadUrl(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<{ uploadUrl: string }> {
+  return trpcMutate(
+    'cloudAgentNext.getAttachmentUploadUrl',
+    token,
+    z.object({ uploadUrl: z.string() }),
+    input,
+  )
 }
 
 /** cloudAgentNext.interruptSession */
-export async function interruptSession(token: string, input: Record<string, unknown>): Promise<void> {
+export async function interruptSession(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<void> {
   await trpcMutate('cloudAgentNext.interruptSession', token, z.unknown(), input)
 }
 
@@ -117,6 +169,9 @@ export async function rejectQuestion(token: string, input: Record<string, unknow
 }
 
 /** cloudAgentNext.answerPermission */
-export async function answerPermission(token: string, input: Record<string, unknown>): Promise<void> {
+export async function answerPermission(
+  token: string,
+  input: Record<string, unknown>,
+): Promise<void> {
   await trpcMutate('cloudAgentNext.answerPermission', token, z.unknown(), input)
 }

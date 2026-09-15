@@ -134,8 +134,16 @@ export async function getServiceDegraded(token: string): Promise<boolean> {
 }
 
 /** kiloclaw.latestVersion */
-export async function getLatestVersion(token: string, currentImageTag?: string): Promise<KiloclawLatestVersion> {
-  return trpcQuery('kiloclaw.latestVersion', token, LatestVersionSchema, currentImageTag ? { currentImageTag } : undefined)
+export async function getLatestVersion(
+  token: string,
+  currentImageTag?: string,
+): Promise<KiloclawLatestVersion> {
+  return trpcQuery(
+    'kiloclaw.latestVersion',
+    token,
+    LatestVersionSchema,
+    currentImageTag ? { currentImageTag } : undefined,
+  )
 }
 
 /** kiloclaw.listAllInstances */
@@ -145,12 +153,25 @@ export async function listAllInstances(token: string): Promise<KiloclawInstance[
 
 /** kiloclaw.fileTree — requires an active KiloClaw subscription (server-side 4xx otherwise). */
 export async function getFileTree(token: string, path?: string): Promise<KiloclawFileTreeNode[]> {
-  return trpcQuery('kiloclaw.fileTree', token, z.array(FileTreeNodeSchema), path ? { path } : undefined)
+  return trpcQuery(
+    'kiloclaw.fileTree',
+    token,
+    z.array(FileTreeNodeSchema),
+    path ? { path } : undefined,
+  )
 }
 
 /** kiloclaw.readFile */
-export async function readFile(token: string, path: string): Promise<{ content: string; etag: string }> {
-  return trpcQuery('kiloclaw.readFile', token, z.object({ content: z.string(), etag: z.string() }), { path })
+export async function readFile(
+  token: string,
+  path: string,
+): Promise<{ content: string; etag: string }> {
+  return trpcQuery(
+    'kiloclaw.readFile',
+    token,
+    z.object({ content: z.string(), etag: z.string() }),
+    { path },
+  )
 }
 
 /** kiloclaw.listAgents */
@@ -164,7 +185,10 @@ export async function getAgent(token: string, agentId: string): Promise<Kiloclaw
 }
 
 /** kiloclaw.getKiloCliRunStatus */
-export async function getKiloCliRunStatus(token: string, runId: string): Promise<KiloclawKiloCliRun> {
+export async function getKiloCliRunStatus(
+  token: string,
+  runId: string,
+): Promise<KiloclawKiloCliRun> {
   return trpcQuery('kiloclaw.getKiloCliRunStatus', token, KiloCliRunSchema, { runId })
 }
 
@@ -174,7 +198,9 @@ export async function getBillingStatus(token: string): Promise<KiloclawBillingSt
 }
 
 /** kiloclaw.getActivePersonalBillingStatus */
-export async function getActivePersonalBillingStatus(token: string): Promise<KiloclawBillingStatus> {
+export async function getActivePersonalBillingStatus(
+  token: string,
+): Promise<KiloclawBillingStatus> {
   return trpcQuery('kiloclaw.getActivePersonalBillingStatus', token, BillingStatusSchema)
 }
 
@@ -184,23 +210,45 @@ export async function getPersonalBillingSummary(token: string): Promise<Kiloclaw
 }
 
 /** kiloclaw.getReferralRewardSummary */
-export async function getReferralRewardSummary(token: string): Promise<{ totalRewards: number; pendingRewards: number }> {
-  return trpcQuery('kiloclaw.getReferralRewardSummary', token, z.object({ totalRewards: z.number(), pendingRewards: z.number() }))
+export async function getReferralRewardSummary(
+  token: string,
+): Promise<{ totalRewards: number; pendingRewards: number }> {
+  return trpcQuery(
+    'kiloclaw.getReferralRewardSummary',
+    token,
+    z.object({ totalRewards: z.number(), pendingRewards: z.number() }),
+  )
 }
 
 /** kiloclaw.listPersonalSubscriptions */
-export async function listPersonalSubscriptions(token: string): Promise<KiloclawSubscriptionsResult> {
+export async function listPersonalSubscriptions(
+  token: string,
+): Promise<KiloclawSubscriptionsResult> {
   return trpcQuery('kiloclaw.listPersonalSubscriptions', token, SubscriptionsResultSchema)
 }
 
 /** kiloclaw.getSubscriptionDetail */
-export async function getSubscriptionDetail(token: string, instanceId: string): Promise<KiloclawSubscriptionDetail> {
-  return trpcQuery('kiloclaw.getSubscriptionDetail', token, SubscriptionDetailSchema, { instanceId })
+export async function getSubscriptionDetail(
+  token: string,
+  instanceId: string,
+): Promise<KiloclawSubscriptionDetail> {
+  return trpcQuery('kiloclaw.getSubscriptionDetail', token, SubscriptionDetailSchema, {
+    instanceId,
+  })
 }
 
 /** kiloclaw.getBillingHistory — requires an instanceId; pass `cursor` from the previous page for pagination. */
-export async function getBillingHistory(token: string, instanceId: string, period?: string, cursor?: string): Promise<KiloclawBillingHistoryPage> {
-  return trpcQuery('kiloclaw.getBillingHistory', token, BillingHistoryPageSchema, { instanceId, period, cursor })
+export async function getBillingHistory(
+  token: string,
+  instanceId: string,
+  period?: string,
+  cursor?: string,
+): Promise<KiloclawBillingHistoryPage> {
+  return trpcQuery('kiloclaw.getBillingHistory', token, BillingHistoryPageSchema, {
+    instanceId,
+    period,
+    cursor,
+  })
 }
 
 // --- Mutations ---
@@ -221,12 +269,26 @@ export async function removeMyPin(token: string): Promise<void> {
 }
 
 /** kiloclaw.writeFile */
-export async function writeFile(token: string, path: string, content: string, etag: string, openclawValidation?: 'warn-before-write' | 'allow-invalid'): Promise<{ etag: string }> {
-  return trpcMutate('kiloclaw.writeFile', token, z.object({ etag: z.string() }), { path, content, etag, openclawValidation })
+export async function writeFile(
+  token: string,
+  path: string,
+  content: string,
+  etag: string,
+  openclawValidation?: 'warn-before-write' | 'allow-invalid',
+): Promise<{ etag: string }> {
+  return trpcMutate('kiloclaw.writeFile', token, z.object({ etag: z.string() }), {
+    path,
+    content,
+    etag,
+    openclawValidation,
+  })
 }
 
 /** kiloclaw.cancelSubscriptionAtInstance */
-export async function cancelSubscriptionAtInstance(token: string, instanceId: string): Promise<void> {
+export async function cancelSubscriptionAtInstance(
+  token: string,
+  instanceId: string,
+): Promise<void> {
   await trpcMutate('kiloclaw.cancelSubscriptionAtInstance', token, z.unknown(), { instanceId })
 }
 
@@ -241,11 +303,18 @@ export async function acceptConversionAtInstance(token: string, instanceId: stri
 }
 
 /** kiloclaw.reactivateSubscriptionAtInstance */
-export async function reactivateSubscriptionAtInstance(token: string, instanceId: string): Promise<void> {
+export async function reactivateSubscriptionAtInstance(
+  token: string,
+  instanceId: string,
+): Promise<void> {
   await trpcMutate('kiloclaw.reactivateSubscriptionAtInstance', token, z.unknown(), { instanceId })
 }
 
 /** kiloclaw.switchPlanAtInstance */
-export async function switchPlanAtInstance(token: string, instanceId: string, planId: string): Promise<void> {
+export async function switchPlanAtInstance(
+  token: string,
+  instanceId: string,
+  planId: string,
+): Promise<void> {
   await trpcMutate('kiloclaw.switchPlanAtInstance', token, z.unknown(), { instanceId, planId })
 }

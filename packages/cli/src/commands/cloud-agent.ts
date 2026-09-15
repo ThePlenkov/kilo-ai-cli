@@ -28,7 +28,10 @@ export const cloudAgentSessionCommand = defineCommand({
 })
 
 async function listRepos(
-  fetcher: (token: string, refresh: boolean) => Promise<{ fullName: string; private: boolean; defaultBranch?: string }[]>,
+  fetcher: (
+    token: string,
+    refresh: boolean,
+  ) => Promise<{ fullName: string; private: boolean; defaultBranch?: string }[]>,
   refresh: boolean,
 ): Promise<void> {
   const { token } = await getToken()
@@ -38,7 +41,11 @@ async function listRepos(
     return
   }
   printTable(
-    repos.map((r) => ({ name: r.fullName, private: r.private ? 'yes' : 'no', default: r.defaultBranch ?? '-' })),
+    repos.map((r) => ({
+      name: r.fullName,
+      private: r.private ? 'yes' : 'no',
+      default: r.defaultBranch ?? '-',
+    })),
     [
       { key: 'name', label: 'Repository', width: 40 },
       { key: 'private', label: 'Private', width: 8 },

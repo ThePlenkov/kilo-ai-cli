@@ -104,9 +104,15 @@ export async function fetchCodingPlanUsage(
   subscriptionId: string,
   organizationId?: string,
 ): Promise<CodingPlanUsage> {
-  return trpcQuery('codingPlans.getUsage', token, CodingPlanUsageSchema, { subscriptionId }, {
-    organizationId,
-  })
+  return trpcQuery(
+    'codingPlans.getUsage',
+    token,
+    CodingPlanUsageSchema,
+    { subscriptionId },
+    {
+      organizationId,
+    },
+  )
 }
 
 /** List BYOK entries via tRPC: byok.list */
@@ -134,9 +140,15 @@ export async function fetchCloudSession(
   sessionId: string,
   organizationId?: string,
 ): Promise<CliSession> {
-  return trpcQuery('cliSessionsV2.get', token, CliSessionSchema, { session_id: sessionId }, {
-    organizationId,
-  })
+  return trpcQuery(
+    'cliSessionsV2.get',
+    token,
+    CliSessionSchema,
+    { session_id: sessionId },
+    {
+      organizationId,
+    },
+  )
 }
 
 /** Rename a CLI session via tRPC mutation: cliSessionsV2.rename */

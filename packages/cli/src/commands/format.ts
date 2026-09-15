@@ -54,7 +54,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
 
   // Header
   const header = columns
-    .map((c) => c.align === 'right' ? padRight(c.label, c.width) : pad(c.label, c.width))
+    .map((c) => (c.align === 'right' ? padRight(c.label, c.width) : pad(c.label, c.width)))
     .join('  ')
   console.log(header)
   console.log(columns.map((c) => '─'.repeat(c.width)).join('  '))
@@ -75,7 +75,10 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
 }
 
 /** Print a single record as key-value pairs. */
-export function printRecord(record: Record<string, unknown>, labels?: Record<string, string>): void {
+export function printRecord(
+  record: Record<string, unknown>,
+  labels?: Record<string, string>,
+): void {
   for (const [key, value] of Object.entries(record)) {
     if (value === undefined || value === null) continue
     const label = labels?.[key] ?? key

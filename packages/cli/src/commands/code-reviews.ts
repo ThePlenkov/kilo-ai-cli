@@ -81,7 +81,10 @@ function resolveScope(args: { scope?: string; platform?: string; org?: string })
 }
 
 export const reviewsListCommand = defineCommand({
-  meta: { name: 'list', description: 'List code reviews (personal by default; pass an org id for org reviews)' },
+  meta: {
+    name: 'list',
+    description: 'List code reviews (personal by default; pass an org id for org reviews)',
+  },
   args: {
     id: { type: 'positional', description: 'Organization ID (same as --org)', required: false },
     org: { type: 'string', description: 'Organization ID (omit for personal reviews)' },
@@ -110,7 +113,9 @@ export const reviewsGetCommand = defineCommand({
     if (review.model) console.log(`Model: ${sanitize(review.model)}`)
     if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
     if (tokenUsage) {
-      console.log(`Tokens: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`)
+      console.log(
+        `Tokens: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`,
+      )
     }
     if (attempts.length > 0) {
       console.log(`\nAttempts (${attempts.length}):`)

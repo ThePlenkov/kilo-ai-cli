@@ -3,41 +3,19 @@
  */
 
 import { defineCommand } from 'citty'
-
+import pkg from '../package.json' with { type: 'json' }
 import {
-  loginCommand,
-  logoutCommand,
-  statusCommand,
-} from './commands/auth.ts'
-import { balanceCommand, profileCommand } from './commands/profile.ts'
+  analyticsBreakdownCommand,
+  analyticsSummaryCommand,
+  analyticsTableCommand,
+  analyticsTimeseriesCommand,
+} from './commands/analytics.ts'
 import {
-  sessionsGetCommand,
-  sessionsListCommand,
-  sessionsRenameCommand,
-} from './commands/sessions.ts'
-import {
-  orgListCommand,
-  orgSetCommand,
-} from './commands/organizations.ts'
-import {
-  byokListCommand,
-  plansListCommand,
-  plansUsageCommand,
-} from './commands/plans.ts'
-import {
-  kiloclawBillingCommand,
-  kiloclawBillingHistoryCommand,
-  kiloclawChangelogCommand,
-  kiloclawFileTreeCommand,
-  kiloclawInstancesCommand,
-  kiloclawRunCancelCommand,
-  kiloclawRunStartCommand,
-  kiloclawRunStatusCommand,
-  kiloclawSubscriptionsCommand,
-  kiloclawSubscriptionDetailCommand,
-  kiloclawUnpinCommand,
-  kiloclawVersionCommand,
-} from './commands/kiloclaw.ts'
+  appBuilderDeployCommand,
+  appBuilderEligibilityCommand,
+  appBuilderListCommand,
+} from './commands/app-builder.ts'
+import { loginCommand, logoutCommand, statusCommand } from './commands/auth.ts'
 import {
   cloudAgentGithubReposCommand,
   cloudAgentGitlabReposCommand,
@@ -51,27 +29,33 @@ import {
   reviewsToggleCommand,
 } from './commands/code-reviews.ts'
 import {
-  analyticsBreakdownCommand,
-  analyticsSummaryCommand,
-  analyticsTableCommand,
-  analyticsTimeseriesCommand,
-} from './commands/analytics.ts'
-import {
-  appBuilderDeployCommand,
-  appBuilderEligibilityCommand,
-  appBuilderListCommand,
-} from './commands/app-builder.ts'
+  kiloclawBillingCommand,
+  kiloclawBillingHistoryCommand,
+  kiloclawChangelogCommand,
+  kiloclawFileTreeCommand,
+  kiloclawInstancesCommand,
+  kiloclawRunCancelCommand,
+  kiloclawRunStartCommand,
+  kiloclawRunStatusCommand,
+  kiloclawSubscriptionDetailCommand,
+  kiloclawSubscriptionsCommand,
+  kiloclawUnpinCommand,
+  kiloclawVersionCommand,
+} from './commands/kiloclaw.ts'
 import {
   orgCreateCommand,
   orgCreditsCommand,
   orgInvoicesCommand,
   orgMembersCommand,
   orgModelsCommand,
-  orgSecurityCommand,
   orgSeatsCommand,
+  orgSecurityCommand,
   orgUpdateCommand,
   orgUsageCommand,
 } from './commands/org-extended.ts'
+import { orgListCommand, orgSetCommand } from './commands/organizations.ts'
+import { byokListCommand, plansListCommand, plansUsageCommand } from './commands/plans.ts'
+import { balanceCommand, profileCommand } from './commands/profile.ts'
 import {
   securityAnalyzeCommand,
   securityCancelRemediationCommand,
@@ -94,8 +78,12 @@ import {
   securityStatusCommand,
   securitySyncCommand,
 } from './commands/security-agent.ts'
+import {
+  sessionsGetCommand,
+  sessionsListCommand,
+  sessionsRenameCommand,
+} from './commands/sessions.ts'
 import { tuiCommand } from './commands/tui.ts'
-import pkg from '../package.json' with { type: 'json' }
 
 export const mainCommand = defineCommand({
   meta: {
@@ -205,7 +193,10 @@ export const mainCommand = defineCommand({
       },
     }),
     security: defineCommand({
-      meta: { name: 'security', description: 'Security agent commands (personal, no org required)' },
+      meta: {
+        name: 'security',
+        description: 'Security agent commands (personal, no org required)',
+      },
       subCommands: {
         status: securityStatusCommand,
         config: securityConfigCommand,

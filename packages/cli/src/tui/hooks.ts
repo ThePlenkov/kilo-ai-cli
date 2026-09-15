@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStdout } from 'ink'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface QueryState<T> {
   data: T | undefined
@@ -13,7 +13,11 @@ export interface QueryState<T> {
  * guards against stale responses, exposes reload() for manual refresh.
  */
 export function useQuery<T>(fn: () => Promise<T>, deps: readonly unknown[] = []): QueryState<T> {
-  const [state, setState] = useState<{ data: T | undefined; error: string | undefined; loading: boolean }>({
+  const [state, setState] = useState<{
+    data: T | undefined
+    error: string | undefined
+    loading: boolean
+  }>({
     data: undefined,
     error: undefined,
     loading: true,
@@ -32,7 +36,11 @@ export function useQuery<T>(fn: () => Promise<T>, deps: readonly unknown[] = [])
       },
       (e) => {
         if (s === seq.current) {
-          setState({ data: undefined, error: e instanceof Error ? e.message : String(e), loading: false })
+          setState({
+            data: undefined,
+            error: e instanceof Error ? e.message : String(e),
+            loading: false,
+          })
         }
       },
     )

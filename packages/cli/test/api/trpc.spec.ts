@@ -171,7 +171,11 @@ describe('tRPC wrappers', () => {
     await renameCloudSession('tok', 's1', 'New title')
     const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toBe(`${KILO_API_BASE}/api/trpc/cliSessionsV2.rename?batch=1`)
-    const init = fetchMock.mock.calls[0]![1] as { method: string; body: string; headers: Record<string, string> }
+    const init = fetchMock.mock.calls[0]![1] as {
+      method: string
+      body: string
+      headers: Record<string, string>
+    }
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ '0': { session_id: 's1', title: 'New title' } })
     expect(init.headers['Content-Type']).toBe('application/json')

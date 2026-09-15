@@ -3,8 +3,12 @@
  * Mirrors @kilocode/kilo-gateway/src/api/profile.ts
  */
 
-import { DEFAULT_FREE_MODEL, DEFAULT_MODEL, KILO_API_BASE } from './constants.ts'
-import { HEADER_ORGANIZATIONID } from './constants.ts'
+import {
+  DEFAULT_FREE_MODEL,
+  DEFAULT_MODEL,
+  HEADER_ORGANIZATIONID,
+  KILO_API_BASE,
+} from './constants.ts'
 import type { KilocodeBalance, KilocodeProfile, Organization } from './types.ts'
 
 /** Request timeout for REST profile calls. */
@@ -78,7 +82,11 @@ export async function fetchProfileWithBalance(
   baseUrl?: string,
 ): Promise<{ profile: KilocodeProfile; balance: KilocodeBalance | null }> {
   const profile = await fetchProfile(token, baseUrl)
-  const balance = await fetchBalance(token, organizationId ?? defaultOrganizationId(profile), baseUrl)
+  const balance = await fetchBalance(
+    token,
+    organizationId ?? defaultOrganizationId(profile),
+    baseUrl,
+  )
   return { profile, balance }
 }
 

@@ -13,8 +13,8 @@ import {
   getSubscriptionDetail,
   listAllInstances,
   listPersonalSubscriptions,
-  removeMyPin,
   readFile,
+  removeMyPin,
   startKiloCliRun,
   writeFile,
 } from '../../src/api/kiloclaw.ts'
@@ -31,7 +31,9 @@ describe('kiloclaw API', () => {
   describe('queries', () => {
     it('getChangelog calls kiloclaw.getChangelog', async () => {
       fetchMock.mockResolvedValue(
-        mockResponse([{ date: '2026-08-01', description: 'fix thing', category: 'fix', deployHint: 'auto' }]),
+        mockResponse([
+          { date: '2026-08-01', description: 'fix thing', category: 'fix', deployHint: 'auto' },
+        ]),
       )
       const result = await getChangelog('tok')
       expect(result).toHaveLength(1)
@@ -41,7 +43,11 @@ describe('kiloclaw API', () => {
 
     it('getBillingStatus calls kiloclaw.getBillingStatus', async () => {
       fetchMock.mockResolvedValue(
-        mockResponse({ hasAccess: true, creditBalanceMicrodollars: 10346942, hasCurrentPersonalSubscription: false }),
+        mockResponse({
+          hasAccess: true,
+          creditBalanceMicrodollars: 10346942,
+          hasCurrentPersonalSubscription: false,
+        }),
       )
       const result = await getBillingStatus('tok')
       expect(result.hasAccess).toBe(true)
@@ -51,7 +57,12 @@ describe('kiloclaw API', () => {
 
     it('getLatestVersion passes currentImageTag', async () => {
       fetchMock.mockResolvedValue(
-        mockResponse({ openclawVersion: '2.0', variant: 'standard', imageTag: 'v2.0', isLatest: false }),
+        mockResponse({
+          openclawVersion: '2.0',
+          variant: 'standard',
+          imageTag: 'v2.0',
+          isLatest: false,
+        }),
       )
       const result = await getLatestVersion('tok', '1.0')
       expect(result.openclawVersion).toBe('2.0')
@@ -62,14 +73,26 @@ describe('kiloclaw API', () => {
     })
 
     it('listAllInstances calls kiloclaw.listAllInstances', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'i1', name: 'inst', status: 'active', createdAt: '2024-01-01', updatedAt: '2024-01-02' }]))
+      fetchMock.mockResolvedValue(
+        mockResponse([
+          {
+            id: 'i1',
+            name: 'inst',
+            status: 'active',
+            createdAt: '2024-01-01',
+            updatedAt: '2024-01-02',
+          },
+        ]),
+      )
       const result = await listAllInstances('tok')
       expect(result).toHaveLength(1)
       expect(result[0]!.id).toBe('i1')
     })
 
     it('getFileTree passes path when provided', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ name: 'file.ts', path: '/file.ts', type: 'file' }]))
+      fetchMock.mockResolvedValue(
+        mockResponse([{ name: 'file.ts', path: '/file.ts', type: 'file' }]),
+      )
       await getFileTree('tok', '/src')
       const url = fetchMock.mock.calls[0]![0] as string
       expect(url).toContain('kiloclaw.fileTree')
@@ -84,7 +107,9 @@ describe('kiloclaw API', () => {
     })
 
     it('getKiloCliRunStatus passes runId', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ runId: 'r1', status: 'running', prompt: 'test', startedAt: '2024-01-01' }))
+      fetchMock.mockResolvedValue(
+        mockResponse({ runId: 'r1', status: 'running', prompt: 'test', startedAt: '2024-01-01' }),
+      )
       const result = await getKiloCliRunStatus('tok', 'r1')
       expect(result.runId).toBe('r1')
       expect(result.status).toBe('running')
@@ -94,7 +119,9 @@ describe('kiloclaw API', () => {
       fetchMock.mockResolvedValue(
         mockResponse({
           commitPlanAvailable: false,
-          subscriptions: [{ instanceId: 's1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }],
+          subscriptions: [
+            { instanceId: 's1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false },
+          ],
         }),
       )
       const result = await listPersonalSubscriptions('tok')
@@ -104,12 +131,19 @@ describe('kiloclaw API', () => {
 
     it('getSubscriptionDetail passes instanceId', async () => {
       fetchMock.mockResolvedValue(
-        mockResponse({ instanceId: 'inst1', plan: 'pro', status: 'active', cancelAtPeriodEnd: false }),
+        mockResponse({
+          instanceId: 'inst1',
+          plan: 'pro',
+          status: 'active',
+          cancelAtPeriodEnd: false,
+        }),
       )
       const result = await getSubscriptionDetail('tok', 'inst1')
       expect(result.instanceId).toBe('inst1')
       const url = fetchMock.mock.calls[0]![0] as string
-      expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({ instanceId: 'inst1' })
+      expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({
+        instanceId: 'inst1',
+      })
     })
 
     it('getBillingHistory passes instanceId and period', async () => {
@@ -156,7 +190,9 @@ describe('kiloclaw API', () => {
       const result = await writeFile('tok', '/file.ts', 'content', 'old-etag')
       expect(result.etag).toBe('new')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { path: '/file.ts', content: 'content', etag: 'old-etag' } })
+      expect(JSON.parse(init.body)).toEqual({
+        '0': { path: '/file.ts', content: 'content', etag: 'old-etag' },
+      })
     })
 
     it('cancelSubscriptionAtInstance posts with instanceId', async () => {

@@ -147,7 +147,12 @@ export function toSaveReviewConfigInput(
 
 /** codeReviews.listForUser — personal code reviews, no org required. */
 export async function listCodeReviewsForUser(token: string): Promise<CodeReview[]> {
-  const r = await trpcQuery('codeReviews.listForUser', token, z.object({ reviews: z.array(CodeReviewSchema) }), {})
+  const r = await trpcQuery(
+    'codeReviews.listForUser',
+    token,
+    z.object({ reviews: z.array(CodeReviewSchema) }),
+    {},
+  )
   return r.reviews
 }
 
@@ -157,7 +162,10 @@ export async function getCodeReview(token: string, reviewId: string): Promise<Co
 }
 
 /** codeReviews.listForOrganization — tolerates both bare array and { reviews } envelope. */
-export async function listCodeReviews(token: string, organizationId: string): Promise<CodeReview[]> {
+export async function listCodeReviews(
+  token: string,
+  organizationId: string,
+): Promise<CodeReview[]> {
   const r = await trpcQuery(
     'codeReviews.listForOrganization',
     token,
@@ -170,7 +178,11 @@ export async function listCodeReviews(token: string, organizationId: string): Pr
 // --- Organization-scoped procedures ---
 
 /** organizations.codeReviews.listGitLabRepositories */
-export async function listGitLabRepositories(token: string, organizationId: string, forceRefresh?: boolean): Promise<{ id: string; name: string; url: string }[]> {
+export async function listGitLabRepositories(
+  token: string,
+  organizationId: string,
+  forceRefresh?: boolean,
+): Promise<{ id: string; name: string; url: string }[]> {
   return trpcQuery(
     'organizations.codeReviews.listGitLabRepositories',
     token,
@@ -180,36 +192,71 @@ export async function listGitLabRepositories(token: string, organizationId: stri
 }
 
 /** organizations.codeReviews.getReviewConfig */
-export async function getReviewConfig(token: string, organizationId: string, platform: string): Promise<CodeReviewConfig> {
-  return trpcQuery('organizations.codeReviews.getReviewConfig', token, CodeReviewConfigSchema, { organizationId, platform })
+export async function getReviewConfig(
+  token: string,
+  organizationId: string,
+  platform: string,
+): Promise<CodeReviewConfig> {
+  return trpcQuery('organizations.codeReviews.getReviewConfig', token, CodeReviewConfigSchema, {
+    organizationId,
+    platform,
+  })
 }
 
 /** organizations.codeReviews.toggleReviewAgent */
-export async function toggleReviewAgent(token: string, organizationId: string, platform: string, isEnabled: boolean): Promise<void> {
-  await trpcMutate('organizations.codeReviews.toggleReviewAgent', token, z.unknown(), { organizationId, platform, isEnabled })
+export async function toggleReviewAgent(
+  token: string,
+  organizationId: string,
+  platform: string,
+  isEnabled: boolean,
+): Promise<void> {
+  await trpcMutate('organizations.codeReviews.toggleReviewAgent', token, z.unknown(), {
+    organizationId,
+    platform,
+    isEnabled,
+  })
 }
 
 // --- Personal review agent (personalReviewAgent.*) ---
 
 /** personalReviewAgent.getReviewConfig — full personal review agent config. */
-export async function getPersonalReviewConfig(token: string, platform: string): Promise<ReviewAgentConfig> {
-  return trpcQuery('personalReviewAgent.getReviewConfig', token, ReviewAgentConfigSchema, { platform })
+export async function getPersonalReviewConfig(
+  token: string,
+  platform: string,
+): Promise<ReviewAgentConfig> {
+  return trpcQuery('personalReviewAgent.getReviewConfig', token, ReviewAgentConfigSchema, {
+    platform,
+  })
 }
 
 /** personalReviewAgent.saveReviewConfig */
-export async function savePersonalReviewConfig(token: string, input: SaveReviewConfigInput): Promise<void> {
+export async function savePersonalReviewConfig(
+  token: string,
+  input: SaveReviewConfigInput,
+): Promise<void> {
   await trpcMutate('personalReviewAgent.saveReviewConfig', token, z.unknown(), input)
 }
 
 /** personalReviewAgent.toggleReviewAgent */
-export async function togglePersonalReviewAgent(token: string, platform: string, isEnabled: boolean): Promise<void> {
-  await trpcMutate('personalReviewAgent.toggleReviewAgent', token, z.unknown(), { platform, isEnabled })
+export async function togglePersonalReviewAgent(
+  token: string,
+  platform: string,
+  isEnabled: boolean,
+): Promise<void> {
+  await trpcMutate('personalReviewAgent.toggleReviewAgent', token, z.unknown(), {
+    platform,
+    isEnabled,
+  })
 }
 
 // --- Organization review agent (organizations.reviewAgent.*) ---
 
 /** organizations.reviewAgent.getReviewConfig — full org review agent config. */
-export async function getOrgReviewAgentConfig(token: string, organizationId: string, platform: string): Promise<ReviewAgentConfig> {
+export async function getOrgReviewAgentConfig(
+  token: string,
+  organizationId: string,
+  platform: string,
+): Promise<ReviewAgentConfig> {
   return trpcQuery(
     'organizations.reviewAgent.getReviewConfig',
     token,
@@ -220,6 +267,16 @@ export async function getOrgReviewAgentConfig(token: string, organizationId: str
 }
 
 /** organizations.reviewAgent.saveReviewConfig */
-export async function saveOrgReviewConfig(token: string, organizationId: string, input: SaveReviewConfigInput): Promise<void> {
-  await trpcMutate('organizations.reviewAgent.saveReviewConfig', token, z.unknown(), { ...input, organizationId }, { organizationId })
+export async function saveOrgReviewConfig(
+  token: string,
+  organizationId: string,
+  input: SaveReviewConfigInput,
+): Promise<void> {
+  await trpcMutate(
+    'organizations.reviewAgent.saveReviewConfig',
+    token,
+    z.unknown(),
+    { ...input, organizationId },
+    { organizationId },
+  )
 }

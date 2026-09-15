@@ -129,7 +129,10 @@ export const orgCreateCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const org = await createOrganization(token, { name: args.name, companyDomain: args.domain ?? null })
+    const org = await createOrganization(token, {
+      name: args.name,
+      companyDomain: args.domain ?? null,
+    })
     console.log(`Created organization: ${org.name} (${org.id})`)
   },
 })

@@ -20,10 +20,7 @@ afterEach(() => {
 })
 
 /** Build a minimal Response-like object for the mock. */
-function jsonResponse(
-  status: number,
-  body: unknown,
-): Response {
+function jsonResponse(status: number, body: unknown): Response {
   const json = JSON.stringify(body)
   return new Response(json, {
     status,

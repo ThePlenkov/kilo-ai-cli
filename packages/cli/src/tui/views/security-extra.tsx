@@ -73,7 +73,8 @@ export function SecurityCommandsScreen({ ctx, focused }: ScreenProps) {
           label: 'Status',
           width: 12,
           value: (c) => c.status ?? '-',
-          color: (c) => (c.status === 'completed' ? 'green' : c.status === 'failed' ? 'red' : 'yellow'),
+          color: (c) =>
+            c.status === 'completed' ? 'green' : c.status === 'failed' ? 'red' : 'yellow',
         },
         { label: 'Started', width: 22, value: (c) => c.started_at ?? c.startedAt ?? '-' },
       ]}

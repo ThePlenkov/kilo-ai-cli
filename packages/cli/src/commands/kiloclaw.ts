@@ -5,6 +5,7 @@
 import { defineCommand } from 'citty'
 
 import {
+  cancelKiloCliRun,
   getBillingHistory,
   getBillingStatus,
   getChangelog,
@@ -16,7 +17,6 @@ import {
   listPersonalSubscriptions,
   removeMyPin,
   startKiloCliRun,
-  cancelKiloCliRun,
 } from '../api/kiloclaw.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
@@ -50,7 +50,9 @@ export const kiloclawBillingCommand = defineCommand({
   async run() {
     const { token } = await getToken()
     const status = await getBillingStatus(token)
-    console.log(`Access: ${status.hasAccess ? 'yes' : 'no'}${status.accessReason ? ` (${status.accessReason})` : ''}`)
+    console.log(
+      `Access: ${status.hasAccess ? 'yes' : 'no'}${status.accessReason ? ` (${status.accessReason})` : ''}`,
+    )
     if (status.creditBalanceMicrodollars != null) {
       console.log(`Credit balance: $${(status.creditBalanceMicrodollars / 1e6).toFixed(2)}`)
     }
@@ -160,7 +162,9 @@ export const kiloclawChangelogCommand = defineCommand({
     const { token } = await getToken()
     const entries = await getChangelog(token)
     for (const entry of entries) {
-      console.log(`\n## ${entry.date} [${entry.category}]${entry.deployHint ? ` (${entry.deployHint})` : ''}`)
+      console.log(
+        `\n## ${entry.date} [${entry.category}]${entry.deployHint ? ` (${entry.deployHint})` : ''}`,
+      )
       console.log(`  ${entry.description}`)
     }
   },

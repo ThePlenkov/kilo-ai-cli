@@ -3,24 +3,31 @@
  */
 
 import { defineCommand } from 'citty'
-
-import {
-  getUsageBreakdown,
-  getUsageSummary,
-  getUsageTable,
-  getUsageTimeseries,
-} from '../api/usage-analytics.ts'
 import type {
   UsageAnalyticsFilters,
   UsageDimension,
   UsageGranularity,
   UsageMetric,
 } from '../api/types.ts'
+import {
+  getUsageBreakdown,
+  getUsageSummary,
+  getUsageTable,
+  getUsageTimeseries,
+} from '../api/usage-analytics.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 const GRANULARITIES: UsageGranularity[] = ['hour', 'day', 'week', 'month']
-const DIMENSIONS: UsageDimension[] = ['feature', 'model', 'mode', 'user', 'provider', 'project', 'organization']
+const DIMENSIONS: UsageDimension[] = [
+  'feature',
+  'model',
+  'mode',
+  'user',
+  'provider',
+  'project',
+  'organization',
+]
 const METRICS: UsageMetric[] = [
   'cost',
   'requests',
@@ -54,7 +61,8 @@ function assertValidDateOnly(s: string, flag: string): void {
 function parseDateStart(s: string, flag: string): string {
   assertValidDateOnly(s, flag)
   const d = new Date(s.includes('T') ? s : `${s}T00:00:00Z`)
-  if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
+  if (Number.isNaN(d.getTime()))
+    throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
   return d.toISOString()
 }
 
@@ -62,7 +70,8 @@ function parseDateStart(s: string, flag: string): string {
 function parseDateEnd(s: string, flag: string): string {
   assertValidDateOnly(s, flag)
   const d = new Date(s.includes('T') ? s : `${s}T23:59:59.999Z`)
-  if (Number.isNaN(d.getTime())) throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
+  if (Number.isNaN(d.getTime()))
+    throw new Error(`Invalid ${flag} value "${s}" — expected ISO date or datetime`)
   return d.toISOString()
 }
 
@@ -76,10 +85,14 @@ function parseFilters(args: FilterArgs, organizationId?: string): UsageAnalytics
   const now = new Date()
   const granularity = (args.granularity ?? 'day') as UsageGranularity
   if (!GRANULARITIES.includes(granularity)) {
-    throw new Error(`Invalid --granularity "${args.granularity}" (expected: ${GRANULARITIES.join('|')})`)
+    throw new Error(
+      `Invalid --granularity "${args.granularity}" (expected: ${GRANULARITIES.join('|')})`,
+    )
   }
   return {
-    startDate: args.from ? parseDateStart(args.from, '--from') : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    startDate: args.from
+      ? parseDateStart(args.from, '--from')
+      : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     endDate: args.to ? parseDateEnd(args.to, '--to') : now.toISOString(),
     granularity,
     organizationId,
@@ -88,7 +101,8 @@ function parseFilters(args: FilterArgs, organizationId?: string): UsageAnalytics
 
 function parseMetric(s: string | undefined): UsageMetric {
   const m = (s ?? 'cost') as UsageMetric
-  if (!METRICS.includes(m)) throw new Error(`Invalid --metric "${s}" (expected: ${METRICS.join('|')})`)
+  if (!METRICS.includes(m))
+    throw new Error(`Invalid --metric "${s}" (expected: ${METRICS.join('|')})`)
   return m
 }
 
@@ -104,7 +118,8 @@ function parseBreakdownMetric(s: string | undefined): 'cost' | 'requests' | 'tok
 
 function parseDimension(s: string | undefined): UsageDimension {
   const d = (s ?? 'model') as UsageDimension
-  if (!DIMENSIONS.includes(d)) throw new Error(`Invalid --dimension "${s}" (expected: ${DIMENSIONS.join('|')})`)
+  if (!DIMENSIONS.includes(d))
+    throw new Error(`Invalid --dimension "${s}" (expected: ${DIMENSIONS.join('|')})`)
   return d
 }
 
@@ -131,8 +146,12 @@ export const analyticsSummaryCommand = defineCommand({
     const { token, organizationId } = await getToken()
     const s = await getUsageSummary(token, parseFilters(args, organizationId))
     console.log(`Cost: $${(s.costMicrodollars / 1e6).toFixed(2)}`)
-    console.log(`Requests: ${s.requestCount} (${s.errorCount} errors, ${(s.errorRate * 100).toFixed(1)}%)`)
-    console.log(`Tokens: ${s.totalTokens} (in ${s.inputTokens} / out ${s.outputTokens} / cache-hit ${s.cacheHitTokens})`)
+    console.log(
+      `Requests: ${s.requestCount} (${s.errorCount} errors, ${(s.errorRate * 100).toFixed(1)}%)`,
+    )
+    console.log(
+      `Tokens: ${s.totalTokens} (in ${s.inputTokens} / out ${s.outputTokens} / cache-hit ${s.cacheHitTokens})`,
+    )
     console.log(`Avg latency: ${(s.avgLatencyMs / 1000).toFixed(1)}s`)
     console.log(`Free requests: ${s.freeRequestCount}  |  BYOK: ${s.byokRequestCount}`)
   },
@@ -147,7 +166,10 @@ export const analyticsTimeseriesCommand = defineCommand({
   async run({ args }) {
     const { token, organizationId } = await getToken()
     const metric = parseMetric(args.metric)
-    const points = await getUsageTimeseries(token, { ...parseFilters(args, organizationId), metric })
+    const points = await getUsageTimeseries(token, {
+      ...parseFilters(args, organizationId),
+      metric,
+    })
     if (points.length === 0) {
       console.log('No timeseries data found.')
       return
@@ -170,7 +192,11 @@ export const analyticsBreakdownCommand = defineCommand({
   meta: { name: 'breakdown', description: 'Show usage analytics breakdown' },
   args: {
     ...filterArgs,
-    dimension: { type: 'string', description: `Dimension (${DIMENSIONS.join('|')})`, default: 'model' },
+    dimension: {
+      type: 'string',
+      description: `Dimension (${DIMENSIONS.join('|')})`,
+      default: 'model',
+    },
     metric: { type: 'string', description: 'cost|requests|tokens', default: 'cost' },
   },
   async run({ args }) {
@@ -187,7 +213,8 @@ export const analyticsBreakdownCommand = defineCommand({
     printTable(
       entries.map((e) => ({
         label: e.label,
-        value: (args.metric ?? 'cost') === 'cost' ? `$${(e.value / 1e6).toFixed(4)}` : String(e.value),
+        value:
+          (args.metric ?? 'cost') === 'cost' ? `$${(e.value / 1e6).toFixed(4)}` : String(e.value),
         percentage: `${e.percentage.toFixed(1)}%`,
       })),
       [
@@ -203,7 +230,11 @@ export const analyticsTableCommand = defineCommand({
   meta: { name: 'table', description: 'Show usage analytics as a table' },
   args: {
     ...filterArgs,
-    'group-by': { type: 'string', description: 'Comma-separated dimensions (default: model)', default: 'model' },
+    'group-by': {
+      type: 'string',
+      description: 'Comma-separated dimensions (default: model)',
+      default: 'model',
+    },
   },
   async run({ args }) {
     const { token, organizationId } = await getToken()
@@ -225,15 +256,13 @@ export const analyticsTableCommand = defineCommand({
       for (const d of groupBy) row[`dim_${d}`] = r.dimensions[d] ?? '-'
       return row
     })
-    printTable(mapped,
-      [
-        { key: 'datetime', label: 'Datetime', width: 24 },
-        ...dimCols,
-        { key: 'credits', label: 'Cost', width: 10, align: 'right' },
-        { key: 'requests', label: 'Requests', width: 10, align: 'right' },
-        { key: 'tokens', label: 'Tokens', width: 12, align: 'right' },
-        { key: 'errors', label: 'Errors', width: 8, align: 'right' },
-      ],
-    )
+    printTable(mapped, [
+      { key: 'datetime', label: 'Datetime', width: 24 },
+      ...dimCols,
+      { key: 'credits', label: 'Cost', width: 10, align: 'right' },
+      { key: 'requests', label: 'Requests', width: 10, align: 'right' },
+      { key: 'tokens', label: 'Tokens', width: 12, align: 'right' },
+      { key: 'errors', label: 'Errors', width: 8, align: 'right' },
+    ])
   },
 })

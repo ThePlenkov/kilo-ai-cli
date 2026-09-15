@@ -1,7 +1,7 @@
 /** Shared TUI building blocks: tables, list screens, record views, sidebar. */
 
-import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import React, { useState } from 'react'
 
 import { useQuery, useTermSize } from './hooks.ts'
 
@@ -68,7 +68,8 @@ export function DataTable<T>({
         <Text>{'  '}</Text>
         {columns.map((c, i) => (
           <Text key={c.label} bold>
-            {(c.align === 'right' ? padRight(c.label, widths[i]!) : pad(c.label, widths[i]!)) + (i < columns.length - 1 ? '  ' : '')}
+            {(c.align === 'right' ? padRight(c.label, widths[i]!) : pad(c.label, widths[i]!)) +
+              (i < columns.length - 1 ? '  ' : '')}
           </Text>
         ))}
       </Box>
@@ -81,7 +82,9 @@ export function DataTable<T>({
           <Text color={i === selected ? 'cyan' : undefined}>{i === selected ? '› ' : '  '}</Text>
           {columns.map((c, j) => {
             const raw = clean(c.value(row))
-            const text = (c.align === 'right' ? padRight(raw, widths[j]!) : pad(raw, widths[j]!)) + (j < columns.length - 1 ? '  ' : '')
+            const text =
+              (c.align === 'right' ? padRight(raw, widths[j]!) : pad(raw, widths[j]!)) +
+              (j < columns.length - 1 ? '  ' : '')
             return (
               <Text key={c.label} color={c.color?.(row)}>
                 {text}
@@ -111,7 +114,11 @@ export interface QueryListScreenProps<T> {
   /** Extra hint appended to the help line, e.g. "f=filter". */
   help?: string
   /** Custom key handler; return true if the key was consumed. */
-  onKey?: (input: string, key: { return?: boolean; escape?: boolean }, selected: T | undefined) => boolean
+  onKey?: (
+    input: string,
+    key: { return?: boolean; escape?: boolean },
+    selected: T | undefined,
+  ) => boolean
   /** Optional summary line rendered above the table. */
   banner?: (data: T[]) => React.ReactNode
 }
@@ -164,7 +171,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
     return (
       <Box flexDirection="column">
         <Text color="red">Error: {error}</Text>
-        <Text dimColor>r=retry  Esc=back</Text>
+        <Text dimColor>r=retry Esc=back</Text>
       </Box>
     )
   }
@@ -173,7 +180,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
       <Box flexDirection="column">
         {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
         <Text>{emptyText ?? 'Nothing found.'}</Text>
-        <Text dimColor>r=refresh  Esc=back</Text>
+        <Text dimColor>r=refresh Esc=back</Text>
       </Box>
     )
   }
@@ -182,14 +189,15 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   return (
     <Box flexDirection="column">
       {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
-      {offset > 0 ? <Text dimColor>  ↑ {offset} more</Text> : null}
+      {offset > 0 ? <Text dimColor> ↑ {offset} more</Text> : null}
       <DataTable rows={visible} columns={columns} selected={selIdx - offset} />
       {offset + maxVisible < rows.length ? (
-        <Text dimColor>  ↓ {rows.length - offset - maxVisible} more</Text>
+        <Text dimColor> ↓ {rows.length - offset - maxVisible} more</Text>
       ) : null}
       <Box marginTop={1}>
         <Text dimColor>
-          [{selIdx + 1}/{rows.length}] ↑↓ navigate{onSelect ? '  Enter=open' : ''}  r=refresh{help ? `  ${help}` : ''}  Esc=back
+          [{selIdx + 1}/{rows.length}] ↑↓ navigate{onSelect ? '  Enter=open' : ''} r=refresh
+          {help ? `  ${help}` : ''} Esc=back
         </Text>
       </Box>
     </Box>
@@ -200,7 +208,13 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
 // RecordView — key/value rendering of a single object
 // ---------------------------------------------------------------------------
 
-export function RecordView({ data, width = 22 }: { data: Record<string, unknown>; width?: number }) {
+export function RecordView({
+  data,
+  width = 22,
+}: {
+  data: Record<string, unknown>
+  width?: number
+}) {
   return (
     <Box flexDirection="column">
       {Object.entries(data).map(([k, v]) => {
@@ -243,7 +257,7 @@ export function QueryRecordScreen({
     return (
       <Box flexDirection="column">
         <Text color="red">Error: {error}</Text>
-        <Text dimColor>r=retry  Esc=back</Text>
+        <Text dimColor>r=retry Esc=back</Text>
       </Box>
     )
   }
@@ -252,7 +266,7 @@ export function QueryRecordScreen({
     <Box flexDirection="column">
       <RecordView data={data} />
       <Box marginTop={1}>
-        <Text dimColor>r=refresh  Esc=back</Text>
+        <Text dimColor>r=refresh Esc=back</Text>
       </Box>
     </Box>
   )
@@ -282,7 +296,8 @@ export function TextScreen({
       if (key.escape) onBack()
       if (key.upArrow) setOffset((o) => Math.max(0, o - 1))
       if (key.downArrow) setOffset((o) => Math.min(Math.max(0, lines.length - maxVisible), o + 1))
-      if (key.pageDown) setOffset((o) => Math.min(Math.max(0, lines.length - maxVisible), o + maxVisible))
+      if (key.pageDown)
+        setOffset((o) => Math.min(Math.max(0, lines.length - maxVisible), o + maxVisible))
       if (key.pageUp) setOffset((o) => Math.max(0, o - maxVisible))
     },
     { isActive: focused },
@@ -299,7 +314,8 @@ export function TextScreen({
       ))}
       <Box marginTop={1}>
         <Text dimColor>
-          [{offset + 1}-{Math.min(offset + maxVisible, lines.length)}/{lines.length}] ↑↓ scroll  Esc=back
+          [{offset + 1}-{Math.min(offset + maxVisible, lines.length)}/{lines.length}] ↑↓ scroll
+          Esc=back
         </Text>
       </Box>
     </Box>
@@ -316,7 +332,9 @@ export interface SidebarItem {
   active: boolean
 }
 
-type SidebarEntry = { kind: 'group'; title: string } | { kind: 'item'; item: SidebarItem; flat: number }
+type SidebarEntry =
+  | { kind: 'group'; title: string }
+  | { kind: 'item'; item: SidebarItem; flat: number }
 
 export function Sidebar({
   groups,
@@ -370,8 +388,16 @@ export function Sidebar({
   const window = entries.slice(start, start + size)
 
   return (
-    <Box flexDirection="column" width={width} height={visible + 2} borderStyle="single" borderColor={focused ? 'cyan' : 'gray'} paddingX={1} overflow="hidden">
-      {up ? <Text dimColor>  ↑ {start} more</Text> : null}
+    <Box
+      flexDirection="column"
+      width={width}
+      height={visible + 2}
+      borderStyle="single"
+      borderColor={focused ? 'cyan' : 'gray'}
+      paddingX={1}
+      overflow="hidden"
+    >
+      {up ? <Text dimColor> ↑ {start} more</Text> : null}
       {window.map((e, i) => {
         if (e.kind === 'group') {
           return (
@@ -394,7 +420,7 @@ export function Sidebar({
           </Text>
         )
       })}
-      {down ? <Text dimColor>  ↓ {entries.length - start - size} more</Text> : null}
+      {down ? <Text dimColor> ↓ {entries.length - start - size} more</Text> : null}
     </Box>
   )
 }

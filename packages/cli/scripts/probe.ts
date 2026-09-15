@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Raw tRPC probe — dumps the real `result.data` payload for a procedure,
  * bypassing zod validation. For debugging schema mismatches.
@@ -12,9 +13,9 @@
  * `z.void()`/optional, pass `'{}'` or omit it entirely.
  */
 
-import { createTokenStore } from '../src/auth/token-store.ts'
 import { KILO_API_BASE } from '../src/api/constants.ts'
 import { buildAuthHeaders } from '../src/api/headers.ts'
+import { createTokenStore } from '../src/auth/token-store.ts'
 
 const [procedure, inputJson] = process.argv.slice(2)
 if (!procedure) {

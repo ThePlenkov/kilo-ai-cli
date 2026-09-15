@@ -25,10 +25,10 @@ import {
   startRemediation,
   triggerSync,
 } from '../api/security-agent.ts'
-import { printSummary, printTable } from './format.ts'
 import { confirm } from './confirm.ts'
-import { colorSeverity, colorStatus, repoLink } from './theme.ts'
+import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
+import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 
 export const securityStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show security agent permission status' },
@@ -112,14 +112,24 @@ export const securityFindingsCommand = defineCommand({
   args: {
     repo: { type: 'string', description: 'Filter by repository full name (e.g. user/repo)' },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
-    status: { type: 'string', description: 'Filter by status (open/dismissed/remediated/in_progress)' },
+    status: {
+      type: 'string',
+      description: 'Filter by status (open/dismissed/remediated/in_progress)',
+    },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
     limit: { type: 'string', description: 'Max findings to show (1-100)', default: '50' },
     offset: { type: 'string', description: 'Pagination offset', default: '0' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const input: { repoFullName?: string; severity?: string; status?: string; overdue?: boolean; limit?: number; offset?: number } = {}
+    const input: {
+      repoFullName?: string
+      severity?: string
+      status?: string
+      overdue?: boolean
+      limit?: number
+      offset?: number
+    } = {}
     if (args.repo) input.repoFullName = args.repo
     if (args.severity) input.severity = args.severity
     if (args.status) input.status = args.status
@@ -164,7 +174,12 @@ export const securityFindingsCommand = defineCommand({
         { key: 'id', label: 'ID', width: 8 },
         { key: 'sev', label: 'Severity', width: 8, format: (v) => colorSeverity(v) },
         { key: 'title', label: 'Title', width: 50 },
-        { key: 'repo', label: 'Repository', width: 30, format: (shown, raw) => repoLink(raw, shown) },
+        {
+          key: 'repo',
+          label: 'Repository',
+          width: 30,
+          format: (shown, raw) => repoLink(raw, shown),
+        },
         { key: 'status', label: 'Status', width: 12, format: (v) => colorStatus(v) },
         { key: 'pkg', label: 'Package', width: 20 },
       ],

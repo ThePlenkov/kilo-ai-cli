@@ -1,12 +1,10 @@
+import { Box, Text, useInput } from 'ink'
 import React from 'react'
-import { Box, Text } from 'ink'
-
 import { fetchCodingPlanSubscriptions, fetchCodingPlanUsage } from '../../api/trpc.ts'
 import type { CodingPlanSubscription } from '../../api/types.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
 import { DataTable, QueryListScreen } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
-import { useInput } from 'ink'
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'green',
@@ -22,14 +20,37 @@ export function PlansScreen({ ctx, focused }: ScreenProps) {
   const narrow = avail < 56
   const columns = [
     { label: 'ID', width: 14, value: (s: CodingPlanSubscription) => s.id },
-    { label: 'Plan', width: narrow ? avail - 30 : 22, value: (s: CodingPlanSubscription) => s.planName },
+    {
+      label: 'Plan',
+      width: narrow ? avail - 30 : 22,
+      value: (s: CodingPlanSubscription) => s.planName,
+    },
     { label: 'Provider', width: 14, value: (s: CodingPlanSubscription) => s.providerName },
-    { label: 'Status', width: 10, value: (s: CodingPlanSubscription) => s.status, color: (s: CodingPlanSubscription) => STATUS_COLORS[s.status] },
-    { label: 'BYOK', width: 5, value: (s: CodingPlanSubscription) => (s.hasInstalledByokKey ? 'yes' : 'no') },
-    { label: 'Cancel@EOP', width: 10, value: (s: CodingPlanSubscription) => (s.cancelAtPeriodEnd ? 'yes' : 'no') },
-    { label: 'Usage', width: 6, value: (s: CodingPlanSubscription) => (s.canQueryUsage ? 'yes' : '—') },
+    {
+      label: 'Status',
+      width: 10,
+      value: (s: CodingPlanSubscription) => s.status,
+      color: (s: CodingPlanSubscription) => STATUS_COLORS[s.status],
+    },
+    {
+      label: 'BYOK',
+      width: 5,
+      value: (s: CodingPlanSubscription) => (s.hasInstalledByokKey ? 'yes' : 'no'),
+    },
+    {
+      label: 'Cancel@EOP',
+      width: 10,
+      value: (s: CodingPlanSubscription) => (s.cancelAtPeriodEnd ? 'yes' : 'no'),
+    },
+    {
+      label: 'Usage',
+      width: 6,
+      value: (s: CodingPlanSubscription) => (s.canQueryUsage ? 'yes' : '—'),
+    },
   ]
-  const visible = narrow ? columns.filter((c) => ['ID', 'Plan', 'Status', 'Usage'].includes(c.label)) : columns
+  const visible = narrow
+    ? columns.filter((c) => ['ID', 'Plan', 'Status', 'Usage'].includes(c.label))
+    : columns
   return (
     <QueryListScreen<CodingPlanSubscription>
       focused={focused}
@@ -53,9 +74,12 @@ export function PlanUsageScreen({ ctx, focused }: ScreenProps) {
     () => fetchCodingPlanUsage(ctx.token, id, ctx.organizationId),
     [ctx.token, id],
   )
-  useInput((_i, key) => {
-    if (key.escape) ctx.goBack()
-  }, { isActive: focused })
+  useInput(
+    (_i, key) => {
+      if (key.escape) ctx.goBack()
+    },
+    { isActive: focused },
+  )
 
   if (loading && !data) return <Text color="yellow">Loading usage…</Text>
   if (error) {
@@ -87,7 +111,8 @@ export function PlanUsageScreen({ ctx, focused }: ScreenProps) {
                 const filled = Math.round((pct / 100) * 20)
                 return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)} ${pct.toFixed(0)}%`
               },
-              color: (w) => (w.remainingPercent < 20 ? 'red' : w.remainingPercent < 50 ? 'yellow' : 'green'),
+              color: (w) =>
+                w.remainingPercent < 20 ? 'red' : w.remainingPercent < 50 ? 'yellow' : 'green',
             },
             { label: 'Resets', width: 24, value: (w) => w.resetsAt },
           ]}
