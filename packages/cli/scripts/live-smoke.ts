@@ -29,8 +29,8 @@ import {
 import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
 import { listOrganizations, updateOrganization } from '../src/api/organizations.ts'
 import {
+  cancelRemediation,
   getSecurityConfig,
-  getSecurityRepositories,
   listActiveCommands,
   listFindings,
   setSecurityEnabled,
@@ -101,15 +101,38 @@ async function firstFindingId(ctx: Ctx): Promise<string[] | null> {
   return r.findings[0]?.id ? [r.findings[0].id] : null
 }
 
+// Mutations need an `open` finding — dismissed/ignored findings are rejected.
+async function firstOpenFindingId(ctx: Ctx): Promise<string[] | null> {
+  const r = await listFindings(ctx.token, { limit: 30 })
+  const f = r.findings.find((f) => f.status === 'open')
+  return f ? [f.id] : null
+}
+
+// The running remediation attempt id lives in remediationCapability.cancelAttemptId.
+async function runningAttemptId(ctx: Ctx): Promise<string[] | null> {
+  const r = await listFindings(ctx.token, { limit: 50 })
+  for (const f of r.findings) {
+    const cap = f.remediationCapability ?? f.remediation_capability
+    if (cap?.canCancel && cap.cancelAttemptId) return [cap.cancelAttemptId]
+  }
+  return null
+}
+
+// Post-hook: cancel every cancellable remediation attempt left behind by
+// remediate/retry-remediation so no fix-PR work continues after the run.
+async function cancelRunningAttempts(ctx: Ctx): Promise<void> {
+  const r = await listFindings(ctx.token, { limit: 50 })
+  for (const f of r.findings) {
+    const cap = f.remediationCapability ?? f.remediation_capability
+    if (cap?.canCancel && cap.cancelAttemptId) {
+      await cancelRemediation(ctx.token, cap.cancelAttemptId)
+    }
+  }
+}
+
 async function firstCommandId(ctx: Ctx): Promise<string[] | null> {
   const cmds = await listActiveCommands(ctx.token)
   return cmds[0]?.id ? [cmds[0].id] : null
-}
-
-async function firstSecurityRepoId(ctx: Ctx): Promise<string[] | null> {
-  const repos = await getSecurityRepositories(ctx.token)
-  const id = repos[0]?.id
-  return id != null ? [String(id)] : null
 }
 
 async function firstReviewId(ctx: Ctx): Promise<string[] | null> {
@@ -146,6 +169,8 @@ const toggleRestore: Record<string, boolean> = {}
 let toggleOrgId: string | null = null
 /** Original security-agent enabled flag. */
 let securityWasEnabled: boolean | null = null
+
+let disableWasEnabled: boolean | null = null
 
 // ---------------------------------------------------------------------------
 // Command inventory — mirrors src/cli.ts
@@ -263,10 +288,16 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     args: async () => ['live smoke test prompt'],
     note: 'spins up a paid run',
+    expectError: /requires an active subscription/i,
   },
   { cmd: 'kiloclaw run-status', cls: 'never', note: 'no run id fixture — needs run-start first' },
   { cmd: 'kiloclaw run-cancel', cls: 'never', note: 'needs a live run id' },
-  { cmd: 'kiloclaw unpin', cls: 'manual', note: 'removes version pin' },
+  {
+    cmd: 'kiloclaw unpin',
+    cls: 'manual',
+    note: 'removes version pin',
+    expectError: /requires an active subscription/i,
+  },
 
   { cmd: 'cloud-agent session', cls: 'never', note: 'no cloud-agent session id fixture' },
   { cmd: 'cloud-agent github-repos', cls: 'read' },
@@ -373,35 +404,38 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'security analyze',
     cls: 'manual',
-    args: firstSecurityRepoId,
-    skipReason: 'no security repos',
-    note: 'starts a paid analysis',
+    args: firstOpenFindingId,
+    skipReason: 'no open findings',
+    note: 'queues finding analysis',
   },
   {
     cmd: 'security dismiss',
     cls: 'manual',
-    args: firstFindingId,
-    skipReason: 'no findings',
-    note: 'dismisses a finding',
+    args: async (c) => (await firstOpenFindingId(c))?.concat('--reason', 'inaccurate') ?? null,
+    skipReason: 'no open findings',
+    note: 'dismisses a finding (one-way)',
   },
   {
     cmd: 'security remediate',
     cls: 'manual',
-    args: firstFindingId,
-    skipReason: 'no findings',
-    note: 'may open real PRs',
+    args: firstOpenFindingId,
+    skipReason: 'no open findings',
+    post: cancelRunningAttempts,
+    note: 'queues a remediation attempt, then cancels it',
   },
   {
     cmd: 'security retry-remediation',
     cls: 'manual',
-    args: firstCommandId,
-    skipReason: 'no active commands',
+    args: firstOpenFindingId,
+    skipReason: 'no open findings',
+    post: cancelRunningAttempts,
+    note: 'queues a remediation attempt, then cancels it',
   },
   {
     cmd: 'security cancel-remediation',
     cls: 'manual',
-    args: firstCommandId,
-    skipReason: 'no active commands',
+    args: runningAttemptId,
+    skipReason: 'no running remediation attempt',
   },
   {
     cmd: 'security enable',
@@ -419,7 +453,19 @@ const COMMANDS: Cmd[] = [
     },
     note: 'enables agent, then restores original state',
   },
-  { cmd: 'security disable', cls: 'manual', note: 'restore path covered by security enable post' },
+  {
+    cmd: 'security disable',
+    cls: 'idempotent',
+    args: async (c) => {
+      const cfg = await getSecurityConfig(c.token)
+      disableWasEnabled = cfg.isEnabled ?? cfg.is_enabled ?? false
+      return []
+    },
+    post: async (c) => {
+      if (disableWasEnabled !== null) await setSecurityEnabled(c.token, disableWasEnabled)
+    },
+    note: 'disables agent, then restores original state',
+  },
   { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
 
   { cmd: 'tui', cls: 'never', note: 'interactive' },

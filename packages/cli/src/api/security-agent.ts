@@ -62,6 +62,42 @@ const RepositorySchema = z
   })
   .passthrough()
 
+const RemediationAttemptSchema = z
+  .object({
+    id: z.string(),
+    status: z.string().nullish(),
+    attemptNumber: z.number().nullish(),
+    branchName: z.string().nullish(),
+    prUrl: z.string().nullish(),
+    prNumber: z.number().nullish(),
+    failureCode: z.string().nullish(),
+  })
+  .passthrough()
+
+const RemediationSummarySchema = z
+  .object({
+    id: z.string().optional(),
+    status: z.string().nullish(),
+    latestAttemptId: z.string().nullish(),
+    prUrl: z.string().nullish(),
+    prNumber: z.number().nullish(),
+    outcomeSummary: z.string().nullish(),
+    latestAttempt: RemediationAttemptSchema.nullish(),
+  })
+  .passthrough()
+
+const RemediationCapabilitySchema = z
+  .object({
+    canStart: z.boolean().nullish(),
+    startReason: z.string().nullish(),
+    canRetry: z.boolean().nullish(),
+    retryReason: z.string().nullish(),
+    canCancel: z.boolean().nullish(),
+    cancelReason: z.string().nullish(),
+    cancelAttemptId: z.string().nullish(),
+  })
+  .passthrough()
+
 const FindingSchema: z.ZodType<SecurityFinding> = z
   .object({
     id: z.string(),
@@ -110,10 +146,10 @@ const FindingSchema: z.ZodType<SecurityFinding> = z
     analysis_completed_at: z.string().nullish(),
     analysisError: z.string().nullish(),
     analysis_error: z.string().nullish(),
-    remediationSummary: z.string().nullish(),
-    remediation_summary: z.string().nullish(),
-    remediationCapability: z.record(z.string(), z.unknown()).nullish(),
-    remediation_capability: z.record(z.string(), z.unknown()).nullish(),
+    remediationSummary: z.union([z.string(), RemediationSummarySchema]).nullish(),
+    remediation_summary: z.union([z.string(), RemediationSummarySchema]).nullish(),
+    remediationCapability: RemediationCapabilitySchema.nullish(),
+    remediation_capability: RemediationCapabilitySchema.nullish(),
     firstDetectedAt: z.string().nullish(),
     first_detected_at: z.string().nullish(),
     lastSyncedAt: z.string().nullish(),
@@ -283,43 +319,59 @@ export async function triggerSync(token: string, input?: { repositoryId?: string
   await trpcMutate('securityAgent.triggerSync', token, z.unknown(), input ?? {})
 }
 
-/** securityAgent.dismissFinding */
+/** Allowed values for the dismissFinding `reason` input. */
+export const DISMISS_REASONS = [
+  'fix_started',
+  'no_bandwidth',
+  'tolerable_risk',
+  'inaccurate',
+  'not_used',
+] as const
+export type DismissReason = (typeof DISMISS_REASONS)[number]
+
+/** securityAgent.dismissFinding — marks the finding ignored (one-way). */
 export async function dismissFinding(
   token: string,
   findingId: string,
-  reason?: string,
+  reason?: DismissReason,
 ): Promise<void> {
   await trpcMutate('securityAgent.dismissFinding', token, z.unknown(), { findingId, reason })
 }
 
-/** securityAgent.startAnalysis */
+/** securityAgent.startAnalysis — queues codebase analysis for a finding. */
 export async function startAnalysis(
   token: string,
-  repositoryId: string,
-): Promise<{ analysisId: string }> {
-  return trpcMutate('securityAgent.startAnalysis', token, z.object({ analysisId: z.string() }), {
-    repositoryId,
-  })
+  findingId: string,
+): Promise<{ commandId?: string }> {
+  return trpcMutate(
+    'securityAgent.startAnalysis',
+    token,
+    z.object({ commandId: z.string().optional() }).passthrough(),
+    { findingId },
+  )
 }
 
-/** securityAgent.startRemediation */
+/** securityAgent.startRemediation — queues a remediation attempt for a finding. */
 export async function startRemediation(
   token: string,
   findingId: string,
-): Promise<{ commandId: string }> {
-  return trpcMutate('securityAgent.startRemediation', token, z.object({ commandId: z.string() }), {
-    findingId,
-  })
+): Promise<{ attemptId: string }> {
+  return trpcMutate(
+    'securityAgent.startRemediation',
+    token,
+    z.object({ attemptId: z.string() }).passthrough(),
+    { findingId },
+  )
 }
 
-/** securityAgent.retryRemediation */
-export async function retryRemediation(token: string, commandId: string): Promise<void> {
-  await trpcMutate('securityAgent.retryRemediation', token, z.unknown(), { commandId })
+/** securityAgent.retryRemediation — retries/starts remediation for a finding. */
+export async function retryRemediation(token: string, findingId: string): Promise<void> {
+  await trpcMutate('securityAgent.retryRemediation', token, z.unknown(), { findingId })
 }
 
-/** securityAgent.cancelRemediation */
-export async function cancelRemediation(token: string, commandId: string): Promise<void> {
-  await trpcMutate('securityAgent.cancelRemediation', token, z.unknown(), { commandId })
+/** securityAgent.cancelRemediation — cancels a running remediation attempt. */
+export async function cancelRemediation(token: string, attemptId: string): Promise<void> {
+  await trpcMutate('securityAgent.cancelRemediation', token, z.unknown(), { attemptId })
 }
 
 /** securityAgent.deleteFindingsByRepository */

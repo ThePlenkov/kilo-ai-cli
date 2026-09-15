@@ -1,12 +1,12 @@
 import { Box, Text, useInput } from 'ink'
 import React, { useEffect, useState } from 'react'
 
-import {
-  dismissFinding,
-  getFinding,
-  startRemediation,
-} from '../../api/security-agent.ts'
-import type { SecurityFinding } from '../../api/types.ts'
+import { dismissFinding, getFinding, startRemediation } from '../../api/security-agent.ts'
+import type {
+  RemediationCapability as RemediationCapabilityType,
+  RemediationSummary as RemediationSummaryType,
+  SecurityFinding,
+} from '../../api/types.ts'
 
 export interface FindingDetailViewProps {
   token: string
@@ -52,11 +52,11 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     setBusy(true)
     try {
       if (what === 'dismiss') {
-        await dismissFinding(token, findingId)
+        await dismissFinding(token, findingId, 'inaccurate')
         setNotice({ text: 'Finding dismissed', error: false })
       } else {
-        const { commandId } = await startRemediation(token, findingId)
-        setNotice({ text: `Remediation started (command ${commandId})`, error: false })
+        const { attemptId } = await startRemediation(token, findingId)
+        setNotice({ text: `Remediation started (attempt ${attemptId})`, error: false })
       }
       setReloadKey((k) => k + 1)
     } catch (e) {
@@ -89,12 +89,10 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         return
       }
       if (want === 'remediate') {
-        const cap = (finding.remediationCapability ?? finding.remediation_capability) as
-          | Record<string, unknown>
-          | undefined
+        const cap = finding.remediationCapability ?? finding.remediation_capability
         if (cap && cap.canStart === false) {
           setNotice({
-            text: `Cannot start remediation${cap.startReason ? `: ${String(cap.startReason)}` : ''}`,
+            text: `Cannot start remediation${cap.startReason ? `: ${cap.startReason}` : ''}`,
             error: true,
           })
           return
@@ -238,14 +236,14 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         <Text bold color="green">
           Remediation
         </Text>
-        {remediation ? (
+        {typeof remediation === 'string' ? (
           <Field label="Summary" value={remediation} />
+        ) : remediation ? (
+          <RemediationSummary summary={remediation} />
         ) : (
           <Text dimColor>No remediation yet</Text>
         )}
-        {remediationCap && typeof remediationCap === 'object' ? (
-          <RemediationCapability cap={remediationCap as Record<string, unknown>} />
-        ) : null}
+        {remediationCap ? <RemediationCapability cap={remediationCap} /> : null}
       </Box>
 
       {/* Timestamps */}
@@ -263,8 +261,8 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       {confirm ? (
         <Box marginTop={1}>
           <Text color="yellow">
-            {confirm === 'dismiss' ? 'Dismiss this finding' : 'Start remediation (may open a PR)'}{' '}
-            — press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
+            {confirm === 'dismiss' ? 'Dismiss this finding' : 'Start remediation (may open a PR)'} —
+            press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
           </Text>
         </Box>
       ) : null}
@@ -302,7 +300,26 @@ function Field({
   )
 }
 
-function RemediationCapability({ cap }: { cap: Record<string, unknown> }) {
+function RemediationSummary({ summary }: { summary: RemediationSummaryType }) {
+  const attempt = summary.latestAttempt
+  return (
+    <Box flexDirection="column">
+      {summary.status ? (
+        <Field
+          label="Status"
+          value={summary.status}
+          color={summary.status === 'running' ? 'yellow' : undefined}
+        />
+      ) : null}
+      {summary.prUrl ? <Field label="PR" value={summary.prUrl} color="cyan" /> : null}
+      {attempt?.branchName ? <Field label="Branch" value={attempt.branchName} dim /> : null}
+      {attempt?.status ? <Field label="Attempt" value={attempt.status} dim /> : null}
+      {summary.outcomeSummary ? <Field label="Outcome" value={summary.outcomeSummary} /> : null}
+    </Box>
+  )
+}
+
+function RemediationCapability({ cap }: { cap: RemediationCapabilityType }) {
   const canStart = cap.canStart
   const startReason = cap.startReason
   const canRetry = cap.canRetry
@@ -319,7 +336,7 @@ function RemediationCapability({ cap }: { cap: Record<string, unknown> }) {
             <Text dimColor>canStart:</Text>
           </Box>
           <Text color={canStart ? 'green' : 'gray'}>{String(canStart)}</Text>
-          {startReason ? <Text dimColor> ({String(startReason)})</Text> : null}
+          {startReason ? <Text dimColor> ({startReason})</Text> : null}
         </Box>
       ) : null}
       {canRetry !== undefined ? (
@@ -328,7 +345,7 @@ function RemediationCapability({ cap }: { cap: Record<string, unknown> }) {
             <Text dimColor>canRetry:</Text>
           </Box>
           <Text color={canRetry ? 'green' : 'gray'}>{String(canRetry)}</Text>
-          {retryReason ? <Text dimColor> ({String(retryReason)})</Text> : null}
+          {retryReason ? <Text dimColor> ({retryReason})</Text> : null}
         </Box>
       ) : null}
       {canCancel !== undefined ? (
@@ -337,7 +354,7 @@ function RemediationCapability({ cap }: { cap: Record<string, unknown> }) {
             <Text dimColor>canCancel:</Text>
           </Box>
           <Text color={canCancel ? 'green' : 'gray'}>{String(canCancel)}</Text>
-          {cancelReason ? <Text dimColor> ({String(cancelReason)})</Text> : null}
+          {cancelReason ? <Text dimColor> ({cancelReason})</Text> : null}
         </Box>
       ) : null}
     </Box>
