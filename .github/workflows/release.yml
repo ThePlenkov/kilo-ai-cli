@@ -93,9 +93,17 @@ jobs:
           echo "next=$V" >> "$GITHUB_OUTPUT"
           # If the version is already on npm a rerun must not republish — it
           # only needs to redo tag/branch/PR (self-healing after a partial run).
-          npm view "kilo-ai-cli@$V" version >/dev/null 2>&1 &&
-            echo "published=true" >> "$GITHUB_OUTPUT" ||
+          # An explicit version that is already published is a user error, not
+          # a partial run — refuse it.
+          if npm view "kilo-ai-cli@$V" version >/dev/null 2>&1; then
+            case "$INPUT_VERSION" in
+              patch|minor|major) ;;
+              *) echo "kilo-ai-cli@$V is already published — pick another version"; exit 1 ;;
+            esac
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
             echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Tag pushes take the version from the tag; dispatches stamp the computed
       # version so the artifact always matches the released number.
@@ -163,7 +171,12 @@ jobs:
             git push origin "v$V"
           git ls-remote --exit-code --heads origin "chore/release-$V" >/dev/null 2>&1 ||
             git push origin "chore/release-$V"
-          if [ "$(gh pr list --head "chore/release-$V" --state open --json number -q 'length')" = "0" ]; then
+          # Count first — a failed query inside the conditional would read as
+          # "PR exists" and silently skip creation.
+          N=$(gh pr list --head "chore/release-$V" --state open --json number -q 'length')
+          if [ "$(git rev-list --count origin/main..HEAD)" = "0" ]; then
+            echo "Nothing to sync — main already at $V"
+          elif [ "$N" = "0" ]; then
             gh pr create \
               --title "chore: release $V" \
               --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
