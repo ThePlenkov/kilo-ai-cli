@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react'
 import { Text } from 'ink'
+import React, { useRef, useState } from 'react'
 
 import { checkAppBuilderEligibility, listAppBuilderProjects } from '../../api/app-builder.ts'
 import type { AppBuilderEligibility, AppBuilderProject } from '../../api/types.ts'
-import { useTermSize } from '../hooks.ts'
-import { QueryListScreen } from '../components.tsx'
 import type { Column } from '../components.tsx'
+import { QueryListScreen } from '../components.tsx'
+import { useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → App Builder: eligibility banner + scrollable projects table. */

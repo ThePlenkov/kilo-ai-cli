@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
+import React, { useRef, useState } from 'react'
 
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../../api/trpc.ts'
 import type { CliSession } from '../../api/types.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
 import { clean, QueryListScreen, RecordView, truncate } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → Sessions: list of cloud CLI sessions. */
@@ -26,7 +26,11 @@ export function SessionsScreen({ ctx, focused }: ScreenProps) {
         // Follow nextCursor until the server stops paginating (bounded to 20 pages).
         for (let i = 0; i < 20; i++) {
           // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
-          const page = await fetchCloudSessions(ctx.token, { limit: 50, cursor }, ctx.organizationId)
+          const page = await fetchCloudSessions(
+            ctx.token,
+            { limit: 50, cursor },
+            ctx.organizationId,
+          )
           all.push(...page.cliSessions)
           more = !!page.nextCursor
           if (!page.nextCursor) break
@@ -42,7 +46,9 @@ export function SessionsScreen({ ctx, focused }: ScreenProps) {
         { label: 'Ver', width: 4, align: 'right', value: (s) => String(s.version) },
       ]}
       banner={() =>
-        truncated ? <Text color="yellow">⚠ more than 1,000 sessions — showing the most recent</Text> : null
+        truncated ? (
+          <Text color="yellow">⚠ more than 1,000 sessions — showing the most recent</Text>
+        ) : null
       }
       onSelect={(s) => ctx.navigate('session', { id: s.session_id })}
       onBack={ctx.goBack}
@@ -115,7 +121,10 @@ export function SessionDetailScreen({ ctx, focused }: ScreenProps) {
                 setNotice({ text: `Renamed to "${truncate(v, 60)}"`, error: false })
                 reload()
               } catch (e) {
-                setNotice({ text: `Rename failed: ${e instanceof Error ? e.message : String(e)}`, error: true })
+                setNotice({
+                  text: `Rename failed: ${e instanceof Error ? e.message : String(e)}`,
+                  error: true,
+                })
               }
             }}
           />

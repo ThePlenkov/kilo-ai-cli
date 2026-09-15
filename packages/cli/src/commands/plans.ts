@@ -4,7 +4,11 @@
 
 import { defineCommand } from 'citty'
 
-import { fetchByokEntries, fetchCodingPlanSubscriptions, fetchCodingPlanUsage } from '../api/trpc.ts'
+import {
+  fetchByokEntries,
+  fetchCodingPlanSubscriptions,
+  fetchCodingPlanUsage,
+} from '../api/trpc.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 

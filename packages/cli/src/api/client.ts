@@ -46,11 +46,18 @@ async function readBody(response: Response, procedure: string): Promise<string> 
   if (contentLengthHeader) {
     const declared = Number.parseInt(contentLengthHeader, 10)
     if (!Number.isNaN(declared) && declared > MAX_BODY_BYTES) {
-      throw new CloudTrpcError('protocol', response.status, procedure, `Response too large: ${declared} bytes`)
+      throw new CloudTrpcError(
+        'protocol',
+        response.status,
+        procedure,
+        `Response too large: ${declared} bytes`,
+      )
     }
   }
 
-  const body = (response as { body?: { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } }).body
+  const body = (
+    response as { body?: { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } }
+  ).body
   if (body && typeof body.getReader === 'function') {
     const reader = body.getReader()
     const chunks: Uint8Array[] = []
@@ -61,7 +68,13 @@ async function readBody(response: Response, procedure: string): Promise<string> 
       if (value) {
         total += value.byteLength
         if (total > MAX_BODY_BYTES) {
-          throw new CloudTrpcError('protocol', response.status, procedure, `Response too large: >${MAX_BODY_BYTES} bytes`)
+          await reader.cancel()
+          throw new CloudTrpcError(
+            'protocol',
+            response.status,
+            procedure,
+            `Response too large: >${MAX_BODY_BYTES} bytes`,
+          )
         }
         chunks.push(value)
       }
@@ -139,13 +152,23 @@ export async function trpcQuery<T>(
     json = JSON.parse(text)
   } catch {
     const snippet = text.slice(0, 200)
-    throw new CloudTrpcError('protocol', response.status, procedure, `Non-JSON response: ${snippet}`)
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Non-JSON response: ${snippet}`,
+    )
   }
 
   const envelope = envelopeSchema.safeParse(json)
   if (!envelope.success) {
     const snippet = text.slice(0, 200)
-    throw new CloudTrpcError('protocol', response.status, procedure, `Unexpected response format: ${snippet}`)
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Unexpected response format: ${snippet}`,
+    )
   }
   const { result, error } = envelope.data
 
@@ -225,7 +248,12 @@ export async function trpcMutate<T>(
     json = JSON.parse(text)
   } catch {
     const snippet = text.slice(0, 200)
-    throw new CloudTrpcError('protocol', response.status, procedure, `Non-JSON response: ${snippet}`)
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Non-JSON response: ${snippet}`,
+    )
   }
 
   const batchEntrySchema = z.object({
@@ -236,7 +264,12 @@ export async function trpcMutate<T>(
   const batch = batchSchema.safeParse(json)
   if (!batch.success) {
     const snippet = text.slice(0, 200)
-    throw new CloudTrpcError('protocol', response.status, procedure, `Unexpected batch format: ${snippet}`)
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Unexpected batch format: ${snippet}`,
+    )
   }
   const entry = batch.data[0]
   if (!entry) {

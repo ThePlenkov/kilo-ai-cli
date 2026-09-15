@@ -32,7 +32,9 @@ describe('security-agent API (personal level)', () => {
 
   describe('queries', () => {
     it('getPermissionStatus calls securityAgent.getPermissionStatus', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ granted: true, permissions: ['read', 'write'], pendingRequests: 0 }))
+      fetchMock.mockResolvedValue(
+        mockResponse({ granted: true, permissions: ['read', 'write'], pendingRequests: 0 }),
+      )
       const result = await getPermissionStatus('tok')
       expect(result.granted).toBe(true)
       expect(result.permissions).toEqual(['read', 'write'])
@@ -47,18 +49,42 @@ describe('security-agent API (personal level)', () => {
     })
 
     it('getSecurityRepositories calls securityAgent.getRepositories', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'r1', name: 'repo', full_name: 'user/repo', url: 'https://github.com/user/repo', private: false }]))
+      fetchMock.mockResolvedValue(
+        mockResponse([
+          {
+            id: 'r1',
+            name: 'repo',
+            full_name: 'user/repo',
+            url: 'https://github.com/user/repo',
+            private: false,
+          },
+        ]),
+      )
       const result = await getSecurityRepositories('tok')
       expect(result).toHaveLength(1)
     })
 
     it('listFindings passes filters and returns paginated result', async () => {
-      fetchMock.mockResolvedValue(mockResponse({
-        findings: [{ id: 'f1', repoFullName: 'user/repo', source: 'dependabot', sourceId: 's1', severity: 'critical', title: 'SQL injection', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }],
-        totalCount: 1,
-        runningCount: 0,
-        concurrencyLimit: 5,
-      }))
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          findings: [
+            {
+              id: 'f1',
+              repoFullName: 'user/repo',
+              source: 'dependabot',
+              sourceId: 's1',
+              severity: 'critical',
+              title: 'SQL injection',
+              status: 'open',
+              createdAt: '2024-01-01',
+              updatedAt: '2024-01-02',
+            },
+          ],
+          totalCount: 1,
+          runningCount: 0,
+          concurrencyLimit: 5,
+        }),
+      )
       const result = await listFindings('tok', { severity: 'critical', limit: 10 })
       expect(result.findings).toHaveLength(1)
       expect(result.findings[0]!.severity).toBe('critical')
@@ -70,21 +96,51 @@ describe('security-agent API (personal level)', () => {
     })
 
     it('getFinding passes findingId', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ id: 'f1', repoFullName: 'user/repo', source: 'dependabot', sourceId: 's1', severity: 'high', title: 'XSS', status: 'open', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          id: 'f1',
+          repoFullName: 'user/repo',
+          source: 'dependabot',
+          sourceId: 's1',
+          severity: 'high',
+          title: 'XSS',
+          status: 'open',
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-02',
+        }),
+      )
       const result = await getFinding('tok', 'f1')
       expect(result.id).toBe('f1')
       expect(result.repoFullName).toBe('user/repo')
     })
 
     it('getSecurityStats calls securityAgent.getStats', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ totalFindings: 10, criticalFindings: 2, highFindings: 3, mediumFindings: 3, lowFindings: 2, openFindings: 5, remediatedFindings: 3, dismissedFindings: 2 }))
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          totalFindings: 10,
+          criticalFindings: 2,
+          highFindings: 3,
+          mediumFindings: 3,
+          lowFindings: 2,
+          openFindings: 5,
+          remediatedFindings: 3,
+          dismissedFindings: 2,
+        }),
+      )
       const result = await getSecurityStats('tok')
       expect(result.totalFindings).toBe(10)
       expect(result.criticalFindings).toBe(2)
     })
 
     it('getDashboardStats passes date range', async () => {
-      fetchMock.mockResolvedValue(mockResponse({ totalRepositories: 5, totalFindings: 20, findingsTrend: [], topRepositories: [{ name: 'repo', findings: 10 }] }))
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          totalRepositories: 5,
+          totalFindings: 20,
+          findingsTrend: [],
+          topRepositories: [{ name: 'repo', findings: 10 }],
+        }),
+      )
       const result = await getDashboardStats('tok', { startDate: '2024-01-01' })
       expect(result.totalRepositories).toBe(5)
       const url = fetchMock.mock.calls[0]![0] as string
@@ -98,7 +154,17 @@ describe('security-agent API (personal level)', () => {
     })
 
     it('listActiveCommands calls securityAgent.listActiveCommands', async () => {
-      fetchMock.mockResolvedValue(mockResponse([{ id: 'c1', type: 'remediation', status: 'running', repositoryId: 'r1', startedAt: '2024-01-01' }]))
+      fetchMock.mockResolvedValue(
+        mockResponse([
+          {
+            id: 'c1',
+            type: 'remediation',
+            status: 'running',
+            repositoryId: 'r1',
+            startedAt: '2024-01-01',
+          },
+        ]),
+      )
       const result = await listActiveCommands('tok')
       expect(result).toHaveLength(1)
     })

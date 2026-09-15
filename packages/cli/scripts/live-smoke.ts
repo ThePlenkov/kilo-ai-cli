@@ -18,14 +18,22 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-import { createTokenStore } from '../src/auth/token-store.ts'
-import { fetchCloudSessions, fetchCloudSession, fetchCodingPlanSubscriptions, renameCloudSession } from '../src/api/trpc.ts'
-import { listFindings, listActiveCommands, getSecurityRepositories } from '../src/api/security-agent.ts'
-import { listOrganizations } from '../src/api/organizations.ts'
-import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
-import { listCodeReviewsForUser } from '../src/api/code-reviews.ts'
 import { listAppBuilderProjects } from '../src/api/app-builder.ts'
+import { listCodeReviewsForUser } from '../src/api/code-reviews.ts'
+import { listPersonalSubscriptions } from '../src/api/kiloclaw.ts'
+import { listOrganizations } from '../src/api/organizations.ts'
+import {
+  getSecurityRepositories,
+  listActiveCommands,
+  listFindings,
+} from '../src/api/security-agent.ts'
+import {
+  fetchCloudSession,
+  fetchCloudSessions,
+  fetchCodingPlanSubscriptions,
+  renameCloudSession,
+} from '../src/api/trpc.ts'
+import { createTokenStore } from '../src/auth/token-store.ts'
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = join(PKG, 'dist/index.mjs')
@@ -147,14 +155,21 @@ const COMMANDS: Cmd[] = [
     },
     post: async (ctx) => {
       // Restore by the captured id — list order may shift after rename.
-      if (renameTarget) await renameCloudSession(ctx.token, renameTarget.id, renameTarget.title, ctx.organizationId)
+      if (renameTarget)
+        await renameCloudSession(ctx.token, renameTarget.id, renameTarget.title, ctx.organizationId)
     },
     skipReason: 'no sessions with a title',
     note: 'renames to a temp title, then restores the original',
   },
 
   { cmd: 'org list', cls: 'read' },
-  { cmd: 'org set', cls: 'manual', args: firstOrgId, skipReason: 'no orgs on account', note: 'rewrites credentials.json accountId' },
+  {
+    cmd: 'org set',
+    cls: 'manual',
+    args: firstOrgId,
+    skipReason: 'no orgs on account',
+    note: 'rewrites credentials.json accountId',
+  },
   { cmd: 'org members', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org usage', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org credits', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
@@ -162,7 +177,12 @@ const COMMANDS: Cmd[] = [
   { cmd: 'org invoices', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org models', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
   { cmd: 'org security', cls: 'read', args: firstOrgId, skipReason: 'no orgs on account' },
-  { cmd: 'org create', cls: 'manual', args: async () => ['live-smoke-org'], note: 'creates a real org on the account' },
+  {
+    cmd: 'org create',
+    cls: 'manual',
+    args: async () => ['live-smoke-org'],
+    note: 'creates a real org on the account',
+  },
   {
     cmd: 'org update',
     cls: 'manual',
@@ -187,13 +207,28 @@ const COMMANDS: Cmd[] = [
 
   { cmd: 'kiloclaw instances', cls: 'read' },
   { cmd: 'kiloclaw billing', cls: 'read' },
-  { cmd: 'kiloclaw billing-history', cls: 'read', args: firstKiloclawSubId, skipReason: 'no kiloclaw subs' },
+  {
+    cmd: 'kiloclaw billing-history',
+    cls: 'read',
+    args: firstKiloclawSubId,
+    skipReason: 'no kiloclaw subs',
+  },
   { cmd: 'kiloclaw subscriptions', cls: 'read' },
-  { cmd: 'kiloclaw subscription', cls: 'read', args: firstKiloclawSubId, skipReason: 'no kiloclaw subs' },
+  {
+    cmd: 'kiloclaw subscription',
+    cls: 'read',
+    args: firstKiloclawSubId,
+    skipReason: 'no kiloclaw subs',
+  },
   { cmd: 'kiloclaw changelog', cls: 'read' },
   { cmd: 'kiloclaw version', cls: 'read' },
   { cmd: 'kiloclaw file-tree', cls: 'read', expectError: /requires an active subscription/i },
-  { cmd: 'kiloclaw run-start', cls: 'manual', args: async () => ['live smoke test prompt'], note: 'spins up a paid run' },
+  {
+    cmd: 'kiloclaw run-start',
+    cls: 'manual',
+    args: async () => ['live smoke test prompt'],
+    note: 'spins up a paid run',
+  },
   { cmd: 'kiloclaw run-status', cls: 'never', note: 'no run id fixture — needs run-start first' },
   { cmd: 'kiloclaw run-cancel', cls: 'never', note: 'needs a live run id' },
   { cmd: 'kiloclaw unpin', cls: 'manual', note: 'removes version pin' },
@@ -239,7 +274,13 @@ const COMMANDS: Cmd[] = [
 
   { cmd: 'app-builder list', cls: 'read' },
   { cmd: 'app-builder eligibility', cls: 'read' },
-  { cmd: 'app-builder deploy', cls: 'manual', args: firstProjectId, skipReason: 'no app-builder projects', note: 'deploys a project' },
+  {
+    cmd: 'app-builder deploy',
+    cls: 'manual',
+    args: firstProjectId,
+    skipReason: 'no app-builder projects',
+    note: 'deploys a project',
+  },
 
   { cmd: 'security status', cls: 'read' },
   { cmd: 'security config', cls: 'read' },
@@ -253,11 +294,39 @@ const COMMANDS: Cmd[] = [
   { cmd: 'security orphaned-repos', cls: 'read' },
   { cmd: 'security last-sync', cls: 'read' },
   { cmd: 'security sync', cls: 'manual', note: 'triggers GitHub sync' },
-  { cmd: 'security analyze', cls: 'manual', args: firstSecurityRepoId, skipReason: 'no security repos', note: 'starts a paid analysis' },
-  { cmd: 'security dismiss', cls: 'manual', args: firstFindingId, skipReason: 'no findings', note: 'dismisses a finding' },
-  { cmd: 'security remediate', cls: 'manual', args: firstFindingId, skipReason: 'no findings', note: 'may open real PRs' },
-  { cmd: 'security retry-remediation', cls: 'manual', args: firstCommandId, skipReason: 'no active commands' },
-  { cmd: 'security cancel-remediation', cls: 'manual', args: firstCommandId, skipReason: 'no active commands' },
+  {
+    cmd: 'security analyze',
+    cls: 'manual',
+    args: firstSecurityRepoId,
+    skipReason: 'no security repos',
+    note: 'starts a paid analysis',
+  },
+  {
+    cmd: 'security dismiss',
+    cls: 'manual',
+    args: firstFindingId,
+    skipReason: 'no findings',
+    note: 'dismisses a finding',
+  },
+  {
+    cmd: 'security remediate',
+    cls: 'manual',
+    args: firstFindingId,
+    skipReason: 'no findings',
+    note: 'may open real PRs',
+  },
+  {
+    cmd: 'security retry-remediation',
+    cls: 'manual',
+    args: firstCommandId,
+    skipReason: 'no active commands',
+  },
+  {
+    cmd: 'security cancel-remediation',
+    cls: 'manual',
+    args: firstCommandId,
+    skipReason: 'no active commands',
+  },
   { cmd: 'security enable', cls: 'manual' },
   { cmd: 'security disable', cls: 'manual' },
   { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
@@ -273,12 +342,18 @@ const COMMANDS: Cmd[] = [
 // no control-character literals appear in a regex — Sonar S6324).
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
-const ANSI = new RegExp(`${ESC}\\[[0-9;]*[a-zA-Z]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`, 'g')
+const ANSI = new RegExp(
+  `${ESC}\\[[0-9;]*[a-zA-Z]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`,
+  'g',
+)
 
 // PATH-resolved binaries trip Sonar S4036 — always spawn the current node binary.
 const NODE = process.execPath
 // Resolve tsdown's bin wherever the package manager placed it (hoisted or nested).
-const TSDOWN = join(dirname(createRequire(import.meta.url).resolve('tsdown/package.json')), 'dist/run.mjs')
+const TSDOWN = join(
+  dirname(createRequire(import.meta.url).resolve('tsdown/package.json')),
+  'dist/run.mjs',
+)
 
 function run(cmd: string, extra: string[]): { code: number; output: string } {
   const argv = cmd.split(' ').concat(extra)
@@ -336,7 +411,12 @@ async function main() {
       try {
         const resolved = await c.args(ctx)
         if (!resolved) {
-          rows.push({ cmd: c.cmd, cls: c.cls, status: 'SKIP', detail: c.skipReason ?? 'no fixture' })
+          rows.push({
+            cmd: c.cmd,
+            cls: c.cls,
+            status: 'SKIP',
+            detail: c.skipReason ?? 'no fixture',
+          })
           continue
         }
         extra = resolved
@@ -377,7 +457,9 @@ async function main() {
             ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
             : truncate(errLine ?? `exit ${code}`, 160),
     })
-    console.log(`${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`)
+    console.log(
+      `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
+    )
   }
 
   // Markdown matrix

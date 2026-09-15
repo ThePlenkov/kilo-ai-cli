@@ -102,7 +102,10 @@ export async function getUsageTimeseries(
 /** usageAnalytics.getBreakdown — metric split by a dimension. */
 export async function getUsageBreakdown(
   token: string,
-  filters: UsageAnalyticsFilters & { dimension: UsageDimension; metric: 'cost' | 'requests' | 'tokens' },
+  filters: UsageAnalyticsFilters & {
+    dimension: UsageDimension
+    metric: 'cost' | 'requests' | 'tokens'
+  },
 ): Promise<UsageAnalyticsBreakdownEntry[]> {
   const r = await trpcQuery('usageAnalytics.getBreakdown', token, BreakdownResultSchema, filters)
   return r.breakdown

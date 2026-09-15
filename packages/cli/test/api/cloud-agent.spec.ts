@@ -23,7 +23,14 @@ describe('cloud-agent API', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('getCloudAgentSession calls cloudAgentNext.getSession', async () => {
-    fetchMock.mockResolvedValue(mockResponse({ sessionId: 's1', status: 'active', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
+    fetchMock.mockResolvedValue(
+      mockResponse({
+        sessionId: 's1',
+        status: 'active',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-02',
+      }),
+    )
     const result = await getCloudAgentSession('tok', 's1')
     expect(result.sessionId).toBe('s1')
     const url = fetchMock.mock.calls[0]![0] as string
@@ -32,7 +39,9 @@ describe('cloud-agent API', () => {
 
   it('listGitHubRepositories unwraps { repositories } and passes forceRefresh', async () => {
     fetchMock.mockResolvedValue(
-      mockResponse({ repositories: [{ id: 1314103791, name: 'repo', fullName: 'user/repo', private: false }] }),
+      mockResponse({
+        repositories: [{ id: 1314103791, name: 'repo', fullName: 'user/repo', private: false }],
+      }),
     )
     const result = await listGitHubRepositories('tok', true)
     expect(result).toHaveLength(1)

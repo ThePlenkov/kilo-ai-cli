@@ -513,7 +513,14 @@ export type UsageMetric =
   | 'cacheHitRatio'
   | 'outputInputRatio'
 
-export type UsageDimension = 'feature' | 'model' | 'mode' | 'user' | 'provider' | 'project' | 'organization'
+export type UsageDimension =
+  | 'feature'
+  | 'model'
+  | 'mode'
+  | 'user'
+  | 'provider'
+  | 'project'
+  | 'organization'
 
 /** All fields the usageAnalytics.* procedures require (server-side zod). */
 export interface UsageAnalyticsFilters {
@@ -704,7 +711,13 @@ export interface SecurityAgentCommand {
 // Error Types
 // ============================================================================
 
-export type CloudTrpcErrorKind = 'network' | 'http' | 'protocol' | 'procedure' | 'schema' | 'unauthorized'
+export type CloudTrpcErrorKind =
+  | 'network'
+  | 'http'
+  | 'protocol'
+  | 'procedure'
+  | 'schema'
+  | 'unauthorized'
 
 export class CloudTrpcError extends Error {
   readonly kind: CloudTrpcErrorKind

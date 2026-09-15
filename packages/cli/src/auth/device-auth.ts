@@ -2,12 +2,8 @@
  * Device authorization flow (OAuth 2.0 Device Authorization Grant) for kilo.ai.
  */
 
-import type {
-  DeviceAuthInitiateResponse,
-  DeviceAuthPollResponse,
-  KiloAuth,
-} from '../api/types.ts'
 import { KILO_API_BASE, POLL_INTERVAL_MS, TOKEN_EXPIRATION_MS } from '../api/constants.ts'
+import type { DeviceAuthInitiateResponse, DeviceAuthPollResponse, KiloAuth } from '../api/types.ts'
 
 /** Result of a successful device auth flow. */
 export interface DeviceAuthResult {
@@ -20,9 +16,7 @@ export interface DeviceAuthResult {
  * Initiate device auth by calling POST /api/device-auth/codes.
  * Returns the code, verification URL and expiration time.
  */
-export async function initiateDeviceAuth(
-  baseUrl?: string,
-): Promise<DeviceAuthInitiateResponse> {
+export async function initiateDeviceAuth(baseUrl?: string): Promise<DeviceAuthInitiateResponse> {
   const base: string = baseUrl ?? KILO_API_BASE
   const response = await fetch(`${base}/api/device-auth/codes`, {
     method: 'POST',
@@ -73,14 +67,10 @@ function sleep(ms: number): Promise<void> {
  * Run the full device auth flow: initiate, poll until approved/denied/expired,
  * then return the resulting token and auth object.
  */
-export async function authenticateWithDeviceAuth(
-  baseUrl?: string,
-): Promise<DeviceAuthResult> {
+export async function authenticateWithDeviceAuth(baseUrl?: string): Promise<DeviceAuthResult> {
   const initiation = await initiateDeviceAuth(baseUrl)
 
-  console.log(
-    `To authorize, open ${initiation.verificationUrl} and enter code ${initiation.code}.`,
-  )
+  console.log(`To authorize, open ${initiation.verificationUrl} and enter code ${initiation.code}.`)
 
   let poll: DeviceAuthPollResponse = { status: 'pending' }
   while (poll.status === 'pending') {

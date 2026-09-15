@@ -1,6 +1,6 @@
-import React from 'react'
 import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
+import React from 'react'
 
 import {
   getCreditTransactions,
@@ -59,11 +59,16 @@ export function OrgDetailScreen({ ctx, focused }: ScreenProps) {
             onSelect={(item) => ctx.navigate(item.value, { id, name: name ?? '' })}
           />
         ) : (
-          ORG_SECTIONS.map((s) => <Text key={s.value} dimColor>  {s.label}</Text>)
+          ORG_SECTIONS.map((s) => (
+            <Text key={s.value} dimColor>
+              {' '}
+              {s.label}
+            </Text>
+          ))
         )}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>↑↓ choose section  Enter=open  Esc=back</Text>
+        <Text dimColor>↑↓ choose section Enter=open Esc=back</Text>
       </Box>
       <EscBack focused={focused} onBack={ctx.goBack} />
     </Box>
@@ -72,9 +77,12 @@ export function OrgDetailScreen({ ctx, focused }: ScreenProps) {
 
 function EscBack({ focused, onBack }: { focused: boolean; onBack: () => void }) {
   // SelectInput consumes arrows+enter; we only need Esc here.
-  useInput((_i, key) => {
-    if (key.escape) onBack()
-  }, { isActive: focused })
+  useInput(
+    (_i, key) => {
+      if (key.escape) onBack()
+    },
+    { isActive: focused },
+  )
   return null
 }
 
@@ -118,7 +126,12 @@ export function OrgCreditsScreen({ ctx, focused }: ScreenProps) {
       fetch={() => getCreditTransactions(ctx.token, orgId(ctx))}
       columns={[
         { label: 'Date', width: 22, value: (t: { createdAt: string }) => t.createdAt },
-        { label: 'Amount', width: 10, align: 'right', value: (t: { amount: number }) => String(t.amount) },
+        {
+          label: 'Amount',
+          width: 10,
+          align: 'right',
+          value: (t: { amount: number }) => String(t.amount),
+        },
         { label: 'Type', width: 16, value: (t: { type: string }) => t.type },
         { label: 'Description', width: 40, value: (t: { description: string }) => t.description },
       ]}
@@ -145,7 +158,12 @@ export function OrgInvoicesScreen({ ctx, focused }: ScreenProps) {
       fetch={() => getOrganizationInvoices(ctx.token, orgId(ctx))}
       columns={[
         { label: 'Date', width: 14, value: (i: { date: string }) => i.date },
-        { label: 'Amount', width: 10, align: 'right', value: (i: { amount: number }) => `$${i.amount.toFixed(2)}` },
+        {
+          label: 'Amount',
+          width: 10,
+          align: 'right',
+          value: (i: { amount: number }) => `$${i.amount.toFixed(2)}`,
+        },
         {
           label: 'Status',
           width: 10,

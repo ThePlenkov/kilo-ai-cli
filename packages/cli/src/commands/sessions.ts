@@ -17,11 +17,7 @@ export const sessionsListCommand = defineCommand({
   async run({ args }) {
     const { token, organizationId } = await getToken()
     const limit = args.limit ? Number.parseInt(args.limit, 10) : 20
-    const result = await fetchCloudSessions(
-      token,
-      { limit, gitUrl: args.gitUrl },
-      organizationId,
-    )
+    const result = await fetchCloudSessions(token, { limit, gitUrl: args.gitUrl }, organizationId)
     if (result.cliSessions.length === 0) {
       console.log('No sessions found.')
       return

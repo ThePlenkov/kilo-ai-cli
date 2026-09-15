@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import React, { useEffect, useState } from 'react'
 
 import { getFinding } from '../../api/security-agent.ts'
 import type { SecurityFinding } from '../../api/types.ts'
@@ -40,15 +40,18 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     load()
   }, [token, findingId])
 
-  useInput((_input, key) => {
-    if (key.escape) onBack()
-  }, { isActive: focused })
+  useInput(
+    (_input, key) => {
+      if (key.escape) onBack()
+    },
+    { isActive: focused },
+  )
 
   if (loading) {
     return (
       <Box>
         <Text color="yellow">Loading finding details…</Text>
-        <Text dimColor>  (Esc to go back)</Text>
+        <Text dimColor>{'  (Esc to go back)'}</Text>
       </Box>
     )
   }
@@ -81,14 +84,17 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const remediationCap = finding.remediationCapability ?? finding.remediation_capability
   const created = finding.createdAt ?? finding.created_at
   const updated = finding.updatedAt ?? finding.updated_at
-  const statusColor = finding.status === 'open' ? 'red' : finding.status === 'fixed' ? 'green' : 'gray'
+  const statusColor =
+    finding.status === 'open' ? 'red' : finding.status === 'fixed' ? 'green' : 'gray'
 
   return (
     <Box flexDirection="column">
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold color={color}>{sev.toUpperCase()}</Text>
-        <Text>  </Text>
+        <Text bold color={color}>
+          {sev.toUpperCase()}
+        </Text>
+        <Text> </Text>
         <Text bold>{finding.title}</Text>
       </Box>
 
@@ -103,8 +109,16 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
 
       {/* Package info */}
       {pkg ? (
-        <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Text bold color="cyan">Package</Text>
+        <Box
+          flexDirection="column"
+          marginBottom={1}
+          borderStyle="single"
+          borderColor="cyan"
+          paddingX={1}
+        >
+          <Text bold color="cyan">
+            Package
+          </Text>
           <Field label="Name" value={pkg} />
           {ecosystem ? <Field label="Ecosystem" value={ecosystem} /> : null}
           {vuln ? <Field label="Vulnerable" value={vuln} color="red" /> : null}
@@ -118,16 +132,36 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       {/* SLA */}
       {sla ? (
         <Box marginBottom={1}>
-          <Text bold color="yellow">! SLA due: </Text>
+          <Text bold color="yellow">
+            ! SLA due:{' '}
+          </Text>
           <Text>{sla}</Text>
         </Box>
       ) : null}
 
       {/* Analysis section */}
-      <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="magenta" paddingX={1}>
-        <Text bold color="magenta">Analysis</Text>
+      <Box
+        flexDirection="column"
+        marginBottom={1}
+        borderStyle="single"
+        borderColor="magenta"
+        paddingX={1}
+      >
+        <Text bold color="magenta">
+          Analysis
+        </Text>
         {analysisStatus ? (
-          <Field label="Status" value={analysisStatus} color={analysisStatus === 'completed' ? 'green' : analysisStatus === 'failed' ? 'red' : 'yellow'} />
+          <Field
+            label="Status"
+            value={analysisStatus}
+            color={
+              analysisStatus === 'completed'
+                ? 'green'
+                : analysisStatus === 'failed'
+                  ? 'red'
+                  : 'yellow'
+            }
+          />
         ) : (
           <Text dimColor>No analysis run yet</Text>
         )}
@@ -135,8 +169,16 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       </Box>
 
       {/* Remediation section */}
-      <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor="green" paddingX={1}>
-        <Text bold color="green">Remediation</Text>
+      <Box
+        flexDirection="column"
+        marginBottom={1}
+        borderStyle="single"
+        borderColor="green"
+        paddingX={1}
+      >
+        <Text bold color="green">
+          Remediation
+        </Text>
         {remediation ? (
           <Field label="Summary" value={remediation} />
         ) : (
@@ -160,11 +202,25 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   )
 }
 
-function Field({ label, value, color, dim }: { label: string; value: string; color?: string; dim?: boolean }) {
+function Field({
+  label,
+  value,
+  color,
+  dim,
+}: {
+  label: string
+  value: string
+  color?: string
+  dim?: boolean
+}) {
   return (
     <Box>
-      <Box width={14}><Text dimColor>{label}:</Text></Box>
-      <Text color={color} dimColor={dim}>{value}</Text>
+      <Box width={14}>
+        <Text dimColor>{label}:</Text>
+      </Box>
+      <Text color={color} dimColor={dim}>
+        {value}
+      </Text>
     </Box>
   )
 }
@@ -182,21 +238,27 @@ function RemediationCapability({ cap }: { cap: Record<string, unknown> }) {
       <Text bold>Capabilities:</Text>
       {canStart !== undefined ? (
         <Box>
-          <Box width={14}><Text dimColor>canStart:</Text></Box>
+          <Box width={14}>
+            <Text dimColor>canStart:</Text>
+          </Box>
           <Text color={canStart ? 'green' : 'gray'}>{String(canStart)}</Text>
           {startReason ? <Text dimColor> ({String(startReason)})</Text> : null}
         </Box>
       ) : null}
       {canRetry !== undefined ? (
         <Box>
-          <Box width={14}><Text dimColor>canRetry:</Text></Box>
+          <Box width={14}>
+            <Text dimColor>canRetry:</Text>
+          </Box>
           <Text color={canRetry ? 'green' : 'gray'}>{String(canRetry)}</Text>
           {retryReason ? <Text dimColor> ({String(retryReason)})</Text> : null}
         </Box>
       ) : null}
       {canCancel !== undefined ? (
         <Box>
-          <Box width={14}><Text dimColor>canCancel:</Text></Box>
+          <Box width={14}>
+            <Text dimColor>canCancel:</Text>
+          </Box>
           <Text color={canCancel ? 'green' : 'gray'}>{String(canCancel)}</Text>
           {cancelReason ? <Text dimColor> ({String(cancelReason)})</Text> : null}
         </Box>

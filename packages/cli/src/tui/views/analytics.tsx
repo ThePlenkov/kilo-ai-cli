@@ -1,19 +1,18 @@
-import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-
+import React, { useState } from 'react'
+import type {
+  UsageAnalyticsBreakdownEntry,
+  UsageAnalyticsFilters,
+  UsageAnalyticsTableRow,
+} from '../../api/types.ts'
 import {
   getUsageBreakdown,
   getUsageSummary,
   getUsageTable,
   getUsageTimeseries,
 } from '../../api/usage-analytics.ts'
-import type {
-  UsageAnalyticsBreakdownEntry,
-  UsageAnalyticsFilters,
-  UsageAnalyticsTableRow,
-} from '../../api/types.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
 import { QueryListScreen, QueryRecordScreen } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenCtx, ScreenProps } from '../types.ts'
 
 /** Default filter: last 30 days, daily granularity (server requires all fields). */
@@ -65,13 +64,17 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
   )
   const [offset, setOffset] = useState(0)
   const rows = data ?? []
-  useInput((_i, key) => {
-    if (key.escape) ctx.goBack()
-    if (key.upArrow) setOffset((o) => Math.max(0, o - 1))
-    if (key.downArrow) setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + 1))
-    if (key.pageDown) setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + maxVisible))
-    if (key.pageUp) setOffset((o) => Math.max(0, o - maxVisible))
-  }, { isActive: focused })
+  useInput(
+    (_i, key) => {
+      if (key.escape) ctx.goBack()
+      if (key.upArrow) setOffset((o) => Math.max(0, o - 1))
+      if (key.downArrow) setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + 1))
+      if (key.pageDown)
+        setOffset((o) => Math.min(Math.max(0, rows.length - maxVisible), o + maxVisible))
+      if (key.pageUp) setOffset((o) => Math.max(0, o - maxVisible))
+    },
+    { isActive: focused },
+  )
 
   if (loading && !data) return <Text color="yellow">Loading timeseries…</Text>
   if (error) return <Text color="red">Error: {error}</Text>
@@ -86,7 +89,7 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
       <Text bold dimColor>
         Cost per day (last 30 days)
       </Text>
-      {off > 0 ? <Text dimColor>  ↑ {off} more</Text> : null}
+      {off > 0 ? <Text dimColor> ↑ {off} more</Text> : null}
       {visible.map((p, i) => {
         const len = Math.max(1, Math.round((p.value / max) * width))
         return (
@@ -100,10 +103,12 @@ export function AnalyticsTimeseriesScreen({ ctx, focused }: ScreenProps) {
         )
       })}
       {off + maxVisible < rows.length ? (
-        <Text dimColor>  ↓ {rows.length - off - maxVisible} more</Text>
+        <Text dimColor> ↓ {rows.length - off - maxVisible} more</Text>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>[{off + 1}-{Math.min(off + maxVisible, rows.length)}/{rows.length}] ↑↓ scroll  Esc=back</Text>
+        <Text dimColor>
+          [{off + 1}-{Math.min(off + maxVisible, rows.length)}/{rows.length}] ↑↓ scroll Esc=back
+        </Text>
       </Box>
     </Box>
   )
@@ -123,7 +128,12 @@ export function AnalyticsBreakdownScreen({ ctx, focused }: ScreenProps) {
       }
       columns={[
         { label: 'Model', width: modelWidth, value: (e) => e.label },
-        { label: 'Cost', width: 12, align: 'right', value: (e) => `$${(e.value / 1e6).toFixed(4)}` },
+        {
+          label: 'Cost',
+          width: 12,
+          align: 'right',
+          value: (e) => `$${(e.value / 1e6).toFixed(4)}`,
+        },
         {
           label: 'Share',
           width: barWidth + 10,
@@ -147,15 +157,30 @@ export function AnalyticsTableScreen({ ctx, focused }: ScreenProps) {
   // On narrow panes drop the trailing Tokens/Err columns so the table fits.
   const narrow = avail < 66
   const modelWidth = Math.max(10, avail - (narrow ? 36 : 54))
-  const columns: { label: string; width: number; align?: 'left' | 'right'; value: (r: UsageAnalyticsTableRow) => string }[] = [
+  const columns: {
+    label: string
+    width: number
+    align?: 'left' | 'right'
+    value: (r: UsageAnalyticsTableRow) => string
+  }[] = [
     { label: 'Date', width: 10, value: (r) => r.datetime.slice(0, 10) },
     { label: 'Model', width: modelWidth, value: (r) => r.dimensions.model ?? '-' },
-    { label: 'Cost', width: 10, align: 'right', value: (r) => `$${(r.costMicrodollars / 1e6).toFixed(4)}` },
+    {
+      label: 'Cost',
+      width: 10,
+      align: 'right',
+      value: (r) => `$${(r.costMicrodollars / 1e6).toFixed(4)}`,
+    },
     { label: 'Req', width: 6, align: 'right', value: (r) => String(r.requestCount) },
   ]
   if (!narrow) {
     columns.push(
-      { label: 'Tokens', width: 12, align: 'right', value: (r) => String(r.inputTokens + r.outputTokens) },
+      {
+        label: 'Tokens',
+        width: 12,
+        align: 'right',
+        value: (r) => String(r.inputTokens + r.outputTokens),
+      },
       { label: 'Err', width: 5, align: 'right', value: (r) => String(r.errorCount) },
     )
   }

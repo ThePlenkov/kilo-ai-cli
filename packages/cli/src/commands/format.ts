@@ -23,6 +23,14 @@ export function sanitize(s: string): string {
   return s.replace(ANSI_ALL, '').replace(CTRL, '')
 }
 
+/** Like {@link sanitize} but preserves line breaks — each line is sanitized. */
+export function sanitizeLines(s: string): string {
+  return s
+    .split('\n')
+    .map((line) => sanitize(line))
+    .join('\n')
+}
+
 /** Pad or truncate a string to a fixed width. */
 function pad(str: string, width: number): string {
   if (str.length > width) return str.slice(0, width - 1) + '…'
@@ -54,7 +62,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
 
   // Header
   const header = columns
-    .map((c) => c.align === 'right' ? padRight(c.label, c.width) : pad(c.label, c.width))
+    .map((c) => (c.align === 'right' ? padRight(c.label, c.width) : pad(c.label, c.width)))
     .join('  ')
   console.log(header)
   console.log(columns.map((c) => '─'.repeat(c.width)).join('  '))
@@ -75,7 +83,10 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
 }
 
 /** Print a single record as key-value pairs. */
-export function printRecord(record: Record<string, unknown>, labels?: Record<string, string>): void {
+export function printRecord(
+  record: Record<string, unknown>,
+  labels?: Record<string, string>,
+): void {
   for (const [key, value] of Object.entries(record)) {
     if (value === undefined || value === null) continue
     const label = labels?.[key] ?? key

@@ -1,9 +1,9 @@
-import React from 'react'
 import { Box, Text, useInput } from 'ink'
+import React from 'react'
 
 import { fetchProfileWithBalance } from '../../api/profile.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
 import { RecordView } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 /** Dashboard → Your Profile: profile record + balance + organizations. */
@@ -32,7 +32,7 @@ export function ProfileScreen({ ctx, focused }: ScreenProps) {
         <Text dimColor>r=retry Esc=back</Text>
       </Box>
     )
-    }
+  }
   if (!data) return null
 
   const { profile, balance } = data
@@ -57,7 +57,9 @@ export function ProfileScreen({ ctx, focused }: ScreenProps) {
             </Text>
           ))}
           {profile.organizations.length > maxOrgs ? (
-            <Text dimColor>{'  '}… {profile.organizations.length - maxOrgs} more</Text>
+            <Text dimColor>
+              {'  '}… {profile.organizations.length - maxOrgs} more
+            </Text>
           ) : null}
         </Box>
       ) : (

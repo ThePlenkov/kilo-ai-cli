@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { KiloAuth } from '../../src/api/types.ts'
 import { UnauthorizedError } from '../../src/api/types.ts'

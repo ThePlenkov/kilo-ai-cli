@@ -8,7 +8,11 @@ import {
 } from '../../src/api/usage-analytics.ts'
 import { mockResponse, setupFetchMock } from './helpers.ts'
 
-const FILTERS = { startDate: '2024-01-01T00:00:00Z', endDate: '2024-01-31T00:00:00Z', granularity: 'day' as const }
+const FILTERS = {
+  startDate: '2024-01-01T00:00:00Z',
+  endDate: '2024-01-31T00:00:00Z',
+  granularity: 'day' as const,
+}
 
 const SUMMARY = {
   costMicrodollars: 10346942,
@@ -66,7 +70,11 @@ describe('usage-analytics API', () => {
     fetchMock.mockResolvedValue(
       mockResponse({ breakdown: [{ key: 'gpt-4', label: 'gpt-4', value: 80, percentage: 80 }] }),
     )
-    const result = await getUsageBreakdown('tok', { ...FILTERS, dimension: 'model', metric: 'cost' })
+    const result = await getUsageBreakdown('tok', {
+      ...FILTERS,
+      dimension: 'model',
+      metric: 'cost',
+    })
     expect(result[0]!.label).toBe('gpt-4')
     expect(fetchMock.mock.calls[0]![0]).toContain('usageAnalytics.getBreakdown')
   })

@@ -40,6 +40,9 @@ export async function checkAppBuilderEligibility(token: string): Promise<AppBuil
 // --- Mutations ---
 
 /** appBuilder.deployProject */
-export async function deployAppBuilderProject(token: string, projectId: string): Promise<AppBuilderProject> {
+export async function deployAppBuilderProject(
+  token: string,
+  projectId: string,
+): Promise<AppBuilderProject> {
   return trpcMutate('appBuilder.deployProject', token, ProjectSchema, { projectId })
 }

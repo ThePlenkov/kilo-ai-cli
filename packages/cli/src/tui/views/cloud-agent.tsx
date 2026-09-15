@@ -1,15 +1,23 @@
-import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
+import React, { useState } from 'react'
 
-import { getCloudAgentSession, listGitHubRepositories, listGitLabRepositories } from '../../api/cloud-agent.ts'
+import {
+  getCloudAgentSession,
+  listGitHubRepositories,
+  listGitLabRepositories,
+} from '../../api/cloud-agent.ts'
 import type { CloudAgentRepository, CloudAgentSession } from '../../api/types.ts'
-import { useQuery } from '../hooks.ts'
 import { QueryListScreen, RecordView } from '../components.tsx'
+import { useQuery } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → Cloud Agent repos (GitHub or GitLab). */
-export function CloudAgentReposScreen({ ctx, focused, provider }: ScreenProps & { provider: 'github' | 'gitlab' }) {
+export function CloudAgentReposScreen({
+  ctx,
+  focused,
+  provider,
+}: ScreenProps & { provider: 'github' | 'gitlab' }) {
   return (
     <QueryListScreen<CloudAgentRepository>
       focused={focused}
@@ -76,9 +84,12 @@ function CloudAgentSessionRecord({ ctx, focused, sessionId }: ScreenProps & { se
     () => getCloudAgentSession(ctx.token, sessionId),
     [ctx.token, sessionId],
   )
-  useInput((_i, key) => {
-    if (key.escape) ctx.goBack()
-  }, { isActive: focused })
+  useInput(
+    (_i, key) => {
+      if (key.escape) ctx.goBack()
+    },
+    { isActive: focused },
+  )
 
   if (loading && !data) return <Text color="yellow">Loading session…</Text>
   if (error) {

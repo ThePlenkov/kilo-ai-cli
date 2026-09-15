@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { KILO_API_BASE } from '../../src/api/constants.ts'
 import { trpcQuery } from '../../src/api/client.ts'
+import { KILO_API_BASE } from '../../src/api/constants.ts'
 
 interface MockResponse {
   ok: boolean
@@ -11,7 +11,10 @@ interface MockResponse {
   body?: unknown
 }
 
-function mockResponse(body: unknown, init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {}): MockResponse {
+function mockResponse(
+  body: unknown,
+  init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {},
+): MockResponse {
   const ok = init.ok ?? true
   const status = init.status ?? 200
   const headers = init.headers ?? {}
@@ -38,18 +41,14 @@ describe('trpcQuery', () => {
   })
 
   it('returns validated data on a successful query', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { hello: 'world' } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { hello: 'world' } } } }))
     const schema = z.object({ hello: z.string() })
     const result = await trpcQuery('test.proc', 'tok', schema)
     expect(result).toEqual({ hello: 'world' })
   })
 
   it('returns validated data when envelope uses bare data (no json wrapper)', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { hello: 'world' } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { hello: 'world' } } }))
     const schema = z.object({ hello: z.string() })
     const result = await trpcQuery('test.proc', 'tok', schema)
     expect(result).toEqual({ hello: 'world' })
@@ -89,9 +88,7 @@ describe('trpcQuery', () => {
   })
 
   it('throws CloudTrpcError("schema") when data fails schema validation', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { hello: 123 } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { hello: 123 } } } }))
     const schema = z.object({ hello: z.string() })
     await expect(trpcQuery('test.proc', 'tok', schema)).rejects.toMatchObject({
       name: 'CloudTrpcError',
@@ -109,9 +106,7 @@ describe('trpcQuery', () => {
   })
 
   it('serializes input as a query parameter', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
     await trpcQuery('test.proc', 'tok', schema, { foo: 'bar', n: 1 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -122,9 +117,7 @@ describe('trpcQuery', () => {
   })
 
   it('does not add input query param when input is undefined', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
     await trpcQuery('test.proc', 'tok', schema)
     const url = fetchMock.mock.calls[0]![0] as string
@@ -132,19 +125,17 @@ describe('trpcQuery', () => {
   })
 
   it('builds the URL from baseUrl override', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
-    await trpcQuery('test.proc', 'tok', schema, undefined, { baseUrl: 'https://custom.example.com' })
+    await trpcQuery('test.proc', 'tok', schema, undefined, {
+      baseUrl: 'https://custom.example.com',
+    })
     const url = fetchMock.mock.calls[0]![0] as string
     expect(url).toBe(`https://custom.example.com/api/trpc/test.proc`)
   })
 
   it('defaults to KILO_API_BASE', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
     await trpcQuery('test.proc', 'tok', schema)
     const url = fetchMock.mock.calls[0]![0] as string
@@ -152,9 +143,7 @@ describe('trpcQuery', () => {
   })
 
   it('passes organizationId as a header', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
     await trpcQuery('test.proc', 'tok', schema, undefined, { organizationId: 'org-123' })
     const init = fetchMock.mock.calls[0]![1] as { headers: Record<string, string> }
@@ -162,9 +151,7 @@ describe('trpcQuery', () => {
   })
 
   it('sets Authorization header from token', async () => {
-    fetchMock.mockResolvedValue(
-      mockResponse({ result: { data: { json: { ok: true } } } }),
-    )
+    fetchMock.mockResolvedValue(mockResponse({ result: { data: { json: { ok: true } } } }))
     const schema = z.object({ ok: z.boolean() })
     await trpcQuery('test.proc', 'tok', schema)
     const init = fetchMock.mock.calls[0]![1] as { headers: Record<string, string> }

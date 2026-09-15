@@ -1,11 +1,11 @@
-import React from 'react'
 import { Box, Text, useInput } from 'ink'
+import React from 'react'
 
 import { getCodeReview, listCodeReviews, listCodeReviewsForUser } from '../../api/code-reviews.ts'
 import type { CodeReview } from '../../api/types.ts'
-import { useQuery, useTermSize } from '../hooks.ts'
-import { DataTable, QueryListScreen, RecordView } from '../components.tsx'
 import type { Column } from '../components.tsx'
+import { DataTable, QueryListScreen, RecordView } from '../components.tsx'
+import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -44,9 +44,7 @@ export function ReviewsScreen({ ctx, focused }: ScreenProps) {
           : listCodeReviewsForUser(ctx.token)
       }
       columns={columns}
-      banner={() => (
-        <Text dimColor>{ctx.organizationId ? 'org reviews' : 'personal reviews'}</Text>
-      )}
+      banner={() => <Text dimColor>{ctx.organizationId ? 'org reviews' : 'personal reviews'}</Text>}
       onSelect={(r) => ctx.navigate('review-detail', { id: r.id })}
       onBack={ctx.goBack}
       emptyText="No code reviews."
@@ -64,7 +62,10 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
   const avail = Math.max(30, termColumns - 34)
   const narrowAttempts = avail < 95
   const id = ctx.route.params.id ?? ''
-  const { data, error, loading, reload } = useQuery(() => getCodeReview(ctx.token, id), [ctx.token, id])
+  const { data, error, loading, reload } = useQuery(
+    () => getCodeReview(ctx.token, id),
+    [ctx.token, id],
+  )
 
   useInput(
     (input, key) => {
@@ -79,7 +80,7 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
     return (
       <Box flexDirection="column">
         <Text color="red">Error: {error}</Text>
-        <Text dimColor>r=retry  Esc=back</Text>
+        <Text dimColor>r=retry Esc=back</Text>
       </Box>
     )
   }
@@ -103,7 +104,9 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
           started: review.started_at ?? '-',
           completed: review.completed_at ?? '-',
           error: review.error_message ?? undefined,
-          tokens: tokenUsage ? `in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}` : '-',
+          tokens: tokenUsage
+            ? `in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`
+            : '-',
         }}
       />
       {attempts.length > 0 ? (
@@ -114,12 +117,25 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
             rows={attempts.slice(0, maxAttempts)}
             columns={[
               { label: '#', width: 3, align: 'right', value: (a) => String(a.attempt_number) },
-              { label: 'Status', width: 12, value: (a) => a.status, color: (a) => STATUS_COLORS[a.status] },
+              {
+                label: 'Status',
+                width: 12,
+                value: (a) => a.status,
+                color: (a) => STATUS_COLORS[a.status],
+              },
               ...(narrowAttempts
                 ? []
                 : [
-                    { label: 'Started', width: 20, value: (a: (typeof attempts)[number]) => a.started_at ?? '-' },
-                    { label: 'Completed', width: 20, value: (a: (typeof attempts)[number]) => a.completed_at ?? '-' },
+                    {
+                      label: 'Started',
+                      width: 20,
+                      value: (a: (typeof attempts)[number]) => a.started_at ?? '-',
+                    },
+                    {
+                      label: 'Completed',
+                      width: 20,
+                      value: (a: (typeof attempts)[number]) => a.completed_at ?? '-',
+                    },
                   ]),
               {
                 label: 'Error',
@@ -129,12 +145,12 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
             ]}
           />
           {attempts.length > maxAttempts ? (
-            <Text dimColor>  … {attempts.length - maxAttempts} more attempts</Text>
+            <Text dimColor> … {attempts.length - maxAttempts} more attempts</Text>
           ) : null}
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <Text dimColor>r=refresh  Esc=back</Text>
+        <Text dimColor>r=refresh Esc=back</Text>
       </Box>
     </Box>
   )

@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import React, { useCallback, useMemo, useState } from 'react'
 
 import { Sidebar, type SidebarItem } from './components.tsx'
 import { useTermSize } from './hooks.ts'
@@ -19,7 +19,12 @@ interface NavEntry {
 
 export function App({ token, organizationId }: AppProps) {
   const navScreens = useMemo<NavEntry[]>(
-    () => SCREENS.filter((s) => !s.hidden).map((s) => ({ name: s.name, group: s.group, title: s.title })),
+    () =>
+      SCREENS.filter((s) => !s.hidden).map((s) => ({
+        name: s.name,
+        group: s.group,
+        title: s.title,
+      })),
     [],
   )
   const groups = useMemo(() => {
@@ -53,13 +58,10 @@ export function App({ token, organizationId }: AppProps) {
     setFocus(nextLen > 1 ? 'content' : 'nav')
   }, [stack.length])
 
-  const select = useCallback(
-    (name: string) => {
-      setStack([{ name, params: {} }])
-      setFocus('content')
-    },
-    [],
-  )
+  const select = useCallback((name: string) => {
+    setStack([{ name, params: {} }])
+    setFocus('content')
+  }, [])
 
   useInput(
     (input, key) => {
@@ -90,12 +92,18 @@ export function App({ token, organizationId }: AppProps) {
           Kilo
         </Text>
         <Text dimColor>
-          {'  '}cloud console{organizationId ? ` · org ${organizationId.slice(0, 8)}…` : ' · personal'}
+          {'  '}cloud console
+          {organizationId ? ` · org ${organizationId.slice(0, 8)}…` : ' · personal'}
           {stack.length > 1 ? ` · ${stack.map((r) => r.name).join(' › ')}` : ''}
         </Text>
       </Box>
       <Box flexDirection="row" height={bodyHeight} overflow="hidden">
-        <Sidebar groups={sidebarGroups} selected={navIdx} focused={focus === 'nav'} height={Math.max(3, bodyHeight - 2)} />
+        <Sidebar
+          groups={sidebarGroups}
+          selected={navIdx}
+          focused={focus === 'nav'}
+          height={Math.max(3, bodyHeight - 2)}
+        />
         <Box flexDirection="column" flexGrow={1} paddingLeft={2} overflow="hidden">
           <Box marginBottom={1}>
             <Text bold>{screen.title}</Text>

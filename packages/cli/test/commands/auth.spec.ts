@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { KiloAuth } from '../../src/api/types.ts'
 
@@ -59,9 +59,7 @@ describe('loginCommand', () => {
 
     expect(mockAuthenticateWithDeviceAuth).toHaveBeenCalled()
     expect(mockStore.set).toHaveBeenCalledWith(auth)
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining('user@example.com'),
-    )
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('user@example.com'))
   })
 })
 

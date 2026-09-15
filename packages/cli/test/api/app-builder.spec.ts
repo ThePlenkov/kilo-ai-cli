@@ -16,7 +16,17 @@ describe('app-builder API', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('listAppBuilderProjects calls appBuilder.listProjects', async () => {
-    fetchMock.mockResolvedValue(mockResponse([{ id: 'p1', name: 'My App', status: 'deployed', createdAt: '2024-01-01', updatedAt: '2024-01-02' }]))
+    fetchMock.mockResolvedValue(
+      mockResponse([
+        {
+          id: 'p1',
+          name: 'My App',
+          status: 'deployed',
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-02',
+        },
+      ]),
+    )
     const result = await listAppBuilderProjects('tok')
     expect(result).toHaveLength(1)
     expect(fetchMock.mock.calls[0]![0]).toContain('appBuilder.listProjects')
@@ -32,7 +42,15 @@ describe('app-builder API', () => {
   })
 
   it('deployAppBuilderProject posts with projectId', async () => {
-    fetchMock.mockResolvedValue(mockMutationResponse({ id: 'p1', name: 'My App', status: 'deploying', createdAt: '2024-01-01', updatedAt: '2024-01-02' }))
+    fetchMock.mockResolvedValue(
+      mockMutationResponse({
+        id: 'p1',
+        name: 'My App',
+        status: 'deploying',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-02',
+      }),
+    )
     const result = await deployAppBuilderProject('tok', 'p1')
     expect(result.status).toBe('deploying')
     const init = fetchMock.mock.calls[0]![1] as { body: string }
