@@ -142,6 +142,8 @@ let savedAuth: KiloAuth | null = null
 let orgRenameTarget: { id: string; name: string } | null = null
 /** Original enabled flags for the review-agent toggle tests. */
 const toggleRestore: Record<string, boolean> = {}
+/** Org id captured by the org toggle resolver — `post` must restore that exact org, not re-resolve. */
+let toggleOrgId: string | null = null
 /** Original security-agent enabled flag. */
 let securityWasEnabled: boolean | null = null
 
@@ -317,12 +319,13 @@ const COMMANDS: Cmd[] = [
       if (!org) return null
       const cfg = await getOrgReviewAgentConfig(c.token, org[0]!, 'github')
       toggleRestore[`org:${org[0]}:github`] = cfg.isEnabled
+      toggleOrgId = org[0]!
       return [...org, 'github', '--enabled', String(!cfg.isEnabled)]
     },
     post: async (c) => {
-      const org = await firstOrgId(c)
-      const orig = org ? toggleRestore[`org:${org[0]}:github`] : undefined
-      if (org && orig !== undefined) await toggleReviewAgent(c.token, org[0]!, 'github', orig)
+      const orig = toggleOrgId ? toggleRestore[`org:${toggleOrgId}:github`] : undefined
+      if (toggleOrgId && orig !== undefined)
+        await toggleReviewAgent(c.token, toggleOrgId, 'github', orig)
     },
     skipReason: 'no orgs on account',
     note: 'org: flips agent state, then restores it',
