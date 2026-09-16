@@ -71,6 +71,7 @@ export function colorAnalysis(s: string): string {
  * Uses ST terminator (\x1b\\) which is the standard.
  * Shows just the repo name (short), links to the full GitHub URL.
  * Sanitizes control characters to prevent terminal injection.
+ * Falls back to plain text if the terminal doesn't support OSC 8.
  */
 export function repoLink(repoFullName: string | undefined, label?: string): string {
   // Strip control characters (C0 and C1) to prevent terminal injection
@@ -87,9 +88,40 @@ export function repoLink(repoFullName: string | undefined, label?: string): stri
   if (segments.some((s) => s === '.' || s === '..' || s === '')) return safeLabel || safe || '-'
   // URI-encode each path segment separately (preserve / in owner/repo)
   const url = `https://github.com/${segments.map(encodeURIComponent).join('/')}`
+  // Check if terminal supports OSC 8 hyperlinks
+  if (!supportsHyperlinks()) return safeLabel ?? safe
   // OSC 8 hyperlink: ESC ] 8 ; ; <url> ESC \ <label> ESC ] 8 ; ; ESC \
   const esc = String.fromCharCode(27)
   return `${esc}]8;;${url}${esc}\\${safeLabel ?? safe}${esc}]8;;${esc}\\`
+}
+
+/**
+ * Detect whether the terminal supports OSC 8 hyperlinks.
+ * Returns false for non-TTY or known-unsupported terminals.
+ */
+let _hyperlinkSupport: boolean | null = null
+function supportsHyperlinks(): boolean {
+  if (_hyperlinkSupport !== null) return _hyperlinkSupport
+  const term = process.env.TERM_PROGRAM ?? ''
+  const termVersion = process.env.TERM_PROGRAM_VERSION ?? ''
+  // Non-TTY (piped) — no hyperlinks
+  if (!process.stdout.isTTY) {
+    _hyperlinkSupport = false
+    return false
+  }
+  // Known supporters: iTerm2 (3.x+), WezTerm, Ghostty, Kitty, Windows Terminal
+  const supporters = ['iTerm.app', 'WezTerm', 'ghostty', 'kitty', 'vscode']
+  if (supporters.includes(term)) {
+    _hyperlinkSupport = true
+    return true
+  }
+  // iTerm needs version >= 3.0
+  if (term === 'iTerm.app' && Number.parseInt(termVersion, 10) >= 3) {
+    _hyperlinkSupport = true
+    return true
+  }
+  _hyperlinkSupport = false
+  return false
 }
 
 /** Get the full GitHub URL for a repo full name. */
