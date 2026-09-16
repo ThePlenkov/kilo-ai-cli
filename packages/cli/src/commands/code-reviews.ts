@@ -35,7 +35,9 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
       platform: r.platform ?? '-',
       repo: r.repo_full_name ?? '-',
       pr: r.pr_number ?? '-',
+      author: r.pr_author ?? '-',
       model: r.model ?? '-',
+      cost: r.total_cost_musd != null ? `$${(r.total_cost_musd / 1000).toFixed(3)}` : '-',
     })),
     [
       { key: 'id', label: 'ID', width: 36 },
@@ -44,7 +46,9 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
       { key: 'platform', label: 'Platform', width: 8 },
       { key: 'repo', label: 'Repo', width: 28 },
       { key: 'pr', label: 'PR', width: 6, align: 'right' },
+      { key: 'author', label: 'Author', width: 16 },
       { key: 'model', label: 'Model', width: 24 },
+      { key: 'cost', label: 'Cost', width: 10, align: 'right' },
     ],
   )
 }
@@ -58,8 +62,15 @@ function printAgentConfig(config: ReviewAgentConfig, platform: string, scope: st
   if (config.gateThreshold) console.log(`Gate threshold: ${sanitize(config.gateThreshold)}`)
   if (config.focusAreas?.length)
     console.log(`Focus areas: ${config.focusAreas.map(sanitize).join(', ')}`)
+  if (config.customInstructions) console.log(`Custom instructions: ${sanitize(config.customInstructions)}`)
+  if (config.thinkingEffort) console.log(`Thinking effort: ${sanitize(config.thinkingEffort)}`)
   if (config.repositorySelectionMode)
     console.log(`Repositories: ${sanitize(config.repositorySelectionMode)}`)
+  if (config.disableReviewMd) console.log(`Disable review.md: yes`)
+  if (config.skipBotPullRequests) console.log(`Skip bot PRs: yes`)
+  if (config.reviewMemoryEnabled) console.log(`Review memory: enabled`)
+  if (config.councilEnabledRepositoryIds?.length)
+    console.log(`Council repos: ${config.councilEnabledRepositoryIds.join(', ')}`)
   const action = config.actionRequired
   if (action) {
     console.log(`\nNeeds attention: ${sanitize(action.reason)}`)
@@ -104,17 +115,31 @@ export const reviewsGetCommand = defineCommand({
   args: { id: { type: 'positional', description: 'Review ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const { review, attempts, tokenUsage } = await getCodeReview(token, args.id)
+    const { review, attempts, tokenUsage, success } = await getCodeReview(token, args.id)
     console.log(`ID: ${sanitize(review.id)}`)
     console.log(`Title: ${sanitize(review.pr_title ?? '-')}`)
     console.log(`Status: ${sanitize(review.status)}`)
+    if (success != null) console.log(`Success: ${success ? 'yes' : 'no'}`)
     console.log(`Repo: ${sanitize(review.repo_full_name ?? '-')}  PR #${review.pr_number ?? '?'}`)
+    if (review.pr_author) console.log(`Author: ${sanitize(review.pr_author)}`)
     if (review.pr_url) console.log(`URL: ${sanitize(review.pr_url)}`)
     if (review.model) console.log(`Model: ${sanitize(review.model)}`)
+    if (review.agent_version) console.log(`Agent version: ${sanitize(review.agent_version)}`)
+    if (review.trigger_source) console.log(`Trigger: ${sanitize(review.trigger_source)}`)
     if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
+    if (review.terminal_reason) console.log(`Terminal reason: ${sanitize(review.terminal_reason)}`)
+    if (review.total_tokens_in != null || review.total_tokens_out != null) {
+      console.log(
+        `Tokens: in ${review.total_tokens_in ?? 0} / out ${review.total_tokens_out ?? 0}`,
+      )
+    }
+    if (review.total_cost_musd != null)
+      console.log(`Cost: $${(review.total_cost_musd / 1000).toFixed(3)}`)
+    if (review.started_at) console.log(`Started: ${sanitize(review.started_at)}`)
+    if (review.completed_at) console.log(`Completed: ${sanitize(review.completed_at)}`)
     if (tokenUsage) {
       console.log(
-        `Tokens: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`,
+        `Token usage: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`,
       )
     }
     if (attempts.length > 0) {
@@ -123,6 +148,7 @@ export const reviewsGetCommand = defineCommand({
         attempts.map((a) => ({
           n: a.attempt_number,
           status: a.status,
+          reason: a.retry_reason ?? '-',
           started: a.started_at ?? '-',
           completed: a.completed_at ?? '-',
           error: sanitize(a.error_message ?? '-'),
@@ -130,6 +156,7 @@ export const reviewsGetCommand = defineCommand({
         [
           { key: 'n', label: '#', width: 4, align: 'right' },
           { key: 'status', label: 'Status', width: 12 },
+          { key: 'reason', label: 'Retry reason', width: 20 },
           { key: 'started', label: 'Started', width: 26 },
           { key: 'completed', label: 'Completed', width: 26 },
           { key: 'error', label: 'Error', width: 30 },
@@ -212,12 +239,17 @@ export const reviewsSetModelCommand = defineCommand({
   meta: {
     name: 'set-model',
     description:
-      'Set the review agent model, preserving other config (personal by default; --org for organization)',
+      'Set the review agent model and optionally other config (personal by default; --org for organization)',
   },
   args: {
     platform: { type: 'positional', description: 'Platform (github/gitlab)', required: true },
     model: { type: 'positional', description: 'Model slug (e.g. kilo-auto/free)', required: true },
     org: { type: 'string', description: 'Organization ID (omit for personal agent)' },
+    style: { type: 'string', description: 'Review style (e.g. thorough/concise)' },
+    'focus-areas': { type: 'string', description: 'Comma-separated focus areas' },
+    instructions: { type: 'string', description: 'Custom instructions for the review agent' },
+    thinking: { type: 'string', description: 'Thinking effort (e.g. low/medium/high)' },
+    gate: { type: 'string', description: 'Gate threshold (e.g. strict/standard/loose)' },
   },
   async run({ args }) {
     const { token } = await getToken()
@@ -229,7 +261,13 @@ export const reviewsSetModelCommand = defineCommand({
     const config = orgId
       ? await getOrgReviewAgentConfig(token, orgId, platform)
       : await getPersonalReviewConfig(token, platform)
-    const input = toSaveReviewConfigInput(platform, config, { modelSlug: args.model })
+    const overrides: { modelSlug: string; reviewStyle?: string; focusAreas?: string[]; customInstructions?: string; thinkingEffort?: string; gateThreshold?: string } = { modelSlug: args.model }
+    if (args.style) overrides.reviewStyle = args.style
+    if (args['focus-areas']) overrides.focusAreas = args['focus-areas'].split(',').map((s) => s.trim()).filter(Boolean)
+    if (args.instructions) overrides.customInstructions = args.instructions
+    if (args.thinking) overrides.thinkingEffort = args.thinking
+    if (args.gate) overrides.gateThreshold = args.gate
+    const input = toSaveReviewConfigInput(platform, config, overrides)
     if (orgId) {
       await saveOrgReviewConfig(token, orgId, input)
     } else {

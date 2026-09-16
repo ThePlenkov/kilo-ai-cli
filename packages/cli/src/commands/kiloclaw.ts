@@ -31,12 +31,23 @@ export const kiloclawInstancesCommand = defineCommand({
       return
     }
     printTable(
-      instances.map((i) => ({ id: i.id, name: i.name, status: i.status, plan: i.planName ?? '-' })),
+      instances.map((i) => ({
+        id: i.id,
+        name: i.name,
+        status: i.status,
+        plan: i.planName ?? '-',
+        image: i.imageTag ?? '-',
+        created: i.createdAt.slice(0, 10),
+        updated: i.updatedAt.slice(0, 10),
+      })),
       [
         { key: 'id', label: 'ID', width: 12 },
         { key: 'name', label: 'Name', width: 30 },
         { key: 'status', label: 'Status', width: 10 },
         { key: 'plan', label: 'Plan', width: 20 },
+        { key: 'image', label: 'Image', width: 20 },
+        { key: 'created', label: 'Created', width: 10 },
+        { key: 'updated', label: 'Updated', width: 10 },
       ],
     )
   },
@@ -149,9 +160,15 @@ export const kiloclawSubscriptionDetailCommand = defineCommand({
     console.log(`Plan: ${detail.plan}`)
     console.log(`Status: ${detail.status}`)
     console.log(`Cancel at period end: ${detail.cancelAtPeriodEnd ? 'yes' : 'no'}`)
+    if (detail.sandboxId) console.log(`Sandbox ID: ${detail.sandboxId}`)
+    if (detail.activationState) console.log(`Activation state: ${detail.activationState}`)
+    if (detail.priceVersion) console.log(`Price version: ${detail.priceVersion}`)
+    if (detail.selfServiceInstanceType) console.log(`Instance type: ${detail.selfServiceInstanceType}`)
     if (detail.currentPeriodStart) console.log(`Current period start: ${detail.currentPeriodStart}`)
     if (detail.currentPeriodEnd) console.log(`Current period end: ${detail.currentPeriodEnd}`)
     if (detail.destroyedAt) console.log(`Destroyed: ${detail.destroyedAt}`)
+    if (detail.suspendedAt) console.log(`Suspended: ${detail.suspendedAt}`)
+    if (detail.trialStartedAt) console.log(`Trial started: ${detail.trialStartedAt}`)
     if (detail.trialEndsAt) console.log(`Trial ends: ${detail.trialEndsAt}`)
   },
 })
@@ -178,7 +195,9 @@ export const kiloclawVersionCommand = defineCommand({
     const result = await getLatestVersion(token, args.current)
     console.log(`OpenClaw version: ${result.openclawVersion} (${result.variant})`)
     console.log(`Image tag: ${result.imageTag}`)
+    if (result.imageDigest) console.log(`Image digest: ${result.imageDigest}`)
     if (result.publishedAt) console.log(`Published: ${result.publishedAt}`)
+    if (result.rolloutPercent != null) console.log(`Rollout: ${result.rolloutPercent}%`)
     console.log(`Is latest: ${result.isLatest ? 'yes' : 'no'}`)
   },
 })
