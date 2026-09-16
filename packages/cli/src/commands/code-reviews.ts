@@ -66,9 +66,12 @@ function printAgentConfig(config: ReviewAgentConfig, platform: string, scope: st
   if (config.thinkingEffort) console.log(`Thinking effort: ${sanitize(config.thinkingEffort)}`)
   if (config.repositorySelectionMode)
     console.log(`Repositories: ${sanitize(config.repositorySelectionMode)}`)
-  if (config.disableReviewMd) console.log(`Disable review.md: yes`)
-  if (config.skipBotPullRequests) console.log(`Skip bot PRs: yes`)
-  if (config.reviewMemoryEnabled) console.log(`Review memory: enabled`)
+  if (config.disableReviewMd != null)
+    console.log(`Disable review.md: ${config.disableReviewMd ? 'yes' : 'no'}`)
+  if (config.skipBotPullRequests != null)
+    console.log(`Skip bot PRs: ${config.skipBotPullRequests ? 'yes' : 'no'}`)
+  if (config.reviewMemoryEnabled != null)
+    console.log(`Review memory: ${config.reviewMemoryEnabled ? 'enabled' : 'disabled'}`)
   if (config.councilEnabledRepositoryIds?.length)
     console.log(`Council repos: ${config.councilEnabledRepositoryIds.join(', ')}`)
   const action = config.actionRequired
@@ -262,11 +265,12 @@ export const reviewsSetModelCommand = defineCommand({
       ? await getOrgReviewAgentConfig(token, orgId, platform)
       : await getPersonalReviewConfig(token, platform)
     const overrides: { modelSlug: string; reviewStyle?: string; focusAreas?: string[]; customInstructions?: string; thinkingEffort?: string; gateThreshold?: string } = { modelSlug: args.model }
-    if (args.style) overrides.reviewStyle = args.style
-    if (args['focus-areas']) overrides.focusAreas = args['focus-areas'].split(',').map((s) => s.trim()).filter(Boolean)
-    if (args.instructions) overrides.customInstructions = args.instructions
-    if (args.thinking) overrides.thinkingEffort = args.thinking
-    if (args.gate) overrides.gateThreshold = args.gate
+    if (args.style !== undefined) overrides.reviewStyle = args.style
+    if (args['focus-areas'] !== undefined)
+      overrides.focusAreas = args['focus-areas'].split(',').map((s) => s.trim()).filter(Boolean)
+    if (args.instructions !== undefined) overrides.customInstructions = args.instructions
+    if (args.thinking !== undefined) overrides.thinkingEffort = args.thinking
+    if (args.gate !== undefined) overrides.gateThreshold = args.gate
     const input = toSaveReviewConfigInput(platform, config, overrides)
     if (orgId) {
       await saveOrgReviewConfig(token, orgId, input)

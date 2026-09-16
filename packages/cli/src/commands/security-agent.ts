@@ -138,8 +138,17 @@ export const securityReposCommand = defineCommand({
     }
     if (args['min-findings']) {
       repos = repos.filter((r) => (r.findingsCount ?? r.findings_count ?? 0) > 0)
+      if (repos.length === 0) {
+        console.log('No repositories with findings found.')
+        return
+      }
     }
     const sortField = args.sort ?? 'findings'
+    const validSorts = ['findings', 'name', 'synced']
+    if (!validSorts.includes(sortField)) {
+      console.error(`Invalid sort: ${sortField}. Valid: ${validSorts.join(', ')}`)
+      process.exit(1)
+    }
     repos = [...repos].sort((a, b) => {
       switch (sortField) {
         case 'name':

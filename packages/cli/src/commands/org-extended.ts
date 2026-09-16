@@ -157,14 +157,18 @@ export const orgCreateCommand = defineCommand({
   args: {
     name: { type: 'positional', description: 'Organization name', required: true },
     domain: { type: 'string', description: 'Company domain' },
-    'no-auto-add': { type: 'boolean', description: 'Do not add creator as owner', default: false },
+    'auto-add': {
+      type: 'boolean',
+      description: 'Add creator as owner (default: true)',
+      default: true,
+    },
   },
   async run({ args }) {
     const { token } = await getToken()
     const org = await createOrganization(token, {
       name: args.name,
       companyDomain: args.domain ?? null,
-      autoAddCreator: !args['no-auto-add'],
+      autoAddCreator: args['auto-add'] !== false,
     })
     console.log(`Created organization: ${org.name} (${org.id})`)
   },
