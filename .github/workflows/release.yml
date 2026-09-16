@@ -196,7 +196,7 @@ jobs:
               --base main \
               --head "chore/release-$V" 2>&1); then
               echo "$ERR"
-              echo "$ERR" | grep -qi 'not permitted to create' ||
+              echo "$ERR" | grep -qiE 'not permitted to create|resource not accessible by integration' ||
                 exit 1
               echo "::warning::Could not open the sync PR — open it manually: https://github.com/${{ github.repository }}/compare/main...chore/release-$V"
             fi

@@ -111,8 +111,14 @@ function supportsHyperlinks(): boolean {
   }
   // Known supporters: WezTerm, Ghostty, Kitty, VS Code
   // iTerm.app is handled separately below (needs version >= 3.0)
+  // Windows Terminal sets WT_SESSION instead of TERM_PROGRAM
+  // Kitty sets TERM=xterm-kitty instead of TERM_PROGRAM
   const supporters = ['WezTerm', 'ghostty', 'kitty', 'vscode']
-  if (supporters.includes(term)) {
+  if (
+    supporters.includes(term) ||
+    process.env.WT_SESSION ||
+    process.env.TERM === 'xterm-kitty'
+  ) {
     _hyperlinkSupport = true
     return true
   }

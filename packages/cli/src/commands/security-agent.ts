@@ -41,9 +41,13 @@ import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 async function resolveRepoId(token: string, idOrName: string): Promise<string> {
   if (/^\d+$/.test(idOrName)) return idOrName
   const repos = await getSecurityRepositories(token)
-  const repo = repos.find(
-    (r) => (r.fullName ?? r.full_name ?? null) === idOrName,
-  )
+  const matches = repos.filter((r) => (r.fullName ?? r.full_name ?? null) === idOrName)
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple repositories match "${idOrName}". Run \`kilo-ai-cli security repos\` and pass the numeric ID to disambiguate.`,
+    )
+  }
+  const repo = matches[0]
   if (!repo) {
     throw new Error(
       `Repository "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories. Use the full name (owner/repo), not the short name.`,

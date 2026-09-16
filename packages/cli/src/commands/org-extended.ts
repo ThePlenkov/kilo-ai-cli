@@ -28,13 +28,18 @@ async function resolveOrgId(token: string, idOrName: string): Promise<string> {
   const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
   if (UUID_RE.test(idOrName)) return idOrName
   const orgs = await listOrganizations(token)
-  const org = orgs.find((o) => o.name === idOrName)
-  if (!org) {
+  const matches = orgs.filter((o) => o.name === idOrName)
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple organizations named "${idOrName}" found; use the UUID from \`kilo-ai-cli org list\`.`,
+    )
+  }
+  if (matches.length === 0) {
     throw new Error(
       `Organization "${idOrName}" not found. Use \`kilo-ai-cli org list\` to see available organizations.`,
     )
   }
-  return org.id
+  return matches[0].id
 }
 
 export const orgMembersCommand = defineCommand({
@@ -117,7 +122,7 @@ export const orgSeatsCommand = defineCommand({
 export const orgInvoicesCommand = defineCommand({
   meta: { name: 'invoices', description: 'Show organization invoices' },
   args: {
-    id: { type: 'positional', description: 'Organization ID', required: true },
+    id: { type: 'positional', description: 'Organization ID or name', required: true },
     period: { type: 'string', description: 'Billing period' },
   },
   async run({ args }) {
@@ -165,7 +170,7 @@ export const orgCreateCommand = defineCommand({
 export const orgUpdateCommand = defineCommand({
   meta: { name: 'update', description: 'Update an organization' },
   args: {
-    id: { type: 'positional', description: 'Organization ID', required: true },
+    id: { type: 'positional', description: 'Organization ID or name', required: true },
     name: { type: 'string', description: 'New name' },
   },
   async run({ args }) {

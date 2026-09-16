@@ -46,7 +46,26 @@ export const orgSetCommand = defineCommand({
     const { token, auth } = await getToken()
     // Verify the org exists by listing organizations
     const orgs = await listOrganizations(token)
-    const org = orgs.find((o) => o.id === args.id || o.name === args.id)
+    const idMatch = orgs.find((o) => o.id.toLowerCase() === args.id.toLowerCase())
+    if (idMatch) {
+      const updated: KiloAuth = { ...auth, accountId: idMatch.id }
+      if (auth.type === 'oauth') {
+        const store = createTokenStore()
+        await store.set(updated)
+        console.log(`Active organization set to ${idMatch.name} (${idMatch.id})`)
+      } else {
+        console.error('Organization switching requires OAuth authentication.')
+        process.exitCode = 1
+      }
+      return
+    }
+    const nameMatches = orgs.filter((o) => o.name === args.id)
+    if (nameMatches.length > 1) {
+      console.error(`Organization name "${args.id}" is ambiguous; use its UUID from \`kilo-ai-cli org list\`.`)
+      process.exitCode = 1
+      return
+    }
+    const org = nameMatches[0]
     if (!org) {
       console.error(`Organization ${args.id} not found.`)
       process.exitCode = 1
