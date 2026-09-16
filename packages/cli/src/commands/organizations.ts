@@ -48,8 +48,8 @@ export const orgSetCommand = defineCommand({
     const orgs = await listOrganizations(token)
     const idMatch = orgs.find((o) => o.id.toLowerCase() === args.id.toLowerCase())
     if (idMatch) {
-      const updated: KiloAuth = { ...auth, accountId: idMatch.id }
       if (auth.type === 'oauth') {
+        const updated: KiloAuth = { ...auth, accountId: idMatch.id }
         const store = createTokenStore()
         await store.set(updated)
         console.log(`Active organization set to ${idMatch.name} (${idMatch.id})`)
