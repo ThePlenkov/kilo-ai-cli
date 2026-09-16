@@ -331,9 +331,7 @@ kilo-ai-cli security dismiss <id> --reason <r>     # Dismiss a finding (one-way;
                                                  #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
 kilo-ai-cli security delete-findings <repo>        # Delete all findings for a repo (interactive)
 kilo-ai-cli security delete-findings <repo> --yes  # Delete without confirmation prompt
-```
-
-`<repo>` can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
+# <repo> can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
 
 # Analysis & remediation
 kilo-ai-cli security analyze <finding-id>           # Queue codebase analysis for a finding

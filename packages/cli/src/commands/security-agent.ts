@@ -35,16 +35,22 @@ import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 
 /**
  * Resolve a repo identifier (numeric ID or full name like "user/repo") to a numeric ID.
- * If the input is already numeric, return it as-is. Otherwise, look it up in the repos list.
+ * If the input is already numeric, return it as-is. Otherwise, look it up by full name.
+ * Short names (e.g. "repo") are rejected — use "owner/repo" to avoid ambiguity.
  */
 async function resolveRepoId(token: string, idOrName: string): Promise<string> {
   if (/^\d+$/.test(idOrName)) return idOrName
   const repos = await getSecurityRepositories(token)
-  const repo = repos.find((r) => (r.fullName ?? r.full_name ?? r.name) === idOrName)
+  const repo = repos.find(
+    (r) => (r.fullName ?? r.full_name ?? null) === idOrName,
+  )
   if (!repo) {
     throw new Error(
-      `Repository "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories.`,
+      `Repository "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories. Use the full name (owner/repo), not the short name.`,
     )
+  }
+  if (repo.id === undefined) {
+    throw new Error(`Repository "${idOrName}" has no ID.`)
   }
   return String(repo.id)
 }

@@ -109,8 +109,9 @@ function supportsHyperlinks(): boolean {
     _hyperlinkSupport = false
     return false
   }
-  // Known supporters: iTerm2 (3.x+), WezTerm, Ghostty, Kitty, Windows Terminal
-  const supporters = ['iTerm.app', 'WezTerm', 'ghostty', 'kitty', 'vscode']
+  // Known supporters: WezTerm, Ghostty, Kitty, VS Code
+  // iTerm.app is handled separately below (needs version >= 3.0)
+  const supporters = ['WezTerm', 'ghostty', 'kitty', 'vscode']
   if (supporters.includes(term)) {
     _hyperlinkSupport = true
     return true
