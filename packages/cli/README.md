@@ -219,6 +219,8 @@ kilo-ai-cli sessions rename <id> <title>     # Rename a session
 
 Organization management. Some subcommands require an active organization (set via `org set`).
 
+`<id>` can be either the organization UUID (from `org list`) or the organization name.
+
 ```text
 kilo-ai-cli org list                        # List organizations you belong to
 kilo-ai-cli org set <id>                    # Set the active organization
@@ -329,6 +331,7 @@ kilo-ai-cli security dismiss <id> --reason <r>     # Dismiss a finding (one-way;
                                                  #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
 kilo-ai-cli security delete-findings <repo>        # Delete all findings for a repo (interactive)
 kilo-ai-cli security delete-findings <repo> --yes  # Delete without confirmation prompt
+# <repo> can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
 
 # Analysis & remediation
 kilo-ai-cli security analyze <finding-id>           # Queue codebase analysis for a finding

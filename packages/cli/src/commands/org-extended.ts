@@ -13,17 +13,42 @@ import {
   getOrganizationWithMembers,
   getSecurityAgentPermissionStatus,
   listAvailableModels,
+  listOrganizations,
   updateOrganization,
 } from '../api/organizations.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
+/**
+ * Resolve an org identifier (name or UUID) to a UUID.
+ * If the input is already a valid UUID, return it as-is.
+ * Otherwise, list organizations and find one matching the name.
+ */
+async function resolveOrgId(token: string, idOrName: string): Promise<string> {
+  const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+  if (UUID_RE.test(idOrName)) return idOrName
+  const orgs = await listOrganizations(token)
+  const matches = orgs.filter((o) => o.name === idOrName)
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple organizations named "${idOrName}" found; use the UUID from \`kilo-ai-cli org list\`.`,
+    )
+  }
+  if (matches.length === 0) {
+    throw new Error(
+      `Organization "${idOrName}" not found. Use \`kilo-ai-cli org list\` to see available organizations.`,
+    )
+  }
+  return matches[0].id
+}
+
 export const orgMembersCommand = defineCommand({
   meta: { name: 'members', description: 'List organization members' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const org = await getOrganizationWithMembers(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const org = await getOrganizationWithMembers(token, orgId)
     console.log(`Organization: ${org.name}`)
     printTable(
       org.members.map((m) => ({ id: m.id, email: m.email, name: m.name ?? '-', role: m.role })),
@@ -39,10 +64,11 @@ export const orgMembersCommand = defineCommand({
 
 export const orgUsageCommand = defineCommand({
   meta: { name: 'usage', description: 'Show organization usage stats' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const stats = await getOrganizationUsageStats(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const stats = await getOrganizationUsageStats(token, orgId)
     console.log(`Total cost: $${stats.totalCost.toFixed(2)}`)
     console.log(`Requests: ${stats.totalRequestCount}`)
     console.log(`Input tokens: ${stats.totalInputTokens}`)
@@ -52,10 +78,11 @@ export const orgUsageCommand = defineCommand({
 
 export const orgCreditsCommand = defineCommand({
   meta: { name: 'credits', description: 'Show organization credit transactions' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const transactions = await getCreditTransactions(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const transactions = await getCreditTransactions(token, orgId)
     if (transactions.length === 0) {
       console.log('No credit transactions found.')
       return
@@ -81,10 +108,11 @@ export const orgCreditsCommand = defineCommand({
 
 export const orgSeatsCommand = defineCommand({
   meta: { name: 'seats', description: 'Show organization seats' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const seats = await getOrganizationSeats(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const seats = await getOrganizationSeats(token, orgId)
     console.log(`Total seats: ${seats.totalSeats}`)
     console.log(`Used seats: ${seats.usedSeats}`)
     console.log(`Available: ${seats.totalSeats - seats.usedSeats}`)
@@ -94,12 +122,13 @@ export const orgSeatsCommand = defineCommand({
 export const orgInvoicesCommand = defineCommand({
   meta: { name: 'invoices', description: 'Show organization invoices' },
   args: {
-    id: { type: 'positional', description: 'Organization ID', required: true },
+    id: { type: 'positional', description: 'Organization ID or name', required: true },
     period: { type: 'string', description: 'Billing period' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const invoices = await getOrganizationInvoices(token, args.id, args.period)
+    const orgId = await resolveOrgId(token, args.id)
+    const invoices = await getOrganizationInvoices(token, orgId, args.period)
     if (invoices.length === 0) {
       console.log('No invoices found.')
       return
@@ -141,22 +170,24 @@ export const orgCreateCommand = defineCommand({
 export const orgUpdateCommand = defineCommand({
   meta: { name: 'update', description: 'Update an organization' },
   args: {
-    id: { type: 'positional', description: 'Organization ID', required: true },
+    id: { type: 'positional', description: 'Organization ID or name', required: true },
     name: { type: 'string', description: 'New name' },
   },
   async run({ args }) {
     const { token } = await getToken()
-    const org = await updateOrganization(token, { organizationId: args.id, name: args.name })
+    const orgId = await resolveOrgId(token, args.id)
+    const org = await updateOrganization(token, { organizationId: orgId, name: args.name })
     console.log(`Updated organization: ${org.name} (${org.id})`)
   },
 })
 
 export const orgModelsCommand = defineCommand({
   meta: { name: 'models', description: 'List available models for an organization' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const models = await listAvailableModels(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const models = await listAvailableModels(token, orgId)
     if (models.length === 0) {
       console.log('No models available.')
       return
@@ -180,10 +211,11 @@ export const orgModelsCommand = defineCommand({
 
 export const orgSecurityCommand = defineCommand({
   meta: { name: 'security', description: 'Show security agent permission status' },
-  args: { id: { type: 'positional', description: 'Organization ID', required: true } },
+  args: { id: { type: 'positional', description: 'Organization ID or name', required: true } },
   async run({ args }) {
     const { token } = await getToken()
-    const status = await getSecurityAgentPermissionStatus(token, args.id)
+    const orgId = await resolveOrgId(token, args.id)
+    const status = await getSecurityAgentPermissionStatus(token, orgId)
     console.log(`Integration connected: ${status.hasIntegration ? 'yes' : 'no'}`)
     console.log(`Permissions granted: ${status.hasPermissions ? 'yes' : 'no'}`)
     if (status.reauthorizeUrl) console.log(`Reauthorize: ${status.reauthorizeUrl}`)

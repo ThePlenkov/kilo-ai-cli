@@ -33,6 +33,32 @@ import { printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 
+/**
+ * Resolve a repo identifier (numeric ID or full name like "user/repo") to a numeric ID.
+ * If the input is already numeric, return it as-is. Otherwise, look it up by full name.
+ * Short names (e.g. "repo") are rejected — use "owner/repo" to avoid ambiguity.
+ */
+async function resolveRepoId(token: string, idOrName: string): Promise<string> {
+  if (/^\d+$/.test(idOrName)) return idOrName
+  const repos = await getSecurityRepositories(token)
+  const matches = repos.filter((r) => (r.fullName ?? r.full_name ?? null) === idOrName)
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple repositories match "${idOrName}". Run \`kilo-ai-cli security repos\` and pass the numeric ID to disambiguate.`,
+    )
+  }
+  const repo = matches[0]
+  if (!repo) {
+    throw new Error(
+      `Repository "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories. Use the full name (owner/repo), not the short name.`,
+    )
+  }
+  if (repo.id === undefined) {
+    throw new Error(`Repository "${idOrName}" has no ID.`)
+  }
+  return String(repo.id)
+}
+
 export const securityStatusCommand = defineCommand({
   meta: { name: 'status', description: 'Show security agent permission status' },
   async run() {
@@ -108,7 +134,7 @@ export const securityReposCommand = defineCommand({
         synced: String(r.lastSyncedAt ?? r.last_synced_at ?? '-').slice(0, 10),
       })),
       [
-        { key: 'id', label: 'ID', width: 12 },
+        { key: 'id', label: 'ID', width: 14 },
         { key: 'name', label: 'Repository', width: 40 },
         { key: 'private', label: 'Private', width: 7 },
         { key: 'findings', label: 'Findings', width: 8, align: 'right' },
@@ -174,7 +200,7 @@ export const securityFindingsCommand = defineCommand({
     console.log('')
     printTable(
       result.findings.map((f) => ({
-        id: (f.id ?? '-').slice(0, 8),
+        id: String(f.id ?? '-'),
         sev: f.severity ?? '-',
         title: f.title ?? '-',
         repo: f.repoFullName ?? f.repo_full_name ?? '-',
@@ -182,7 +208,7 @@ export const securityFindingsCommand = defineCommand({
         pkg: f.packageName ?? f.package_name ?? '-',
       })),
       [
-        { key: 'id', label: 'ID', width: 8 },
+        { key: 'id', label: 'ID', width: 36 },
         { key: 'sev', label: 'Severity', width: 8, format: (v) => colorSeverity(v) },
         { key: 'title', label: 'Title', width: 50 },
         {
@@ -453,11 +479,13 @@ export const securityLastSyncCommand = defineCommand({
 export const securityDeleteFindingsCommand = defineCommand({
   meta: { name: 'delete-findings', description: 'Delete all findings for a repository' },
   args: {
-    repo: { type: 'positional', description: 'Repository ID', required: true },
+    repo: { type: 'positional', description: 'Repository ID or full name (e.g. user/repo)', required: true },
     yes: { type: 'boolean', description: 'Skip confirmation prompt', alias: 'y' },
   },
   async run({ args }) {
     const { token } = await getToken()
+    // Resolve repo full name → numeric ID if needed
+    const repoId = await resolveRepoId(token, args.repo)
     if (!args.yes) {
       const ok = await confirm(`Delete ALL findings for repository ${args.repo}?`)
       if (!ok) {
@@ -465,7 +493,7 @@ export const securityDeleteFindingsCommand = defineCommand({
         return
       }
     }
-    await deleteFindingsByRepository(token, args.repo)
+    await deleteFindingsByRepository(token, repoId)
     console.log(`Deleted findings for repository: ${args.repo}`)
   },
 })

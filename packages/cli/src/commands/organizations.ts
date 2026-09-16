@@ -28,7 +28,7 @@ export const orgListCommand = defineCommand({
         active: o.id === organizationId ? 'yes' : '',
       })),
       [
-        { key: 'id', label: 'ID', width: 12 },
+        { key: 'id', label: 'ID', width: 36 },
         { key: 'name', label: 'Name', width: 30 },
         { key: 'role', label: 'Role', width: 12 },
         { key: 'active', label: 'Active', width: 8 },
@@ -40,13 +40,32 @@ export const orgListCommand = defineCommand({
 export const orgSetCommand = defineCommand({
   meta: { name: 'set', description: 'Set active organization' },
   args: {
-    id: { type: 'positional', description: 'Organization ID', required: true },
+    id: { type: 'positional', description: 'Organization ID or name', required: true },
   },
   async run({ args }) {
     const { token, auth } = await getToken()
     // Verify the org exists by listing organizations
     const orgs = await listOrganizations(token)
-    const org = orgs.find((o) => o.id === args.id)
+    const idMatch = orgs.find((o) => o.id.toLowerCase() === args.id.toLowerCase())
+    if (idMatch) {
+      if (auth.type === 'oauth') {
+        const updated: KiloAuth = { ...auth, accountId: idMatch.id }
+        const store = createTokenStore()
+        await store.set(updated)
+        console.log(`Active organization set to ${idMatch.name} (${idMatch.id})`)
+      } else {
+        console.error('Organization switching requires OAuth authentication.')
+        process.exitCode = 1
+      }
+      return
+    }
+    const nameMatches = orgs.filter((o) => o.name === args.id)
+    if (nameMatches.length > 1) {
+      console.error(`Organization name "${args.id}" is ambiguous; use its UUID from \`kilo-ai-cli org list\`.`)
+      process.exitCode = 1
+      return
+    }
+    const org = nameMatches[0]
     if (!org) {
       console.error(`Organization ${args.id} not found.`)
       process.exitCode = 1
@@ -57,7 +76,7 @@ export const orgSetCommand = defineCommand({
     if (auth.type === 'oauth') {
       const updated: KiloAuth = {
         ...auth,
-        accountId: args.id,
+        accountId: org.id,
       }
       const store = createTokenStore()
       await store.set(updated)
