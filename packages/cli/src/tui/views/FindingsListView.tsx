@@ -218,14 +218,18 @@ export function FindingsListView({
   const [repos, setRepos] = useState<SecurityAgentRepository[] | null>(null)
   const [reposError, setReposError] = useState<string | null>(null)
   const loadSeqRef = useRef(0)
+  const repoSeqRef = useRef(0)
 
   const loadRepos = async () => {
+    const seq = ++repoSeqRef.current
+    setReposError(null)
     try {
-      setReposError(null)
-      setRepos(await getSecurityRepositories(token))
+      const result = await getSecurityRepositories(token)
+      if (seq !== repoSeqRef.current) return
+      setRepos(result)
     } catch (e) {
+      if (seq !== repoSeqRef.current) return
       setReposError(e instanceof Error ? e.message : String(e))
-      setRepos([])
     }
   }
 
@@ -293,6 +297,15 @@ export function FindingsListView({
 
   // --- Filter selection modes ---
   if (filterMode === 'repo') {
+    if (reposError) {
+      return (
+        <Box flexDirection="column">
+          <Text color="red">Failed to load repositories: {reposError}</Text>
+          <Text dimColor>Esc to go back</Text>
+          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        </Box>
+      )
+    }
     if (repos === null) {
       return (
         <Box flexDirection="column">
@@ -310,15 +323,6 @@ export function FindingsListView({
         return [{ label: count != null ? `${full} (${count})` : full, value: full }]
       }),
     ]
-    if (reposError) {
-      return (
-        <Box flexDirection="column">
-          <Text color="red">Failed to load repositories: {reposError}</Text>
-          <Text dimColor>Esc to go back</Text>
-          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
-        </Box>
-      )
-    }
     return (
       <Box flexDirection="column">
         <Text bold color="cyan">

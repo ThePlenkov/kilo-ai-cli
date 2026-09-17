@@ -8,10 +8,16 @@
 # real api.kilo.ai, so a recording can neither leak nor mutate a real
 # account. KILO_API_URL must point at the stub before the CLI starts.
 #
-# Prerequisite: a stored auth token — the CLI resolves credentials before
-# contacting KILO_API_URL, so a clean environment exits at the auth prompt
-# before the stub is ever hit. Run `kilo-ai-cli auth login` once (any
-# token works; the stub ignores it), then record.
+# Prerequisite: ~/.kilo/credentials.json must exist — the CLI resolves
+# credentials before contacting KILO_API_URL, so a clean environment exits
+# at "Not authenticated" before the stub is ever hit. The stub ignores the
+# token, so a fixture file works (device auth is NOT stubbed):
+#
+#   mkdir -p ~/.kilo && echo '{"type":"api","key":"demo"}' > ~/.kilo/credentials.json
+#
+# or authenticate against the real API before starting the stub:
+#
+#   kilo-ai-cli auth login
 #
 # Regenerate with tmux (as used for the committed GIF):
 #
