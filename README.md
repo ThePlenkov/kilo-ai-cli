@@ -1,5 +1,10 @@
 # kilo-ai-cli
 
+[![CI](https://github.com/ThePlenkov/kilo-ai-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ThePlenkov/kilo-ai-cli/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/kilo-ai-cli)](https://www.npmjs.com/package/kilo-ai-cli)
+[![Node.js ≥24](https://img.shields.io/badge/node-%3E%3D24.21.0-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](packages/cli/LICENSE)
+
 A command-line interface for the [kilo.ai](https://kilo.ai) cloud platform. Authenticate via browser, manage sessions and organizations, inspect coding plans and usage, run KiloClaw instances, trigger code reviews, browse usage analytics, deploy apps, and operate the personal Security Agent — all from your terminal.
 
 - **Auth** — OAuth 2.0 Device Authorization Grant (browser-based login, persisted credentials)
@@ -15,6 +20,16 @@ A command-line interface for the [kilo.ai](https://kilo.ai) cloud platform. Auth
 - **App Builder** — list apps, check eligibility, deploy
 - **Security Agent** — enable/disable, list repos and findings, view finding details, stats, dashboard, sync, dismiss, analyze, remediate, retry/cancel remediation, list commands, orphaned repos, last sync, bulk delete findings
 - **TUI** — website-style interactive terminal UI covering all areas, with mutations (Ink/React)
+
+---
+
+## Demo
+
+<p align="center">
+  <img src="docs/demo.gif" alt="kilo-ai-cli TUI demo — navigating sessions, security findings, filters, sort and column pickers" width="900" />
+</p>
+
+Interactive TUI (`kilo-ai-cli tui`): sidebar navigation, live session table, security findings with repository/severity filters, server-side sort, and a column picker. The GIF was recorded with [asciinema](https://asciinema.org) + [agg](https://github.com/asciinema/agg) against the real API — see [`docs/demo.tape`](docs/demo.tape) for the scripted key sequence (also usable with [VHS](https://github.com/charmbracelet/vhs)).
 
 ---
 
@@ -40,6 +55,7 @@ A command-line interface for the [kilo.ai](https://kilo.ai) cloud platform. Auth
   - [app-builder](#app-builder)
   - [security](#security)
   - [tui](#tui)
+- [Demo](#demo)
 - [Interactive TUI Mode](#interactive-tui-mode)
 - [Environment Variables](#environment-variables)
 - [Credential Storage](#credential-storage)
@@ -329,9 +345,11 @@ kilo-ai-cli security findings list [options]        # List findings
 kilo-ai-cli security findings detail <id>           # Get finding details
 kilo-ai-cli security findings dismiss <id> --reason <r>  # Dismiss a finding (one-way; reason:
                                                     #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
+kilo-ai-cli security findings close [filters] --reason <r>  # Bulk-dismiss matching findings (counts reported)
 kilo-ai-cli security findings delete <repo>         # Delete all findings for a repo (interactive)
 kilo-ai-cli security findings delete <repo> --yes   # Delete without confirmation prompt
 # <repo> can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
+# Both `close` and `delete` accept --repo plus the same filters as `list`, and support --dry-run/--yes.
 
 # Analysis & remediation
 kilo-ai-cli security findings analyze <id>           # Queue codebase analysis for a finding
@@ -382,7 +400,7 @@ The `tui` command launches a full-screen interactive terminal UI built with [Ink
 
 - **Dashboard** — profile, balance, organizations
 - **Cloud** — sessions (detail + rename), cloud-agent repos, session lookup, code reviews, **review-agent config** (platform switch, model edit, personal/org toggle), app builder
-- **Security** — findings (filter/detail with **d**=dismiss / **r**=remediate + confirm), repositories, stats, dashboard, commands, config, permissions
+- **Security** — findings (**R**=repo filter, **f**=severity, **s**=status, **o**=sort, **c**=columns, **n**/**p**=page; detail with **d**=dismiss / **r**=remediate + confirm), repositories, stats, dashboard, commands, config, permissions
 - **Usage** — analytics summary/timeseries/breakdown/table, coding plans
 - **KiloClaw** — instances, agents, billing, history, subscriptions, changelog, version, files
 - **Organizations** — org list with members/usage/credits/seats/invoices/models/security detail
