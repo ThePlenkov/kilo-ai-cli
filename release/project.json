@@ -3,10 +3,11 @@
   "name": "release",
   "sourceRoot": "release",
   "targets": {
-    "prepare-for-release": {
-      "executor": "./.nx-devkit/packages/prepare-for-release:publish-placeholder",
+    "release": {
+      "executor": "@nx-devkit/release:publish",
       "options": {
-        "trustRepo": "ThePlenkov/kilo-ai-cli"
+        "packageName": "kilo-ai-cli",
+        "packagePath": "packages/cli"
       }
     }
   }
