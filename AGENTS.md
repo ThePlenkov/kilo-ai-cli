@@ -68,3 +68,13 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
 - tRPC endpoint: `${KILO_API_BASE}/api/trpc/{procedure}`
 - Auth: OAuth 2.0 Device Authorization Grant → JWT Bearer token
 - Headers: `Authorization: Bearer <token>`, `X-KILOCODE-ORGANIZATIONID`, `X-KILOCODE-EDITORNAME`
+
+## Workflow
+
+- **`$act` is always-on for every PR** — never ask whether to run it. After opening
+  a PR, immediately run `$act --loop` (fetch threads → fix → reply → resolve →
+  wait for CI → repeat until exit gate passes). This is the central workflow.
+- **Releases are CI-driven, not PR-driven** — trigger via
+  `gh workflow run release.yml -f version=patch -f dry-run=false`. The workflow
+  bumps `package.json` on main, publishes to npm via OIDC, pushes the tag, and
+  creates a GitHub Release with auto-generated changelog. No sync PR.
