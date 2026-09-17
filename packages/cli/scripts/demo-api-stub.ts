@@ -540,7 +540,7 @@ createServer((req, res) => {
     return
   }
 
-  const m = url.pathname.match(/^\/api\/trpc\/([\w.]+)/)
+  const m = /^\/api\/trpc\/([\w.]+)/.exec(url.pathname)
   if (m) {
     // POST = batched mutation — always a no-op, array envelope required
     // by trpcMutate's parser.
@@ -564,7 +564,7 @@ createServer((req, res) => {
 
   res.writeHead(404, JSON_HEADERS)
   res.end(JSON.stringify({ error: `not stubbed: ${url.pathname}` }))
-  console.log(`404   ${url.pathname}`)
+  console.log(`404   ${url.pathname.replace(/[\r\n]/g, '')}`)
 }).listen(PORT, () => {
   console.log(`demo stub on http://localhost:${PORT} (fixtures only, no upstream)`)
 })

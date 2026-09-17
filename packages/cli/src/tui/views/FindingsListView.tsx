@@ -108,6 +108,15 @@ const TUI_COLUMNS: Record<string, TuiColumnDef> = {
 const ALL_COLUMN_NAMES = Object.keys(TUI_COLUMNS)
 const DEFAULT_COLUMNS = ['severity', 'title', 'repo', 'status', 'package']
 
+/** Keys that open a picker/filter mode (R also triggers a repo load). */
+const MODE_KEYS: Record<string, FilterMode> = {
+  f: 'severity',
+  s: 'status',
+  o: 'sort',
+  c: 'columns',
+  R: 'repo',
+}
+
 /* ------------------------------------------------------------------ */
 /* Sort options                                                        */
 /* ------------------------------------------------------------------ */
@@ -209,29 +218,14 @@ export function FindingsListView({
         onBack()
         return
       }
-      if (input === 'f') {
-        setFilterMode('severity')
-        return
-      }
-      if (input === 's') {
-        setFilterMode('status')
-        return
-      }
-      if (input === 'o') {
-        setFilterMode('sort')
-        return
-      }
-      if (input === 'c') {
-        setFilterMode('columns')
+      const mode = MODE_KEYS[input]
+      if (mode) {
+        setFilterMode(mode)
+        if (mode === 'repo') loadRepos()
         return
       }
       if (input === 'r') {
         loadFindings()
-        return
-      }
-      if (input === 'R') {
-        setFilterMode('repo')
-        loadRepos()
         return
       }
       if (
