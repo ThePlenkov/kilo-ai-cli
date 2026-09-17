@@ -106,7 +106,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
+          # Gate on a leading digit first — a tag like v--help would be
+          # parsed as a semver CLI option and pass validation.
+          if [[ ! "$VERSION" =~ ^[0-9] ]] || ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
             echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
             exit 0
           fi
