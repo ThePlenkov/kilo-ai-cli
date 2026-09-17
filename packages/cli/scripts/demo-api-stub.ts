@@ -236,13 +236,18 @@ function queryStub(procedure: string, input: Record<string, unknown>): unknown {
     case 'cliSessionsV2.list':
       return { cliSessions: SESSIONS, nextCursor: null }
     case 'cliSessionsV2.get':
-      return SESSIONS.find((s) => s.session_id === input.sessionId) ?? SESSIONS[0]
+      return SESSIONS.find((s) => s.session_id === input.session_id) ?? SESSIONS[0]
     case 'organizations.list':
-    case 'organizations.withMembers':
-      return ORGS.map((o) => ({
-        ...o,
-        members: [{ id: 'u1', email: PROFILE.email, name: PROFILE.name, role: o.role }],
-      }))
+      return ORGS.map((o) => ({ organizationId: o.id, organizationName: o.name, role: o.role }))
+    case 'organizations.withMembers': {
+      const org = ORGS.find((o) => o.id === input.organizationId) ?? ORGS[0]
+      return {
+        id: org.id,
+        name: org.name,
+        callerRole: org.role,
+        members: [{ id: 'u1', email: PROFILE.email, name: PROFILE.name, role: org.role }],
+      }
+    }
     case 'byok.list':
       return []
     default:
