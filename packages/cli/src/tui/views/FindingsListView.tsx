@@ -2,8 +2,12 @@ import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 import React, { useEffect, useRef, useState } from 'react'
 
-import { listFindings } from '../../api/security-agent.ts'
-import type { SecurityFinding, SecurityFindingsResult } from '../../api/types.ts'
+import { getSecurityRepositories, listFindings } from '../../api/security-agent.ts'
+import type {
+  SecurityAgentRepository,
+  SecurityFinding,
+  SecurityFindingsResult,
+} from '../../api/types.ts'
 import { useTermSize } from '../hooks.ts'
 import type { FindingsFilter } from '../types.ts'
 
@@ -32,7 +36,7 @@ const SEVERITY_ORDER: Record<string, number> = {
   info: 4,
 }
 
-type FilterMode = 'none' | 'severity' | 'status' | 'sort' | 'columns'
+type FilterMode = 'none' | 'severity' | 'status' | 'sort' | 'columns' | 'repo'
 
 /** Lines reserved for header, filters, help bar, scroll indicators, etc. */
 const RESERVED_LINES = 10
@@ -145,7 +149,16 @@ export function FindingsListView({
   const [sortField, setSortField] = useState('severity')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS))
+  const [repos, setRepos] = useState<SecurityAgentRepository[] | null>(null)
   const loadSeqRef = useRef(0)
+
+  const loadRepos = async () => {
+    try {
+      setRepos(await getSecurityRepositories(token))
+    } catch {
+      setRepos([])
+    }
+  }
 
   const loadFindings = async () => {
     const seq = ++loadSeqRef.current
@@ -216,6 +229,11 @@ export function FindingsListView({
         loadFindings()
         return
       }
+      if (input === 'R') {
+        setFilterMode('repo')
+        loadRepos()
+        return
+      }
       if (
         input === 'n' &&
         data &&
@@ -247,6 +265,42 @@ export function FindingsListView({
   )
 
   // --- Filter selection modes ---
+  if (filterMode === 'repo') {
+    if (repos === null) {
+      return (
+        <Box flexDirection="column">
+          <Text color="yellow">Loading repositories…</Text>
+          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        </Box>
+      )
+    }
+    const items = [
+      { label: '(all repositories)', value: '' },
+      ...repos.map((r) => {
+        const name = r.fullName ?? r.full_name ?? r.name ?? String(r.id ?? '?')
+        const count = r.findingsCount ?? r.findings_count
+        return { label: count != null ? `${name} (${count})` : name, value: name }
+      }),
+    ]
+    return (
+      <Box flexDirection="column">
+        <Text bold color="cyan">
+          Filter by repository:
+        </Text>
+        <SelectInput
+          items={items}
+          isFocused={focused}
+          onSelect={(item) => {
+            onFilterChange({ ...filter, repoFullName: item.value || undefined, offset: 0 })
+            setFilterMode('none')
+          }}
+        />
+        <Text dimColor>Esc to cancel</Text>
+        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+      </Box>
+    )
+  }
+
   if (filterMode === 'severity') {
     const items = [
       { label: '(all severities)', value: '' },
@@ -365,6 +419,11 @@ export function FindingsListView({
     return (
       <Box flexDirection="column">
         <Text>No findings found.</Text>
+        <Text dimColor>
+          {filter.repoFullName
+            ? `repo=${filter.repoFullName} — try R to pick another repository`
+            : 'Press R to filter by repository, r to refresh, Esc to go back'}
+        </Text>
         <BackHandler onBack={onBack} focused={focused} />
       </Box>
     )
@@ -401,6 +460,8 @@ export function FindingsListView({
       <Box marginBottom={1}>
         <Text dimColor>
           Filters:{' '}
+          {filter.repoFullName ? <Text color="cyan">repo={filter.repoFullName}</Text> : null}
+          {filter.repoFullName ? '  ' : ''}
           {filter.severity ? (
             <Text color={SEVERITY_COLORS[filter.severity] ?? 'white'}>
               severity={filter.severity}
@@ -458,8 +519,8 @@ export function FindingsListView({
       {/* Position indicator */}
       <Box marginTop={1}>
         <Text dimColor>
-          [{selectedIdx + 1}/{sorted.length}] ↑↓ navigate Enter=details f=severity s=status o=sort
-          c=columns n/p=page r=refresh Esc=back
+          [{selectedIdx + 1}/{sorted.length}] ↑↓ navigate Enter=details R=repo f=severity s=status
+          o=sort c=columns n/p=page r=refresh Esc=back
         </Text>
       </Box>
 
