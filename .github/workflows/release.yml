@@ -105,6 +105,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
+            exit 0
+          fi
           ./node_modules/.bin/nx run release:release \
-            --version="${GITHUB_REF_NAME#v}" \
+            --version="$VERSION" \
             --dryRun=false
