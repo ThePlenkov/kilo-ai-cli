@@ -1,20 +1,31 @@
 # kilo-ai-cli TUI demo — key sequence used for docs/demo.gif
 #
-# The committed GIF was produced with tmux + asciinema + agg, driven by
-# `tmux send-keys`. Security-agent endpoints were stubbed by
-# packages/cli/scripts/demo-api-stub.ts (passthrough proxy + fixture
-# findings) so the demo shows populated data without mutating a real
-# account. To regenerate:
+# Everything below is a logical key sequence: VHS directives (Type/Down/
+# Enter/Sleep), not shell commands. The committed GIF was produced with
+# tmux + asciinema + agg — the same keys translated to `tmux send-keys`
+# calls. The demo talks ONLY to packages/cli/scripts/demo-api-stub.ts, a
+# self-contained fixture server on :8399 — no request ever reaches the
+# real api.kilo.ai, so a recording can neither leak nor mutate a real
+# account. KILO_API_URL must point at the stub before the CLI starts.
+#
+# Regenerate with tmux (as used for the committed GIF):
 #
 #   node packages/cli/scripts/demo-api-stub.ts &          # :8399
 #   tmux new-session -d -s demo -x 150 -y 45
 #   tmux send-keys -t demo 'export KILO_API_URL=http://localhost:8399' Enter
 #   asciinema rec demo.cast --window-size 150x45 -c "tmux attach -t demo" &
-#   tmux send-keys -t demo ...                            # the sequence below
+#   # now translate the Type/Down/Enter/Sleep lines below into send-keys
 #   agg demo.cast docs/demo.gif --speed 1.2 --idle-time-limit 4 --font-size 16
 #
-# Redact account PII in the cast before rendering (email, org UUID, name).
-# VHS users can replay the same keys below: vhs docs/demo.tape
+# Or replay under VHS — the Env line below sets KILO_API_URL inside the
+# recorded shell, so `vhs docs/demo.tape` is safe as long as the stub is
+# running first:
+#
+#   node packages/cli/scripts/demo-api-stub.ts &
+#   vhs docs/demo.tape
+#
+# Redact account PII in the cast before rendering (email, org UUID, name)
+# if you ever record against real fixtures.
 
 Output docs/demo.gif
 Set Shell bash
@@ -25,6 +36,7 @@ Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 60ms
 Set PlaybackSpeed 1.2
+Env KILO_API_URL "http://localhost:8399"
 
 # Launch the TUI
 Type "npx kilo-ai-cli tui"

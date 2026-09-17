@@ -29,9 +29,7 @@ A command-line interface for the [kilo.ai](https://kilo.ai) cloud platform. Auth
   <img src="docs/demo.gif" alt="kilo-ai-cli TUI demo — navigating sessions, security findings, filters, sort and column pickers" width="900" />
 </p>
 
-Interactive TUI (`kilo-ai-cli tui`): sidebar navigation, live session table, security findings with repository/severity filters, server-side sort, column picker, finding details, stats, and dashboard.
-
-The GIF was recorded with tmux + [asciinema](https://asciinema.org) + [agg](https://github.com/asciinema/agg). Security-agent endpoints were served by [`packages/cli/scripts/demo-api-stub.ts`](packages/cli/scripts/demo-api-stub.ts) — a local passthrough proxy that returns fixture findings so the demo shows a populated table without exposing or mutating a real account; everything else proxies to the live API. See [`docs/demo.tape`](docs/demo.tape) for the key sequence and regeneration instructions (VHS-compatible).
+Interactive TUI (`kilo-ai-cli tui`): sidebar navigation, live session table, security findings with repository/severity filters, server-side sort, column picker, finding details, stats, and dashboard. The demo above runs against a local fixture server, so it can be regenerated safely — see [`docs/demo.tape`](docs/demo.tape).
 
 ---
 

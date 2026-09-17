@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * Demo API stub — local passthrough proxy used ONLY to record docs/demo.gif.
+ * Demo API stub — self-contained fixture server used ONLY to record
+ * docs/demo.gif.
  *
- * Forwards every request to https://api.kilo.ai unchanged, except the
- * security-agent procedures below which are served from fixtures so the
- * TUI demo shows a populated findings table, working filters, sorting,
- * pagination, and dashboard cards without touching real data.
- *
- * Mutating security procedures (dismiss/delete/sync/analyze/remediate)
- * are stubbed as no-ops — the demo can never mutate the real account.
+ * Serves every endpoint the demo touches from local fixtures: profile,
+ * balance, sessions, organizations, and all securityAgent reads (findings
+ * table, repo picker, filters, sort, detail, stats, dashboard). POST
+ * mutations return a no-op batch envelope — nothing ever leaves
+ * localhost, so a recording can neither read nor mutate a real account.
  *
  * Usage:
  *   node packages/cli/scripts/demo-api-stub.ts &            # listens on :8399
@@ -16,9 +15,7 @@
  */
 
 import { createServer } from 'node:http'
-import { request as httpsReq } from 'node:https'
 
-const UPSTREAM = 'https://api.kilo.ai'
 const PORT = 8399
 
 /* ------------------------------------------------------------------ */
@@ -375,6 +372,45 @@ const REPOSITORIES = [REPO_A, REPO_B, REPO_C].map((name, i) => ({
   findings_count: FINDINGS.filter((f) => f.repoFullName === name).length,
 }))
 
+const SESSION_TITLES = [
+  'Fix login redirect loop in auth flow',
+  'PR #49: TUI demo GIF review',
+  'Bulk dismiss findings command',
+  'Security findings dashboard polish',
+  'Migrate to native TS execution',
+  'OAuth device flow edge cases',
+  'Refactor session store to zod schemas',
+  'Analyze Next.js CVE-2026-75604',
+  'Nx release plugin integration',
+  'KiloClaw instance file-tree viewer',
+  'Org seats usage report',
+  'Add retry logic to tRPC client',
+  'BYOK key rotation helper',
+  'Column picker for findings table',
+]
+
+const SESSIONS = SESSION_TITLES.map((title, i) => {
+  const day = 17 - Math.floor(i / 3)
+  const hour = 18 - (i % 8)
+  const ts = `2026-09-${String(day).padStart(2, '0')}T${String(Math.max(hour, 9)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}:00Z`
+  return { session_id: `ses_demo${String(1000 + i)}`, title, created_at: ts, updated_at: ts, version: 0 }
+})
+
+const ORGS = [
+  { id: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', name: 'live-smoke-org', role: 'owner' },
+  { id: 'yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy', name: 'demo-org', role: 'member' },
+]
+
+const PROFILE = {
+  email: 'dev@example.com',
+  name: 'Kilo User',
+  hasPersonalAccount: true,
+  selectedOrganizationId: ORGS[0].id,
+  organizations: ORGS,
+}
+
+const BALANCE = { balance: 128.5 }
+
 /* ------------------------------------------------------------------ */
 /* Stubbed procedures                                                  */
 /* ------------------------------------------------------------------ */
@@ -442,74 +478,93 @@ function dashboardStats(): unknown {
 }
 
 /* ------------------------------------------------------------------ */
-/* Proxy                                                               */
+/* Stub server — fixtures only, no upstream                            */
 /* ------------------------------------------------------------------ */
 
-function stubResponse(procedure: string, input: Record<string, unknown>): unknown {
+/** Procedures whose response is an array — unknown ones still get a
+ *  shape-correct empty instead of an object that fails zod parsing. */
+const ARRAY_LIKE = /list|repos|sessions|commands|members|invoices|seats|agents|instances|subscriptions|transactions|blocks|children|breakdown|table|timeseries|byok/i
+
+function queryStub(procedure: string, input: Record<string, unknown>): unknown {
   switch (procedure) {
     case 'securityAgent.listFindings':
       return listFindings(input)
     case 'securityAgent.getRepositories':
       return REPOSITORIES
-    case 'securityAgent.getFinding': {
-      const f = FINDINGS.find((x) => x.id === input.id)
-      return f ?? { error: 'not found' }
-    }
+    case 'securityAgent.getFinding':
+      return FINDINGS.find((x) => x.id === input.id) ?? {}
     case 'securityAgent.getStats':
       return securityStats()
     case 'securityAgent.getDashboardStats':
       return dashboardStats()
     case 'securityAgent.getLastSyncTime':
       return { last_sync_time: '2026-09-17T12:00:00Z' }
+    case 'securityAgent.getPermissionStatus':
+      return { granted: true, hasIntegration: true, hasPermissions: true }
+    case 'securityAgent.getConfig':
+      return { isEnabled: true }
+    case 'securityAgent.listActiveCommands':
+    case 'securityAgent.getOrphanedRepositories':
+      return []
+    case 'cliSessionsV2.list':
+      return { cliSessions: SESSIONS, nextCursor: null }
+    case 'cliSessionsV2.get':
+      return SESSIONS.find((s) => s.session_id === input.sessionId) ?? SESSIONS[0]
+    case 'organizations.list':
+    case 'organizations.withMembers':
+      return ORGS.map((o) => ({
+        ...o,
+        members: [{ id: 'u1', email: PROFILE.email, name: PROFILE.name, role: o.role }],
+      }))
+    case 'byok.list':
+      return []
     default:
-      // Mutations and anything else under securityAgent — no-op, never
-      // let a demo recording touch the real account.
-      return { ok: true }
+      return ARRAY_LIKE.test(procedure) ? [] : {}
   }
 }
 
+const JSON_HEADERS = { 'content-type': 'application/json' }
+
 createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
-  const m = url.pathname.match(/^\/api\/trpc\/(securityAgent\.\w+)/)
 
+  // REST endpoints (raw JSON, no tRPC envelope).
+  if (url.pathname === '/api/profile') {
+    res.writeHead(200, JSON_HEADERS)
+    res.end(JSON.stringify(PROFILE))
+    return
+  }
+  if (url.pathname === '/api/profile/balance') {
+    res.writeHead(200, JSON_HEADERS)
+    res.end(JSON.stringify(BALANCE))
+    return
+  }
+
+  const m = url.pathname.match(/^\/api\/trpc\/([\w.]+)/)
   if (m) {
-    const inputRaw = url.searchParams.get('input')
+    // POST = batched mutation — always a no-op, array envelope required
+    // by trpcMutate's parser.
+    if (req.method === 'POST') {
+      res.writeHead(200, JSON_HEADERS)
+      res.end(JSON.stringify([{ result: { data: { json: { ok: true } } } }]))
+      console.log(`stub  ${m[1]} (mutation, no-op)`)
+      return
+    }
     let input: Record<string, unknown> = {}
     try {
-      input = inputRaw ? (JSON.parse(inputRaw) as Record<string, unknown>) : {}
+      input = JSON.parse(url.searchParams.get('input') ?? '{}') as Record<string, unknown>
     } catch {
       input = {}
     }
-    const data = stubResponse(m[1], input)
-    res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ result: { data: { json: data } } }))
+    res.writeHead(200, JSON_HEADERS)
+    res.end(JSON.stringify({ result: { data: { json: queryStub(m[1], input) } } }))
     console.log(`stub  ${m[1]}`)
     return
   }
 
-  // Pass through to the real API — but only /api/* on the fixed upstream
-  // origin. Anything else is refused so the stub can't be used as an
-  // open forward proxy.
-  const target = new URL(url.pathname + url.search, UPSTREAM)
-  if (target.origin !== UPSTREAM || !target.pathname.startsWith('/api/')) {
-    res.writeHead(403)
-    res.end('forbidden')
-    return
-  }
-  const upstream = httpsReq(
-    target,
-    { method: req.method, headers: { ...req.headers, host: 'api.kilo.ai' } },
-    (up) => {
-      res.writeHead(up.statusCode ?? 502, up.headers)
-      up.pipe(res)
-    },
-  )
-  upstream.on('error', (e) => {
-    res.writeHead(502)
-    res.end(String(e))
-  })
-  req.pipe(upstream)
-  console.log(`proxy ${req.method} ${url.pathname}`)
+  res.writeHead(404, JSON_HEADERS)
+  res.end(JSON.stringify({ error: `not stubbed: ${url.pathname}` }))
+  console.log(`404   ${url.pathname}`)
 }).listen(PORT, () => {
-  console.log(`demo stub → ${UPSTREAM} on http://localhost:${PORT}`)
+  console.log(`demo stub on http://localhost:${PORT} (fixtures only, no upstream)`)
 })
