@@ -13,7 +13,7 @@
 # at "Not authenticated" before the stub is ever hit. The stub ignores the
 # token, so a fixture file works (device auth is NOT stubbed):
 #
-#   mkdir -p ~/.kilo && echo '{"type":"api","key":"demo"}' > ~/.kilo/credentials.json
+#   mkdir -p ~/.kilo && [ -e ~/.kilo/credentials.json ] || (umask 077 && printf '%s\n' '{"type":"api","key":"demo"}' > ~/.kilo/credentials.json)
 #
 # or authenticate against the real API before starting the stub:
 #
