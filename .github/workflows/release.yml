@@ -87,7 +87,7 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          echo "$INPUT_VERSION" | grep -qE '^(patch|minor|major|[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$' ||
+          [[ "$INPUT_VERSION" =~ ^(patch|minor|major|[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]] ||
             { echo "Invalid version: $INPUT_VERSION"; exit 1; }
 
       - name: Release
