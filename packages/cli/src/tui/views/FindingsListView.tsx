@@ -216,12 +216,15 @@ export function FindingsListView({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS))
   const [repos, setRepos] = useState<SecurityAgentRepository[] | null>(null)
+  const [reposError, setReposError] = useState<string | null>(null)
   const loadSeqRef = useRef(0)
 
   const loadRepos = async () => {
     try {
+      setReposError(null)
       setRepos(await getSecurityRepositories(token))
-    } catch {
+    } catch (e) {
+      setReposError(e instanceof Error ? e.message : String(e))
       setRepos([])
     }
   }
@@ -307,6 +310,15 @@ export function FindingsListView({
         return [{ label: count != null ? `${full} (${count})` : full, value: full }]
       }),
     ]
+    if (reposError) {
+      return (
+        <Box flexDirection="column">
+          <Text color="red">Failed to load repositories: {reposError}</Text>
+          <Text dimColor>Esc to go back</Text>
+          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column">
         <Text bold color="cyan">
