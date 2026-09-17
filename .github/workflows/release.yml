@@ -70,21 +70,21 @@ jobs:
           bun install --frozen-lockfile --ignore-scripts
           bun run build
 
-      # Scope to kilo-ai-cli: run-many without -p executes these targets on
-      # every graph project, including the .nx-devkit packages whose build
-      # executor (@nx-devkit/typescript:build) isn't resolvable as an npm
-      # package from the root install.
+      # npm run scripts are scoped to kilo-ai-cli (unscoped run-many would
+      # execute targets on the .nx-devkit packages too, whose executors
+      # aren't resolvable from the root install) and npm puts
+      # node_modules/.bin on PATH without npx's registry fallback.
       - name: Build
-        run: ./node_modules/.bin/nx run-many -t build -p kilo-ai-cli
+        run: npm run build
 
       - name: Typecheck
-        run: ./node_modules/.bin/nx run-many -t typecheck -p kilo-ai-cli
+        run: npm run typecheck
 
       - name: Lint
-        run: ./node_modules/.bin/nx run-many -t lint -p kilo-ai-cli
+        run: npm run lint
 
       - name: Test
-        run: ./node_modules/.bin/nx run-many -t test -p kilo-ai-cli
+        run: npm run test
 
       - name: Verify package contents
         working-directory: packages/cli
