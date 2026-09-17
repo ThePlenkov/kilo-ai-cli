@@ -97,16 +97,14 @@ jobs:
             --version="$INPUT_VERSION" \
             --dryRun="$INPUT_DRY_RUN"
 
-      # Tag-push path: create a GitHub Release with auto-generated changelog.
-      - name: Create release (tag push)
+      # Tag-push path: the tag name is the exact version. The executor is
+      # idempotent — already-published/tagged/released steps are skipped, so
+      # this also safely handles tags pushed by the dispatch path above.
+      - name: Release (tag push)
         if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
-          if ! gh release view "v$V" >/dev/null 2>&1; then
-            gh release create "v$V" \
-              --title "v$V" \
-              --generate-notes \
-              --target "$GITHUB_SHA"
-          fi
+          ./node_modules/.bin/nx run release:release \
+            --version="${GITHUB_REF_NAME#v}" \
+            --dryRun=false
