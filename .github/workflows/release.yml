@@ -25,12 +25,10 @@ on:
           - 'true'
           - 'false'
 
-# contents:write — push release tag + version-sync branch
-# pull-requests:write — open the version-sync PR
+# contents:write — push release tag + bump commit to main
 # id-token:write — npm OIDC trusted publishing
 permissions:
   contents: write
-  pull-requests: write
   id-token: write
 
 jobs:
@@ -103,13 +101,17 @@ jobs:
           echo "next=$V" >> "$GITHUB_OUTPUT"
           # Already on npm → skip publish but still repair tag/branch/PR
           # (self-heal after a partial run). Already published AND tagged →
-          # the release is complete — refuse to tag a foreign release.
+          # check if the GitHub Release exists — if not, still proceed to
+          # create it (release repair after a partial run).
           if npm view "kilo-ai-cli@$V" version >/dev/null 2>&1; then
-            if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
-              echo "kilo-ai-cli@$V is already published and tagged — nothing to do"
-              exit 1
-            fi
             echo "published=true" >> "$GITHUB_OUTPUT"
+            if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
+              if gh release view "v$V" >/dev/null 2>&1; then
+                echo "kilo-ai-cli@$V is already published, tagged, and released — nothing to do"
+                exit 1
+              fi
+              echo "tagged=true" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
@@ -126,18 +128,17 @@ jobs:
           fi
           npm version "$V" --no-git-tag-version --allow-same-version
 
-      # Commit the bump on a sync branch and tag it before building, so the tag
+      # Commit the bump directly on main and tag it before building, so the tag
       # points at a commit whose package.json matches the published version.
       # Pushed only after publish succeeds — a failed run leaves no residue.
       - name: Commit bump and tag
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' && steps.ver.outputs.tagged != 'true' }}
         run: |
           V="${{ steps.ver.outputs.next }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "chore/release-$V"
           git add packages/cli/package.json package-lock.json
-          # A rerun after the sync PR merged has nothing to commit — that's fine.
+          # A rerun after a previous successful release has nothing to commit — that's fine.
           git diff --cached --quiet || git commit -m "chore: release $V"
           git rev-parse -q --verify "refs/tags/v$V" >/dev/null || git tag "v$V"
 
@@ -167,37 +168,46 @@ jobs:
         working-directory: packages/cli
         run: npm publish --provenance --access public --dry-run
 
-      # main requires PRs — push the bump branch + tag and open the sync PR so
-      # the repo version catches up through the normal merge flow.
-      - name: Push tag and open version-sync PR
+      # Push the bump commit directly to main + push the tag + create a GitHub
+      # Release with auto-generated changelog. No PR — fully automated.
+      # Rebase on origin/main first to avoid non-fast-forward failures when
+      # main advances during the build/test/publish steps.
+      - name: Push to main, tag, and create release
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run == 'false' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           V="${{ steps.ver.outputs.next }}"
-          # Idempotent: a rerun skips whatever already exists on the remote.
-          git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1 ||
-            git push origin "v$V"
-          git ls-remote --exit-code --heads origin "chore/release-$V" >/dev/null 2>&1 ||
-            git push origin "chore/release-$V"
-          # Count first — a failed query inside the conditional would read as
-          # "PR exists" and silently skip creation.
-          N=$(gh pr list --head "chore/release-$V" --state open --json number -q 'length')
-          if [ "$(git rev-list --count origin/main..HEAD)" = "0" ]; then
-            echo "Nothing to sync — main already at $V"
-          elif [ "$N" = "0" ]; then
-            # GITHUB_TOKEN can't create PRs when the repo disables
-            # "Allow GitHub Actions to create pull requests" — degrade that
-            # specific denial to a warning (the release already succeeded),
-            # but keep failing on transient/validation errors.
-            if ! ERR=$(gh pr create \
-              --title "chore: release $V" \
-              --body "Automated version sync after publishing \`kilo-ai-cli@$V\` (tag \`v$V\`)." \
-              --base main \
-              --head "chore/release-$V" 2>&1); then
-              echo "$ERR"
-              echo "$ERR" | grep -qiE 'not permitted to create|resource not accessible by integration' ||
-                exit 1
-              echo "::warning::Could not open the sync PR — open it manually: https://github.com/${{ github.repository }}/compare/main...chore/release-$V"
-            fi
+          # Skip main+tag push when already tagged (release repair — only
+          # the GitHub Release is missing).
+          if [ "${{ steps.ver.outputs.tagged }}" != "true" ]; then
+            # Rebase the bump commit on the latest origin/main to avoid
+            # non-fast-forward rejection if main advanced during the build.
+            git fetch origin main
+            git rebase origin/main
+            # Idempotent: a rerun skips whatever already exists on the remote.
+            git push origin main
+            git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1 ||
+              git push origin "v$V"
+          fi
+          # Create GitHub Release with auto-generated changelog (idempotent).
+          if ! gh release view "v$V" >/dev/null 2>&1; then
+            gh release create "v$V" \
+              --title "v$V" \
+              --generate-notes \
+              --target main
+          fi
+
+      # Tag-push path: create a GitHub Release with auto-generated changelog.
+      - name: Create release (tag push)
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if ! gh release view "v$V" >/dev/null 2>&1; then
+            gh release create "v$V" \
+              --title "v$V" \
+              --generate-notes \
+              --target "$GITHUB_SHA"
           fi
