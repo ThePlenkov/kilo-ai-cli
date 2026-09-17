@@ -8,6 +8,7 @@
     "./.nx-devkit/packages/tsdown/dist/plugin.mjs",
     "./.nx-devkit/packages/oxlint/dist/plugin.mjs",
     "./.nx-devkit/packages/biome/dist/plugin.mjs",
-    "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs"
+    "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs",
+    "./.nx-devkit/packages/release/dist/plugin.mjs"
   ]
 }
