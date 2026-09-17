@@ -152,7 +152,13 @@ export function FindingsListView({
     setLoading(true)
     setError(null)
     try {
-      const result = await listFindings(token, filter)
+      // Severity sorts go through the API (global order across pages).
+      // Other fields are sorted client-side — page-local only.
+      const input =
+        sortField === 'severity'
+          ? { ...filter, sortBy: sortDir === 'asc' ? ('severity_asc' as const) : ('severity_desc' as const) }
+          : filter
+      const result = await listFindings(token, input)
       if (seq !== loadSeqRef.current) return // stale response, discard
       setData(result)
       setSelectedIdx(0)
@@ -168,7 +174,7 @@ export function FindingsListView({
   useEffect(() => {
     loadFindings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter])
+  }, [filter, sortField, sortDir])
 
   // Adjust scroll offset when selection changes
   useEffect(() => {
@@ -386,6 +392,7 @@ export function FindingsListView({
             {' '}
             | Running: {running} | Concurrency: {concurrency} | Sort: {sortField}
             {sortDir === 'desc' ? '↓' : '↑'}
+            {sortField !== 'severity' ? ' (page)' : ''}
           </Text>
         </Text>
       </Box>

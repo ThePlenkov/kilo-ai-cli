@@ -397,7 +397,8 @@ export interface BulkFindingFilters {
 
 /**
  * Dismiss findings matching the given filters.
- * Fetches findings in pages, dismisses each individually.
+ * Collects matching IDs first (read-only pagination — dismissing shifts
+ * result pages), then dismisses each individually.
  */
 export async function dismissFindingsBulk(
   token: string,
@@ -405,7 +406,7 @@ export async function dismissFindingsBulk(
   reason?: DismissReason,
 ): Promise<{ dismissed: number; totalMatched: number; errors: string[] }> {
   const errors: string[] = []
-  let dismissed = 0
+  const ids: string[] = []
   let totalMatched = 0
   let offset = 0
   const limit = 100
@@ -422,27 +423,30 @@ export async function dismissFindingsBulk(
     })
     totalMatched = result.totalCount ?? result.total_count ?? totalMatched
 
-    let findings = result.findings
-    if (filters.createdAfter || filters.createdBefore) {
-      findings = findings.filter((f) => {
-        const created = f.createdAt ?? f.created_at ?? ''
-        if (filters.createdAfter && created < filters.createdAfter) return false
-        if (filters.createdBefore && created > filters.createdBefore) return false
-        return true
-      })
-    }
-
-    for (const f of findings) {
-      try {
-        await dismissFinding(token, f.id, reason)
-        dismissed++
-      } catch (e) {
-        errors.push(`${f.id}: ${e instanceof Error ? e.message : String(e)}`)
+    for (const f of result.findings) {
+      if (filters.createdAfter || filters.createdBefore) {
+        const created = f.createdAt ?? f.created_at
+        // Missing timestamp: exclude when date filters are set (safe default
+        // for a destructive op rather than silently matching)
+        if (!created) continue
+        if (filters.createdAfter && created < filters.createdAfter) continue
+        if (filters.createdBefore && created > filters.createdBefore) continue
       }
+      ids.push(f.id)
     }
 
     if (result.findings.length < limit) break
     offset += limit
+  }
+
+  let dismissed = 0
+  for (const id of ids) {
+    try {
+      await dismissFinding(token, id, reason)
+      dismissed++
+    } catch (e) {
+      errors.push(`${id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 
   return { dismissed, totalMatched, errors }
