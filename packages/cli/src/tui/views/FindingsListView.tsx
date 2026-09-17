@@ -117,6 +117,63 @@ const MODE_KEYS: Record<string, FilterMode> = {
   R: 'repo',
 }
 
+interface FindingsKeyCtx {
+  filterMode: FilterMode
+  data: SecurityFindingsResult | null
+  filter: FindingsFilter
+  sortField: string
+  sortDir: 'asc' | 'desc'
+  selectedIdx: number
+  setFilterMode: (m: FilterMode) => void
+  setSelectedIdx: (updater: (i: number) => number) => void
+  onFilterChange: (f: FindingsFilter) => void
+  onSelectFinding: (id: string) => void
+  onBack: () => void
+  loadFindings: () => void
+  loadRepos: () => void
+}
+
+function nextOffset(input: string, filter: FindingsFilter, total: number): number | null {
+  if (input === 'n' && filter.offset + filter.limit < total) return filter.offset + filter.limit
+  if (input === 'p' && filter.offset > 0) return Math.max(0, filter.offset - filter.limit)
+  return null
+}
+
+function handleFindingsKey(
+  input: string,
+  key: { escape: boolean; upArrow: boolean; downArrow: boolean; return: boolean },
+  ctx: FindingsKeyCtx,
+): void {
+  if (ctx.filterMode !== 'none') return
+  if (key.escape) {
+    ctx.onBack()
+    return
+  }
+  const mode = MODE_KEYS[input]
+  if (mode) {
+    ctx.setFilterMode(mode)
+    if (mode === 'repo') ctx.loadRepos()
+    return
+  }
+  if (input === 'r') {
+    ctx.loadFindings()
+    return
+  }
+  const offset = nextOffset(input, ctx.filter, ctx.data?.totalCount ?? ctx.data?.total_count ?? 0)
+  if (offset !== null) {
+    ctx.onFilterChange({ ...ctx.filter, offset })
+    return
+  }
+  const findings = ctx.data?.findings ?? []
+  if (findings.length === 0) return
+  if (key.upArrow) ctx.setSelectedIdx((i) => Math.max(0, i - 1))
+  if (key.downArrow) ctx.setSelectedIdx((i) => Math.min(findings.length - 1, i + 1))
+  if (key.return) {
+    const finding = sortFindings(findings, ctx.sortField, ctx.sortDir)[ctx.selectedIdx]
+    if (finding?.id) ctx.onSelectFinding(finding.id)
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Sort options                                                        */
 /* ------------------------------------------------------------------ */
@@ -212,49 +269,22 @@ export function FindingsListView({
   }, [selectedIdx, scrollOffset, maxVisible, data])
 
   useInput(
-    (input, key) => {
-      if (filterMode !== 'none') return
-      if (key.escape) {
-        onBack()
-        return
-      }
-      const mode = MODE_KEYS[input]
-      if (mode) {
-        setFilterMode(mode)
-        if (mode === 'repo') loadRepos()
-        return
-      }
-      if (input === 'r') {
-        loadFindings()
-        return
-      }
-      if (
-        input === 'n' &&
-        data &&
-        filter.offset + filter.limit < (data.totalCount ?? data.total_count ?? 0)
-      ) {
-        onFilterChange({ ...filter, offset: filter.offset + filter.limit })
-        return
-      }
-      if (input === 'p' && filter.offset > 0) {
-        onFilterChange({ ...filter, offset: Math.max(0, filter.offset - filter.limit) })
-        return
-      }
-
-      if (!data || data.findings.length === 0) return
-
-      if (key.upArrow) {
-        setSelectedIdx((i) => Math.max(0, i - 1))
-      }
-      if (key.downArrow) {
-        setSelectedIdx((i) => Math.min(data.findings.length - 1, i + 1))
-      }
-      if (key.return) {
-        const sorted = sortFindings(data.findings, sortField, sortDir)
-        const finding = sorted[selectedIdx]
-        if (finding && finding.id) onSelectFinding(finding.id)
-      }
-    },
+    (input, key) =>
+      handleFindingsKey(input, key, {
+        filterMode,
+        data,
+        filter,
+        sortField,
+        sortDir,
+        selectedIdx,
+        setFilterMode,
+        setSelectedIdx,
+        onFilterChange,
+        onSelectFinding,
+        onBack,
+        loadFindings,
+        loadRepos,
+      }),
     { isActive: focused },
   )
 
