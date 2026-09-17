@@ -351,7 +351,8 @@ kilo-ai-cli security findings close [filters] --reason <r>  # Bulk-dismiss match
 kilo-ai-cli security findings delete <repo>         # Delete all findings for a repo (interactive)
 kilo-ai-cli security findings delete <repo> --yes   # Delete without confirmation prompt
 # <repo> can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
-# Both `close` and `delete` accept --repo plus the same filters as `list`, and support --dry-run/--yes.
+# Both `close` and `delete` accept --repo plus the `list` filters
+# --severity/--status/--outcome/--overdue, and support --dry-run/--yes.
 
 # Analysis & remediation
 kilo-ai-cli security findings analyze <id>           # Queue codebase analysis for a finding

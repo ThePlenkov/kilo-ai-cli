@@ -276,10 +276,11 @@ export function FindingsListView({
     }
     const items = [
       { label: '(all repositories)', value: '' },
-      ...repos.map((r) => {
-        const name = r.fullName ?? r.full_name ?? r.name ?? String(r.id ?? '?')
+      ...repos.flatMap((r) => {
+        const full = r.fullName ?? r.full_name
+        if (!full) return []
         const count = r.findingsCount ?? r.findings_count
-        return { label: count != null ? `${name} (${count})` : name, value: name }
+        return [{ label: count != null ? `${full} (${count})` : full, value: full }]
       }),
     ]
     return (

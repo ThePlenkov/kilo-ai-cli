@@ -487,9 +487,17 @@ createServer((req, res) => {
     return
   }
 
-  // Pass through to the real API.
+  // Pass through to the real API — but only /api/* on the fixed upstream
+  // origin. Anything else is refused so the stub can't be used as an
+  // open forward proxy.
+  const target = new URL(url.pathname + url.search, UPSTREAM)
+  if (target.origin !== UPSTREAM || !target.pathname.startsWith('/api/')) {
+    res.writeHead(403)
+    res.end('forbidden')
+    return
+  }
   const upstream = httpsReq(
-    `${UPSTREAM}${url.pathname}${url.search}`,
+    target,
     { method: req.method, headers: { ...req.headers, host: 'api.kilo.ai' } },
     (up) => {
       res.writeHead(up.statusCode ?? 502, up.headers)
