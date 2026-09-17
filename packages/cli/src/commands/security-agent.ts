@@ -272,7 +272,7 @@ export const securityFindingsListCommand = defineCommand({
     // Parse --columns
     const requested =
       args.columns === 'all' ? FINDINGS_COLUMN_NAMES : args.columns.split(',').map((c) => c.trim())
-    const invalid = requested.filter((c) => !(c in FINDINGS_COLUMNS))
+    const invalid = requested.filter((c) => !Object.hasOwn(FINDINGS_COLUMNS, c))
     if (invalid.length > 0) {
       console.error(
         `Invalid columns: ${invalid.join(', ')}. Valid: ${FINDINGS_COLUMN_NAMES.join(', ')} or "all"`,
