@@ -2,8 +2,12 @@ import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 import React, { useEffect, useRef, useState } from 'react'
 
-import { listFindings } from '../../api/security-agent.ts'
-import type { SecurityFinding, SecurityFindingsResult } from '../../api/types.ts'
+import { getSecurityRepositories, listFindings } from '../../api/security-agent.ts'
+import type {
+  SecurityAgentRepository,
+  SecurityFinding,
+  SecurityFindingsResult,
+} from '../../api/types.ts'
 import { useTermSize } from '../hooks.ts'
 import type { FindingsFilter } from '../types.ts'
 
@@ -32,7 +36,7 @@ const SEVERITY_ORDER: Record<string, number> = {
   info: 4,
 }
 
-type FilterMode = 'none' | 'severity' | 'status' | 'sort' | 'columns'
+type FilterMode = 'none' | 'severity' | 'status' | 'sort' | 'columns' | 'repo'
 
 /** Lines reserved for header, filters, help bar, scroll indicators, etc. */
 const RESERVED_LINES = 10
@@ -104,6 +108,72 @@ const TUI_COLUMNS: Record<string, TuiColumnDef> = {
 const ALL_COLUMN_NAMES = Object.keys(TUI_COLUMNS)
 const DEFAULT_COLUMNS = ['severity', 'title', 'repo', 'status', 'package']
 
+/** Keys that open a picker/filter mode (R also triggers a repo load). */
+const MODE_KEYS: Record<string, FilterMode> = {
+  f: 'severity',
+  s: 'status',
+  o: 'sort',
+  c: 'columns',
+  R: 'repo',
+}
+
+interface FindingsKeyCtx {
+  filterMode: FilterMode
+  data: SecurityFindingsResult | null
+  filter: FindingsFilter
+  sortField: string
+  sortDir: 'asc' | 'desc'
+  selectedIdx: number
+  setFilterMode: (m: FilterMode) => void
+  setSelectedIdx: (updater: (i: number) => number) => void
+  onFilterChange: (f: FindingsFilter) => void
+  onSelectFinding: (id: string) => void
+  onBack: () => void
+  loadFindings: () => void
+  loadRepos: () => void
+}
+
+function nextOffset(input: string, filter: FindingsFilter, total: number): number | null {
+  if (input === 'n' && filter.offset + filter.limit < total) return filter.offset + filter.limit
+  if (input === 'p' && filter.offset > 0) return Math.max(0, filter.offset - filter.limit)
+  return null
+}
+
+function handleFindingsKey(
+  input: string,
+  key: { escape: boolean; upArrow: boolean; downArrow: boolean; return: boolean },
+  ctx: FindingsKeyCtx,
+): void {
+  if (ctx.filterMode !== 'none') return
+  if (key.escape) {
+    ctx.onBack()
+    return
+  }
+  const mode = MODE_KEYS[input]
+  if (mode) {
+    ctx.setFilterMode(mode)
+    if (mode === 'repo') ctx.loadRepos()
+    return
+  }
+  if (input === 'r') {
+    ctx.loadFindings()
+    return
+  }
+  const offset = nextOffset(input, ctx.filter, ctx.data?.totalCount ?? ctx.data?.total_count ?? 0)
+  if (offset !== null) {
+    ctx.onFilterChange({ ...ctx.filter, offset })
+    return
+  }
+  const findings = ctx.data?.findings ?? []
+  if (findings.length === 0) return
+  if (key.upArrow) ctx.setSelectedIdx((i) => Math.max(0, i - 1))
+  if (key.downArrow) ctx.setSelectedIdx((i) => Math.min(findings.length - 1, i + 1))
+  if (key.return) {
+    const finding = sortFindings(findings, ctx.sortField, ctx.sortDir)[ctx.selectedIdx]
+    if (finding?.id) ctx.onSelectFinding(finding.id)
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Sort options                                                        */
 /* ------------------------------------------------------------------ */
@@ -145,7 +215,23 @@ export function FindingsListView({
   const [sortField, setSortField] = useState('severity')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS))
+  const [repos, setRepos] = useState<SecurityAgentRepository[] | null>(null)
+  const [reposError, setReposError] = useState<string | null>(null)
   const loadSeqRef = useRef(0)
+  const repoSeqRef = useRef(0)
+
+  const loadRepos = async () => {
+    const seq = ++repoSeqRef.current
+    setReposError(null)
+    try {
+      const result = await getSecurityRepositories(token)
+      if (seq !== repoSeqRef.current) return
+      setRepos(result)
+    } catch (e) {
+      if (seq !== repoSeqRef.current) return
+      setReposError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const loadFindings = async () => {
     const seq = ++loadSeqRef.current
@@ -190,63 +276,72 @@ export function FindingsListView({
   }, [selectedIdx, scrollOffset, maxVisible, data])
 
   useInput(
-    (input, key) => {
-      if (filterMode !== 'none') return
-      if (key.escape) {
-        onBack()
-        return
-      }
-      if (input === 'f') {
-        setFilterMode('severity')
-        return
-      }
-      if (input === 's') {
-        setFilterMode('status')
-        return
-      }
-      if (input === 'o') {
-        setFilterMode('sort')
-        return
-      }
-      if (input === 'c') {
-        setFilterMode('columns')
-        return
-      }
-      if (input === 'r') {
-        loadFindings()
-        return
-      }
-      if (
-        input === 'n' &&
-        data &&
-        filter.offset + filter.limit < (data.totalCount ?? data.total_count ?? 0)
-      ) {
-        onFilterChange({ ...filter, offset: filter.offset + filter.limit })
-        return
-      }
-      if (input === 'p' && filter.offset > 0) {
-        onFilterChange({ ...filter, offset: Math.max(0, filter.offset - filter.limit) })
-        return
-      }
-
-      if (!data || data.findings.length === 0) return
-
-      if (key.upArrow) {
-        setSelectedIdx((i) => Math.max(0, i - 1))
-      }
-      if (key.downArrow) {
-        setSelectedIdx((i) => Math.min(data.findings.length - 1, i + 1))
-      }
-      if (key.return) {
-        const sorted = sortFindings(data.findings, sortField, sortDir)
-        const finding = sorted[selectedIdx]
-        if (finding && finding.id) onSelectFinding(finding.id)
-      }
-    },
+    (input, key) =>
+      handleFindingsKey(input, key, {
+        filterMode,
+        data,
+        filter,
+        sortField,
+        sortDir,
+        selectedIdx,
+        setFilterMode,
+        setSelectedIdx,
+        onFilterChange,
+        onSelectFinding,
+        onBack,
+        loadFindings,
+        loadRepos,
+      }),
     { isActive: focused },
   )
 
   // --- Filter selection modes ---
+  if (filterMode === 'repo') {
+    if (reposError) {
+      return (
+        <Box flexDirection="column">
+          <Text color="red">Failed to load repositories: {reposError}</Text>
+          <Text dimColor>Esc to go back</Text>
+          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        </Box>
+      )
+    }
+    if (repos === null) {
+      return (
+        <Box flexDirection="column">
+          <Text color="yellow">Loading repositories…</Text>
+          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        </Box>
+      )
+    }
+    const items = [
+      { label: '(all repositories)', value: '' },
+      ...repos.flatMap((r) => {
+        const full = r.fullName ?? r.full_name
+        if (!full) return []
+        const count = r.findingsCount ?? r.findings_count
+        return [{ label: count != null ? `${full} (${count})` : full, value: full }]
+      }),
+    ]
+    return (
+      <Box flexDirection="column">
+        <Text bold color="cyan">
+          Filter by repository:
+        </Text>
+        <SelectInput
+          items={items}
+          isFocused={focused}
+          onSelect={(item) => {
+            onFilterChange({ ...filter, repoFullName: item.value || undefined, offset: 0 })
+            setFilterMode('none')
+          }}
+        />
+        <Text dimColor>Esc to cancel</Text>
+        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+      </Box>
+    )
+  }
+
   if (filterMode === 'severity') {
     const items = [
       { label: '(all severities)', value: '' },
@@ -365,6 +460,11 @@ export function FindingsListView({
     return (
       <Box flexDirection="column">
         <Text>No findings found.</Text>
+        <Text dimColor>
+          {filter.repoFullName
+            ? `repo=${filter.repoFullName} — try R to pick another repository`
+            : 'Press R to filter by repository, r to refresh, Esc to go back'}
+        </Text>
         <BackHandler onBack={onBack} focused={focused} />
       </Box>
     )
@@ -401,6 +501,8 @@ export function FindingsListView({
       <Box marginBottom={1}>
         <Text dimColor>
           Filters:{' '}
+          {filter.repoFullName ? <Text color="cyan">repo={filter.repoFullName}</Text> : null}
+          {filter.repoFullName ? '  ' : ''}
           {filter.severity ? (
             <Text color={SEVERITY_COLORS[filter.severity] ?? 'white'}>
               severity={filter.severity}
@@ -458,8 +560,8 @@ export function FindingsListView({
       {/* Position indicator */}
       <Box marginTop={1}>
         <Text dimColor>
-          [{selectedIdx + 1}/{sorted.length}] ↑↓ navigate Enter=details f=severity s=status o=sort
-          c=columns n/p=page r=refresh Esc=back
+          [{selectedIdx + 1}/{sorted.length}] ↑↓ navigate Enter=details R=repo f=severity s=status
+          o=sort c=columns n/p=page r=refresh Esc=back
         </Text>
       </Box>
 
