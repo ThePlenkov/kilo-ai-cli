@@ -4,6 +4,7 @@ import {
   cancelRemediation,
   deleteFindingsByRepository,
   dismissFinding,
+  dismissFindingsBulk,
   getDashboardStats,
   getFinding,
   getLastSyncTime,
@@ -230,11 +231,64 @@ describe('security-agent API (personal level)', () => {
       expect(JSON.parse(init.body)).toEqual({ '0': { attemptId: 'a1' } })
     })
 
-    it('deleteFindingsByRepository posts with repositoryId', async () => {
+    it('deleteFindingsByRepository posts with repoFullName', async () => {
       fetchMock.mockResolvedValue(mockMutationResponse(null))
       await deleteFindingsByRepository('tok', 'r1')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
-      expect(JSON.parse(init.body)).toEqual({ '0': { repositoryId: 'r1' } })
+      expect(JSON.parse(init.body)).toEqual({ '0': { repoFullName: 'r1' } })
+    })
+
+    it('dismissFindingsBulk dismisses all matching findings', async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse(null)
+        }
+        return mockResponse({
+          findings: [
+            { id: 'f1', severity: 'high', title: 't1', status: 'open' },
+            { id: 'f2', severity: 'low', title: 't2', status: 'open' },
+            { id: 'f3', severity: 'critical', title: 't3', status: 'open' },
+          ],
+          totalCount: 3,
+        })
+      })
+
+      const result = await dismissFindingsBulk(
+        'tok',
+        { repoFullName: 'user/repo', status: 'open' },
+        'no_bandwidth',
+      )
+      expect(result.dismissed).toBe(3)
+      expect(result.totalMatched).toBe(3)
+      expect(result.errors).toHaveLength(0)
+      const dismissCalls = fetchMock.mock.calls.filter((c) =>
+        String(c[0]).includes('securityAgent.dismissFinding'),
+      )
+      expect(dismissCalls).toHaveLength(3)
+    })
+
+    it('dismissFindingsBulk collects errors and keeps going', async () => {
+      let dismissCount = 0
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          dismissCount++
+          if (dismissCount === 2) throw new Error('API error')
+          return mockMutationResponse(null)
+        }
+        return mockResponse({
+          findings: [
+            { id: 'f1', severity: 'high', title: 't1', status: 'open' },
+            { id: 'f2', severity: 'low', title: 't2', status: 'open' },
+            { id: 'f3', severity: 'critical', title: 't3', status: 'open' },
+          ],
+          totalCount: 3,
+        })
+      })
+
+      const result = await dismissFindingsBulk('tok', { repoFullName: 'user/repo' })
+      expect(result.dismissed).toBe(2)
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0]).toContain('f2')
     })
   })
 })

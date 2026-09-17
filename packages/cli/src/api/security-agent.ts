@@ -377,9 +377,79 @@ export async function cancelRemediation(token: string, attemptId: string): Promi
 /** securityAgent.deleteFindingsByRepository */
 export async function deleteFindingsByRepository(
   token: string,
-  repositoryId: string,
+  repoFullName: string,
 ): Promise<void> {
-  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repositoryId })
+  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repoFullName })
+}
+
+/** Filters for bulk dismiss operations. */
+export interface BulkFindingFilters {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  outcomeFilter?: string
+  overdue?: boolean
+  /** ISO date string — only findings created after this date (client-side) */
+  createdAfter?: string
+  /** ISO date string — only findings created before this date (client-side) */
+  createdBefore?: string
+}
+
+/**
+ * Dismiss findings matching the given filters.
+ * Collects matching IDs first (read-only pagination — dismissing shifts
+ * result pages), then dismisses each individually.
+ */
+export async function dismissFindingsBulk(
+  token: string,
+  filters: BulkFindingFilters,
+  reason?: DismissReason,
+): Promise<{ dismissed: number; totalMatched: number; errors: string[] }> {
+  const errors: string[] = []
+  const ids: string[] = []
+  let totalMatched = 0
+  let offset = 0
+  const limit = 100
+
+  for (;;) {
+    const result = await listFindings(token, {
+      repoFullName: filters.repoFullName,
+      severity: filters.severity,
+      status: filters.status,
+      outcomeFilter: filters.outcomeFilter,
+      overdue: filters.overdue,
+      limit,
+      offset,
+    })
+    totalMatched = result.totalCount ?? result.total_count ?? totalMatched
+
+    for (const f of result.findings) {
+      if (filters.createdAfter || filters.createdBefore) {
+        const created = f.createdAt ?? f.created_at
+        // Missing timestamp: exclude when date filters are set (safe default
+        // for a destructive op rather than silently matching)
+        if (!created) continue
+        if (filters.createdAfter && created < filters.createdAfter) continue
+        if (filters.createdBefore && created > filters.createdBefore) continue
+      }
+      ids.push(f.id)
+    }
+
+    if (result.findings.length < limit) break
+    offset += limit
+  }
+
+  let dismissed = 0
+  for (const id of ids) {
+    try {
+      await dismissFinding(token, id, reason)
+      dismissed++
+    } catch (e) {
+      errors.push(`${id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  return { dismissed, totalMatched, errors }
 }
 
 /** securityAgent.trackUiInteraction */

@@ -97,38 +97,18 @@ export function repoLink(repoFullName: string | undefined, label?: string): stri
 
 /**
  * Detect whether the terminal supports OSC 8 hyperlinks.
- * Returns false for non-TTY or known-unsupported terminals.
+ * Defaults to true for TTY — unsupported terminals ignore the sequences
+ * and still show the label text. Use FORCE_HYPERLINK=0 to disable.
  */
 let _hyperlinkSupport: boolean | null = null
 function supportsHyperlinks(): boolean {
   if (_hyperlinkSupport !== null) return _hyperlinkSupport
-  const term = process.env.TERM_PROGRAM ?? ''
-  const termVersion = process.env.TERM_PROGRAM_VERSION ?? ''
-  // Non-TTY (piped) — no hyperlinks
-  if (!process.stdout.isTTY) {
-    _hyperlinkSupport = false
-    return false
+  if (process.env.FORCE_HYPERLINK) {
+    _hyperlinkSupport = process.env.FORCE_HYPERLINK !== '0'
+    return _hyperlinkSupport
   }
-  // Known supporters: WezTerm, Ghostty, Kitty, VS Code
-  // iTerm.app is handled separately below (needs version >= 3.0)
-  // Windows Terminal sets WT_SESSION instead of TERM_PROGRAM
-  // Kitty sets TERM=xterm-kitty instead of TERM_PROGRAM
-  const supporters = ['WezTerm', 'ghostty', 'kitty', 'vscode']
-  if (
-    supporters.includes(term) ||
-    process.env.WT_SESSION ||
-    process.env.TERM === 'xterm-kitty'
-  ) {
-    _hyperlinkSupport = true
-    return true
-  }
-  // iTerm needs version >= 3.0
-  if (term === 'iTerm.app' && Number.parseInt(termVersion, 10) >= 3) {
-    _hyperlinkSupport = true
-    return true
-  }
-  _hyperlinkSupport = false
-  return false
+  _hyperlinkSupport = process.stdout.isTTY === true
+  return _hyperlinkSupport
 }
 
 /** Get the full GitHub URL for a repo full name. */

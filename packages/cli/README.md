@@ -325,43 +325,46 @@ kilo-ai-cli security sync                           # Trigger a security sync
 kilo-ai-cli security last-sync                     # Show last sync time
 
 # Findings
-kilo-ai-cli security findings [options]            # List findings
-kilo-ai-cli security finding <id>                  # Get finding details
-kilo-ai-cli security dismiss <id> --reason <r>     # Dismiss a finding (one-way; reason:
-                                                 #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
-kilo-ai-cli security delete-findings <repo>        # Delete all findings for a repo (interactive)
-kilo-ai-cli security delete-findings <repo> --yes  # Delete without confirmation prompt
+kilo-ai-cli security findings list [options]        # List findings
+kilo-ai-cli security findings detail <id>           # Get finding details
+kilo-ai-cli security findings dismiss <id> --reason <r>  # Dismiss a finding (one-way; reason:
+                                                    #  fix_started/no_bandwidth/tolerable_risk/inaccurate/not_used)
+kilo-ai-cli security findings delete <repo>         # Delete all findings for a repo (interactive)
+kilo-ai-cli security findings delete <repo> --yes   # Delete without confirmation prompt
 # <repo> can be a numeric repository ID (from `security repos`) or a full name like `user/repo`.
 
 # Analysis & remediation
-kilo-ai-cli security analyze <finding-id>           # Queue codebase analysis for a finding
-kilo-ai-cli security remediate <finding-id>         # Start remediation for a finding (may open a PR)
-kilo-ai-cli security retry-remediation <finding-id> # Retry remediation for a finding
-kilo-ai-cli security cancel-remediation <attempt-id> # Cancel a running remediation attempt
+kilo-ai-cli security findings analyze <id>           # Queue codebase analysis for a finding
+kilo-ai-cli security findings remediate <id>         # Start remediation for a finding (may open a PR)
+kilo-ai-cli security findings retry <id>             # Retry remediation for a finding
+kilo-ai-cli security findings cancel <attempt-id>    # Cancel a running remediation attempt
 
 # Stats & dashboard
-kilo-ai-cli security stats                          # Show security agent statistics
-kilo-ai-cli security dashboard                     # Show dashboard stats
+kilo-ai-cli security stats                           # Show security agent statistics
+kilo-ai-cli security dashboard                      # Show dashboard stats
 
 # Commands
-kilo-ai-cli security commands                       # List active security agent commands
-kilo-ai-cli security command <id>                   # Get status of a specific command
+kilo-ai-cli security commands                        # List active security agent commands
+kilo-ai-cli security command <id>                    # Get status of a specific command
 ```
 
-#### `security findings` options
+#### `security findings list` options
 
 | Flag | Type | Description |
 |------|------|-------------|
 | `--repo` | string | Filter by repository full name (e.g. `user/repo`) |
 | `--severity` | string | Filter by severity: `critical` / `high` / `medium` / `low` / `info` |
 | `--status` | string | Filter by status: `open` / `dismissed` / `remediated` / `in_progress` |
+| `--outcome` | string | Filter by remediation outcome |
 | `--overdue` | boolean | Only show overdue findings |
+| `--sort` | string | Sort: `severity_desc` (default), `severity_asc`, `sla_due_at_asc` |
 | `--limit` | string | Max findings to show (1–100, default `50`) |
 | `--offset` | string | Pagination offset (default `0`) |
+| `--columns` | string | Columns to show: `id,severity,title,repo,status,package` or `all` (default: no `id`) |
 
-Output includes a summary (total, running, concurrency) followed by a table with ID, severity (color-coded), title, repository (clickable hyperlink), status (color-coded), and package columns.
+Output includes a summary (total, running, concurrency) followed by a table with severity (color-coded), title, repository (clickable hyperlink), status (color-coded), and package columns. Use `--columns all` to include the `id` column.
 
-#### `security finding <id>` output
+#### `security findings detail <id>` output
 
 Shows full finding details: severity, title, repository, status, source, description, package (with ecosystem), vulnerable version range, patched version, CVE, GHSA, CVSS score, SLA due date, analysis status, remediation summary, created/updated timestamps.
 
