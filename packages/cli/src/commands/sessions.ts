@@ -13,11 +13,16 @@ export const sessionsListCommand = defineCommand({
   args: {
     limit: { type: 'string', description: 'Max sessions to show', default: '20' },
     gitUrl: { type: 'string', description: 'Filter by git URL' },
+    cursor: { type: 'string', description: 'Pagination cursor from a previous list' },
   },
   async run({ args }) {
     const { token, organizationId } = await getToken()
     const limit = args.limit ? Number.parseInt(args.limit, 10) : 20
-    const result = await fetchCloudSessions(token, { limit, gitUrl: args.gitUrl }, organizationId)
+    const result = await fetchCloudSessions(
+      token,
+      { limit, gitUrl: args.gitUrl, cursor: args.cursor },
+      organizationId,
+    )
     if (result.cliSessions.length === 0) {
       console.log('No sessions found.')
       return
@@ -26,18 +31,20 @@ export const sessionsListCommand = defineCommand({
       result.cliSessions.map((s) => ({
         id: s.session_id,
         title: s.title ?? '(untitled)',
+        created: s.created_at,
         updated: s.updated_at,
         version: s.version,
       })),
       [
         { key: 'id', label: 'ID', width: 12 },
         { key: 'title', label: 'Title', width: 40 },
+        { key: 'created', label: 'Created', width: 24 },
         { key: 'updated', label: 'Updated', width: 24 },
         { key: 'version', label: 'Version', width: 10 },
       ],
     )
     if (result.nextCursor) {
-      console.log(`More sessions available (cursor: ${result.nextCursor})`)
+      console.log(`More sessions available (--cursor ${result.nextCursor})`)
     }
   },
 })

@@ -139,12 +139,14 @@ export const orgInvoicesCommand = defineCommand({
         date: i.date,
         amount: i.amount,
         status: i.status,
+        url: i.url ?? '-',
       })),
       [
         { key: 'id', label: 'ID', width: 12 },
         { key: 'date', label: 'Date', width: 12 },
         { key: 'amount', label: 'Amount', width: 10, align: 'right' },
         { key: 'status', label: 'Status', width: 10 },
+        { key: 'url', label: 'URL', width: 40 },
       ],
     )
   },
@@ -155,13 +157,18 @@ export const orgCreateCommand = defineCommand({
   args: {
     name: { type: 'positional', description: 'Organization name', required: true },
     domain: { type: 'string', description: 'Company domain' },
+    'auto-add': {
+      type: 'boolean',
+      description: 'Add creator as owner (default: true)',
+      default: true,
+    },
   },
   async run({ args }) {
     const { token } = await getToken()
     const org = await createOrganization(token, {
       name: args.name,
       companyDomain: args.domain ?? null,
-      autoAddCreator: true,
+      autoAddCreator: args['auto-add'] !== false,
     })
     console.log(`Created organization: ${org.name} (${org.id})`)
   },
@@ -196,12 +203,14 @@ export const orgModelsCommand = defineCommand({
       models.map((m) => ({
         id: m.id,
         name: m.name,
+        description: m.description ?? '-',
         free: m.isFree == null ? '-' : m.isFree ? 'yes' : 'no',
         context: m.contextLength ?? '-',
       })),
       [
         { key: 'id', label: 'ID', width: 24 },
         { key: 'name', label: 'Name', width: 30 },
+        { key: 'description', label: 'Description', width: 40 },
         { key: 'free', label: 'Free', width: 6 },
         { key: 'context', label: 'Context', width: 10, align: 'right' },
       ],

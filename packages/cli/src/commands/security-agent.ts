@@ -117,13 +117,57 @@ export const securityDisableCommand = defineCommand({
 
 export const securityReposCommand = defineCommand({
   meta: { name: 'repos', description: 'List repositories monitored by security agent' },
-  async run() {
+  args: {
+    sort: {
+      type: 'string',
+      description: 'Sort by: findings (desc), name (asc), synced (desc)',
+      default: 'findings',
+    },
+    'min-findings': {
+      type: 'boolean',
+      description: 'Hide repositories with zero findings',
+      default: false,
+    },
+  },
+  async run({ args }) {
     const { token } = await getToken()
-    const repos = await getSecurityRepositories(token)
+    let repos = await getSecurityRepositories(token)
     if (repos.length === 0) {
       console.log('No repositories found.')
       return
     }
+    if (args['min-findings']) {
+      repos = repos.filter((r) => (r.findingsCount ?? r.findings_count ?? 0) > 0)
+      if (repos.length === 0) {
+        console.log('No repositories with findings found.')
+        return
+      }
+    }
+    const sortField = args.sort ?? 'findings'
+    const validSorts = ['findings', 'name', 'synced']
+    if (!validSorts.includes(sortField)) {
+      console.error(`Invalid sort: ${sortField}. Valid: ${validSorts.join(', ')}`)
+      process.exit(1)
+    }
+    repos = [...repos].sort((a, b) => {
+      switch (sortField) {
+        case 'name':
+          return (a.fullName ?? a.full_name ?? a.name ?? '').localeCompare(
+            b.fullName ?? b.full_name ?? b.name ?? '',
+          )
+        case 'synced': {
+          const aT = a.lastSyncedAt ?? a.last_synced_at ?? ''
+          const bT = b.lastSyncedAt ?? b.last_synced_at ?? ''
+          return bT.localeCompare(aT)
+        }
+        case 'findings':
+        default: {
+          const aN = a.findingsCount ?? a.findings_count ?? 0
+          const bN = b.findingsCount ?? b.findings_count ?? 0
+          return bN - aN
+        }
+      }
+    })
     console.log(`Repositories (${repos.length}):\n`)
     printTable(
       repos.map((r) => ({
@@ -153,7 +197,16 @@ export const securityFindingsCommand = defineCommand({
       type: 'string',
       description: 'Filter by status (open/dismissed/remediated/in_progress)',
     },
+    outcome: {
+      type: 'string',
+      description: 'Filter by remediation outcome (e.g. fixed/failed/pending)',
+    },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
+    sort: {
+      type: 'string',
+      description: 'Sort: severity_desc (default), severity_asc, sla_due_at_asc',
+      default: 'severity_desc',
+    },
     limit: { type: 'string', description: 'Max findings to show (1-100)', default: '50' },
     offset: { type: 'string', description: 'Pagination offset', default: '0' },
   },
@@ -163,14 +216,25 @@ export const securityFindingsCommand = defineCommand({
       repoFullName?: string
       severity?: string
       status?: string
+      outcomeFilter?: string
       overdue?: boolean
+      sortBy?: 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
       limit?: number
       offset?: number
     } = {}
     if (args.repo) input.repoFullName = args.repo
     if (args.severity) input.severity = args.severity
     if (args.status) input.status = args.status
+    if (args.outcome) input.outcomeFilter = args.outcome
     if (args.overdue) input.overdue = true
+    if (args.sort) {
+      const valid = ['severity_desc', 'severity_asc', 'sla_due_at_asc']
+      if (!valid.includes(args.sort)) {
+        console.error(`Invalid sort: ${args.sort}. Valid: ${valid.join(', ')}`)
+        process.exit(1)
+      }
+      input.sortBy = args.sort as 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
+    }
     if (args.limit) {
       const parsed = Number.parseInt(args.limit, 10)
       if (Number.isNaN(parsed) || parsed < 1) {
