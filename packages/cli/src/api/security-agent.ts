@@ -377,9 +377,75 @@ export async function cancelRemediation(token: string, attemptId: string): Promi
 /** securityAgent.deleteFindingsByRepository */
 export async function deleteFindingsByRepository(
   token: string,
-  repositoryId: string,
+  repoFullName: string,
 ): Promise<void> {
-  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repositoryId })
+  await trpcMutate('securityAgent.deleteFindingsByRepository', token, z.unknown(), { repoFullName })
+}
+
+/** Filters for bulk dismiss operations. */
+export interface BulkFindingFilters {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  outcomeFilter?: string
+  overdue?: boolean
+  /** ISO date string — only findings created after this date (client-side) */
+  createdAfter?: string
+  /** ISO date string — only findings created before this date (client-side) */
+  createdBefore?: string
+}
+
+/**
+ * Dismiss findings matching the given filters.
+ * Fetches findings in pages, dismisses each individually.
+ */
+export async function dismissFindingsBulk(
+  token: string,
+  filters: BulkFindingFilters,
+  reason?: DismissReason,
+): Promise<{ dismissed: number; totalMatched: number; errors: string[] }> {
+  const errors: string[] = []
+  let dismissed = 0
+  let totalMatched = 0
+  let offset = 0
+  const limit = 100
+
+  for (;;) {
+    const result = await listFindings(token, {
+      repoFullName: filters.repoFullName,
+      severity: filters.severity,
+      status: filters.status,
+      outcomeFilter: filters.outcomeFilter,
+      overdue: filters.overdue,
+      limit,
+      offset,
+    })
+    totalMatched = result.totalCount ?? result.total_count ?? totalMatched
+
+    let findings = result.findings
+    if (filters.createdAfter || filters.createdBefore) {
+      findings = findings.filter((f) => {
+        const created = f.createdAt ?? f.created_at ?? ''
+        if (filters.createdAfter && created < filters.createdAfter) return false
+        if (filters.createdBefore && created > filters.createdBefore) return false
+        return true
+      })
+    }
+
+    for (const f of findings) {
+      try {
+        await dismissFinding(token, f.id, reason)
+        dismissed++
+      } catch (e) {
+        errors.push(`${f.id}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+
+    if (result.findings.length < limit) break
+    offset += limit
+  }
+
+  return { dismissed, totalMatched, errors }
 }
 
 /** securityAgent.trackUiInteraction */

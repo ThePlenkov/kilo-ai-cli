@@ -60,8 +60,8 @@ Generated: 2026-09-15T15:46:12.539Z — `node packages/cli/scripts/live-smoke.ts
 | `security status` | read | PASS |  |
 | `security config` | read | PASS |  |
 | `security repos` | read | PASS |  |
-| `security findings` | read | PASS |  |
-| `security finding <id>` | read | PASS |  |
+| `security findings list` | read | PASS |  |
+| `security findings detail <id>` | read | PASS |  |
 | `security stats` | read | PASS |  |
 | `security dashboard` | read | PASS |  |
 | `security commands` | read | PASS |  |
@@ -69,14 +69,14 @@ Generated: 2026-09-15T15:46:12.539Z — `node packages/cli/scripts/live-smoke.ts
 | `security orphaned-repos` | read | PASS |  |
 | `security last-sync` | read | PASS |  |
 | `security sync` | manual | PASS | triggers GitHub sync |
-| `security analyze <id>` | manual | PASS | queues finding analysis |
-| `security dismiss <id> --reason inaccurate` | manual | PASS | dismisses a finding (one-way) |
-| `security remediate <id>` | manual | PASS | queues a remediation attempt, then cancels it |
-| `security retry-remediation <id>` | manual | PASS | queues a remediation attempt, then cancels it |
-| `security cancel-remediation` | manual | SKIP | no running remediation attempt |
+| `security findings analyze <id>` | manual | PASS | queues finding analysis |
+| `security findings dismiss <id> --reason inaccurate` | manual | PASS | dismisses a finding (one-way) |
+| `security findings remediate <id>` | manual | PASS | queues a remediation attempt, then cancels it |
+| `security findings retry <id>` | manual | PASS | queues a remediation attempt, then cancels it |
+| `security findings cancel` | manual | SKIP | no running remediation attempt |
 | `security enable` | idempotent | PASS | enables agent, then restores original state |
 | `security disable` | idempotent | PASS | disables agent, then restores original state |
-| `security delete-findings` | never | MANUAL | destructive |
+| `security findings delete` | never | MANUAL | destructive |
 | `tui` | never | MANUAL | interactive |
 
 **60 PASS · 0 FAIL · 7 SKIP · 7 MANUAL**

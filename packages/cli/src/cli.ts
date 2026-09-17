@@ -2,8 +2,18 @@
  * Main CLI command tree using citty.
  */
 
-import { defineCommand } from 'citty'
+import { defineCommand, showUsage } from 'citty'
 import pkg from '../package.json' with { type: 'json' }
+
+/** Show subcommand help instead of "No command specified" for parent commands. */
+async function showParentHelp(ctx: {
+  cmd: Parameters<typeof showUsage>[0]
+  rawArgs: string[]
+}) {
+  // Skip if citty already resolved a subcommand — rawArgs contains its name
+  if (ctx.rawArgs.some((a) => !a.startsWith('-'))) return
+  await showUsage(ctx.cmd)
+}
 import {
   analyticsBreakdownCommand,
   analyticsSummaryCommand,
@@ -57,23 +67,16 @@ import { orgListCommand, orgSetCommand } from './commands/organizations.ts'
 import { byokListCommand, plansListCommand, plansUsageCommand } from './commands/plans.ts'
 import { balanceCommand, profileCommand } from './commands/profile.ts'
 import {
-  securityAnalyzeCommand,
-  securityCancelRemediationCommand,
   securityCommandStatusCommand,
   securityCommandsCommand,
   securityConfigCommand,
   securityDashboardCommand,
-  securityDeleteFindingsCommand,
   securityDisableCommand,
-  securityDismissCommand,
   securityEnableCommand,
-  securityFindingCommand,
   securityFindingsCommand,
   securityLastSyncCommand,
   securityOrphanedReposCommand,
-  securityRemediateCommand,
   securityReposCommand,
-  securityRetryRemediationCommand,
   securityStatsCommand,
   securityStatusCommand,
   securitySyncCommand,
@@ -99,6 +102,7 @@ export const mainCommand = defineCommand({
         logout: logoutCommand,
         status: statusCommand,
       },
+      run: showParentHelp,
     }),
     profile: profileCommand,
     balance: balanceCommand,
@@ -110,6 +114,7 @@ export const mainCommand = defineCommand({
         get: sessionsGetCommand,
         rename: sessionsRenameCommand,
       },
+      run: showParentHelp,
     }),
     org: defineCommand({
       meta: { name: 'org', description: 'Organization commands' },
@@ -126,6 +131,7 @@ export const mainCommand = defineCommand({
         models: orgModelsCommand,
         security: orgSecurityCommand,
       },
+      run: showParentHelp,
     }),
     plans: defineCommand({
       meta: { name: 'plans', description: 'Coding plan commands' },
@@ -133,12 +139,14 @@ export const mainCommand = defineCommand({
         list: plansListCommand,
         usage: plansUsageCommand,
       },
+      run: showParentHelp,
     }),
     byok: defineCommand({
       meta: { name: 'byok', description: 'BYOK commands' },
       subCommands: {
         list: byokListCommand,
       },
+      run: showParentHelp,
     }),
     kiloclaw: defineCommand({
       meta: { name: 'kiloclaw', description: 'KiloClaw managed instance commands' },
@@ -156,6 +164,7 @@ export const mainCommand = defineCommand({
         'run-cancel': kiloclawRunCancelCommand,
         unpin: kiloclawUnpinCommand,
       },
+      run: showParentHelp,
     }),
     'cloud-agent': defineCommand({
       meta: { name: 'cloud-agent', description: 'Cloud agent commands' },
@@ -164,6 +173,7 @@ export const mainCommand = defineCommand({
         'github-repos': cloudAgentGithubReposCommand,
         'gitlab-repos': cloudAgentGitlabReposCommand,
       },
+      run: showParentHelp,
     }),
     reviews: defineCommand({
       meta: { name: 'reviews', description: 'Code review commands' },
@@ -174,6 +184,7 @@ export const mainCommand = defineCommand({
         toggle: reviewsToggleCommand,
         'set-model': reviewsSetModelCommand,
       },
+      run: showParentHelp,
     }),
     analytics: defineCommand({
       meta: { name: 'analytics', description: 'Usage analytics commands' },
@@ -183,6 +194,7 @@ export const mainCommand = defineCommand({
         breakdown: analyticsBreakdownCommand,
         table: analyticsTableCommand,
       },
+      run: showParentHelp,
     }),
     'app-builder': defineCommand({
       meta: { name: 'app-builder', description: 'App builder commands' },
@@ -191,6 +203,7 @@ export const mainCommand = defineCommand({
         eligibility: appBuilderEligibilityCommand,
         deploy: appBuilderDeployCommand,
       },
+      run: showParentHelp,
     }),
     security: defineCommand({
       meta: {
@@ -204,21 +217,15 @@ export const mainCommand = defineCommand({
         disable: securityDisableCommand,
         repos: securityReposCommand,
         findings: securityFindingsCommand,
-        finding: securityFindingCommand,
         stats: securityStatsCommand,
         dashboard: securityDashboardCommand,
         sync: securitySyncCommand,
-        dismiss: securityDismissCommand,
-        analyze: securityAnalyzeCommand,
-        remediate: securityRemediateCommand,
-        'retry-remediation': securityRetryRemediationCommand,
-        'cancel-remediation': securityCancelRemediationCommand,
         commands: securityCommandsCommand,
         command: securityCommandStatusCommand,
         'orphaned-repos': securityOrphanedReposCommand,
         'last-sync': securityLastSyncCommand,
-        'delete-findings': securityDeleteFindingsCommand,
       },
+      run: showParentHelp,
     }),
   },
 })

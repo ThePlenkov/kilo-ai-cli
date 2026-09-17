@@ -430,8 +430,8 @@ const COMMANDS: Cmd[] = [
   { cmd: 'security status', cls: 'read' },
   { cmd: 'security config', cls: 'read' },
   { cmd: 'security repos', cls: 'read' },
-  { cmd: 'security findings', cls: 'read' },
-  { cmd: 'security finding', cls: 'read', args: firstFindingId, skipReason: 'no findings' },
+  { cmd: 'security findings list', cls: 'read' },
+  { cmd: 'security findings detail', cls: 'read', args: firstFindingId, skipReason: 'no findings' },
   { cmd: 'security stats', cls: 'read' },
   { cmd: 'security dashboard', cls: 'read' },
   { cmd: 'security commands', cls: 'read' },
@@ -440,14 +440,14 @@ const COMMANDS: Cmd[] = [
   { cmd: 'security last-sync', cls: 'read' },
   { cmd: 'security sync', cls: 'manual', note: 'triggers GitHub sync' },
   {
-    cmd: 'security analyze',
+    cmd: 'security findings analyze',
     cls: 'manual',
     args: firstOpenFindingId,
     skipReason: 'no open findings',
     note: 'queues finding analysis',
   },
   {
-    cmd: 'security remediate',
+    cmd: 'security findings remediate',
     cls: 'manual',
     args: openFindingAndSnapshot,
     skipReason: 'no open findings',
@@ -455,7 +455,7 @@ const COMMANDS: Cmd[] = [
     note: 'queues a remediation attempt, then cancels it',
   },
   {
-    cmd: 'security retry-remediation',
+    cmd: 'security findings retry',
     cls: 'manual',
     args: openFindingAndSnapshot,
     skipReason: 'no open findings',
@@ -463,7 +463,7 @@ const COMMANDS: Cmd[] = [
     note: 'queues a remediation attempt, then cancels it',
   },
   {
-    cmd: 'security cancel-remediation',
+    cmd: 'security findings cancel',
     cls: 'manual',
     args: runningAttemptId,
     skipReason: 'no running remediation attempt',
@@ -471,7 +471,7 @@ const COMMANDS: Cmd[] = [
   // Dismiss runs last among finding mutations — it consumes the shared
   // open-finding fixture and cannot be undone (no reopen procedure).
   {
-    cmd: 'security dismiss',
+    cmd: 'security findings dismiss',
     cls: 'manual',
     args: async (c) => (await firstOpenFindingId(c))?.concat('--reason', 'inaccurate') ?? null,
     skipReason: 'no open findings',
@@ -506,7 +506,7 @@ const COMMANDS: Cmd[] = [
     },
     note: 'disables agent, then restores original state',
   },
-  { cmd: 'security delete-findings', cls: 'never', note: 'destructive' },
+  { cmd: 'security findings delete', cls: 'never', note: 'destructive' },
 
   { cmd: 'tui', cls: 'never', note: 'interactive' },
 ]

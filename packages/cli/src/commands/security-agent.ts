@@ -2,7 +2,7 @@
  * Security Agent CLI command handlers — personal level (no organization required).
  */
 
-import { defineCommand } from 'citty'
+import { defineCommand, showUsage } from 'citty'
 
 import {
   cancelRemediation,
@@ -10,6 +10,7 @@ import {
   type DismissReason,
   deleteFindingsByRepository,
   dismissFinding,
+  dismissFindingsBulk,
   getCommandStatus,
   getDashboardStats,
   getFinding,
@@ -29,34 +30,22 @@ import {
 } from '../api/security-agent.ts'
 import type { SecurityFinding } from '../api/types.ts'
 import { confirm } from './confirm.ts'
-import { printSummary, printTable } from './format.ts'
+import { type Column, printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 
-/**
- * Resolve a repo identifier (numeric ID or full name like "user/repo") to a numeric ID.
- * If the input is already numeric, return it as-is. Otherwise, look it up by full name.
- * Short names (e.g. "repo") are rejected — use "owner/repo" to avoid ambiguity.
- */
-async function resolveRepoId(token: string, idOrName: string): Promise<string> {
-  if (/^\d+$/.test(idOrName)) return idOrName
+/** Resolve a numeric repo ID or full name to the full name (owner/repo). */
+async function resolveRepoFullName(token: string, idOrName: string): Promise<string> {
+  if (!/^\d+$/.test(idOrName)) return idOrName // already a full name
   const repos = await getSecurityRepositories(token)
-  const matches = repos.filter((r) => (r.fullName ?? r.full_name ?? null) === idOrName)
-  if (matches.length > 1) {
+  const repo = repos.find((r) => String(r.id) === idOrName)
+  const fullName = repo?.fullName ?? repo?.full_name
+  if (!fullName) {
     throw new Error(
-      `Multiple repositories match "${idOrName}". Run \`kilo-ai-cli security repos\` and pass the numeric ID to disambiguate.`,
+      `Repository ID "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories.`,
     )
   }
-  const repo = matches[0]
-  if (!repo) {
-    throw new Error(
-      `Repository "${idOrName}" not found. Use \`kilo-ai-cli security repos\` to see available repositories. Use the full name (owner/repo), not the short name.`,
-    )
-  }
-  if (repo.id === undefined) {
-    throw new Error(`Repository "${idOrName}" has no ID.`)
-  }
-  return String(repo.id)
+  return fullName
 }
 
 export const securityStatusCommand = defineCommand({
@@ -188,8 +177,32 @@ export const securityReposCommand = defineCommand({
   },
 })
 
-export const securityFindingsCommand = defineCommand({
-  meta: { name: 'findings', description: 'List security findings' },
+/** Column registry for `security findings --columns`. */
+const FINDINGS_COLUMNS: Record<
+  string,
+  { label: string; width: number; get: (f: SecurityFinding) => string; format?: Column['format'] }
+> = {
+  id: { label: 'ID', width: 36, get: (f) => String(f.id ?? '-') },
+  severity: { label: 'Severity', width: 8, get: (f) => f.severity ?? '-', format: colorSeverity },
+  title: { label: 'Title', width: 50, get: (f) => f.title ?? '-' },
+  repo: {
+    label: 'Repository',
+    width: 30,
+    get: (f) => f.repoFullName ?? f.repo_full_name ?? '-',
+    format: (shown, raw) => repoLink(raw, shown),
+  },
+  status: { label: 'Status', width: 12, get: (f) => f.status ?? '-', format: colorStatus },
+  package: {
+    label: 'Package',
+    width: 20,
+    get: (f) => f.packageName ?? f.package_name ?? '-',
+  },
+}
+
+const FINDINGS_COLUMN_NAMES = Object.keys(FINDINGS_COLUMNS)
+
+export const securityFindingsListCommand = defineCommand({
+  meta: { name: 'list', description: 'List security findings' },
   args: {
     repo: { type: 'string', description: 'Filter by repository full name (e.g. user/repo)' },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
@@ -209,6 +222,11 @@ export const securityFindingsCommand = defineCommand({
     },
     limit: { type: 'string', description: 'Max findings to show (1-100)', default: '50' },
     offset: { type: 'string', description: 'Pagination offset', default: '0' },
+    columns: {
+      type: 'string',
+      description: 'Columns to show: id,severity,title,repo,status,package (or "all")',
+      default: 'severity,title,repo,status,package',
+    },
   },
   async run({ args }) {
     const { token } = await getToken()
@@ -251,6 +269,23 @@ export const securityFindingsCommand = defineCommand({
       }
       input.offset = parsed
     }
+    // Parse --columns
+    const requested =
+      args.columns === 'all' ? FINDINGS_COLUMN_NAMES : args.columns.split(',').map((c) => c.trim())
+    const invalid = requested.filter((c) => !(c in FINDINGS_COLUMNS))
+    if (invalid.length > 0) {
+      console.error(
+        `Invalid columns: ${invalid.join(', ')}. Valid: ${FINDINGS_COLUMN_NAMES.join(', ')} or "all"`,
+      )
+      process.exit(1)
+    }
+    const columns: Column[] = requested.map((name) => ({
+      key: name,
+      label: FINDINGS_COLUMNS[name].label,
+      width: FINDINGS_COLUMNS[name].width,
+      format: FINDINGS_COLUMNS[name].format,
+    }))
+
     const result = await listFindings(token, input)
     printSummary([
       { label: 'Total', value: result.totalCount ?? result.total_count ?? '?' },
@@ -263,33 +298,18 @@ export const securityFindingsCommand = defineCommand({
     }
     console.log('')
     printTable(
-      result.findings.map((f) => ({
-        id: String(f.id ?? '-'),
-        sev: f.severity ?? '-',
-        title: f.title ?? '-',
-        repo: f.repoFullName ?? f.repo_full_name ?? '-',
-        status: f.status ?? '-',
-        pkg: f.packageName ?? f.package_name ?? '-',
-      })),
-      [
-        { key: 'id', label: 'ID', width: 36 },
-        { key: 'sev', label: 'Severity', width: 8, format: (v) => colorSeverity(v) },
-        { key: 'title', label: 'Title', width: 50 },
-        {
-          key: 'repo',
-          label: 'Repository',
-          width: 30,
-          format: (shown, raw) => repoLink(raw, shown),
-        },
-        { key: 'status', label: 'Status', width: 12, format: (v) => colorStatus(v) },
-        { key: 'pkg', label: 'Package', width: 20 },
-      ],
+      result.findings.map((f) => {
+        const row: Record<string, string> = {}
+        for (const name of requested) row[name] = FINDINGS_COLUMNS[name].get(f)
+        return row
+      }),
+      columns,
     )
   },
 })
 
-export const securityFindingCommand = defineCommand({
-  meta: { name: 'finding', description: 'Get details of a security finding' },
+export const securityFindingsDetailCommand = defineCommand({
+  meta: { name: 'detail', description: 'Get details of a security finding' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
@@ -399,7 +419,7 @@ function printRemediation(remediation: SecurityFinding['remediationSummary']): v
   if (remediation.outcomeSummary) console.log(`    Outcome: ${remediation.outcomeSummary}`)
 }
 
-export const securityDismissCommand = defineCommand({
+export const securityFindingsDismissCommand = defineCommand({
   meta: { name: 'dismiss', description: 'Dismiss a security finding (one-way)' },
   args: {
     id: { type: 'positional', description: 'Finding ID', required: true },
@@ -419,7 +439,7 @@ export const securityDismissCommand = defineCommand({
   },
 })
 
-export const securityAnalyzeCommand = defineCommand({
+export const securityFindingsAnalyzeCommand = defineCommand({
   meta: { name: 'analyze', description: 'Start security analysis for a finding' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
@@ -429,7 +449,7 @@ export const securityAnalyzeCommand = defineCommand({
   },
 })
 
-export const securityRemediateCommand = defineCommand({
+export const securityFindingsRemediateCommand = defineCommand({
   meta: { name: 'remediate', description: 'Start remediation for a finding (may open a PR)' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
@@ -439,8 +459,8 @@ export const securityRemediateCommand = defineCommand({
   },
 })
 
-export const securityRetryRemediationCommand = defineCommand({
-  meta: { name: 'retry-remediation', description: 'Retry remediation for a finding' },
+export const securityFindingsRetryCommand = defineCommand({
+  meta: { name: 'retry', description: 'Retry remediation for a finding' },
   args: { id: { type: 'positional', description: 'Finding ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
@@ -449,8 +469,8 @@ export const securityRetryRemediationCommand = defineCommand({
   },
 })
 
-export const securityCancelRemediationCommand = defineCommand({
-  meta: { name: 'cancel-remediation', description: 'Cancel an in-progress remediation' },
+export const securityFindingsCancelCommand = defineCommand({
+  meta: { name: 'cancel', description: 'Cancel an in-progress remediation' },
   args: { id: { type: 'positional', description: 'Attempt ID', required: true } },
   async run({ args }) {
     const { token } = await getToken()
@@ -540,24 +560,211 @@ export const securityLastSyncCommand = defineCommand({
   },
 })
 
-export const securityDeleteFindingsCommand = defineCommand({
-  meta: { name: 'delete-findings', description: 'Delete all findings for a repository' },
+export const securityFindingsCloseCommand = defineCommand({
+  meta: { name: 'close', description: 'Dismiss (close/ignore) findings matching filters' },
   args: {
-    repo: { type: 'positional', description: 'Repository ID or full name (e.g. user/repo)', required: true },
+    repo: { type: 'string', description: 'Repository full name (e.g. user/repo)' },
+    severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
+    status: {
+      type: 'string',
+      description: 'Filter by status (open/dismissed/remediated/in_progress)',
+      default: 'open',
+    },
+    outcome: { type: 'string', description: 'Filter by remediation outcome' },
+    overdue: { type: 'boolean', description: 'Only overdue findings' },
+    from: { type: 'string', description: 'Only findings created after this date (ISO, e.g. 2025-01-01)' },
+    to: { type: 'string', description: 'Only findings created before this date (ISO)' },
+    reason: {
+      type: 'string',
+      description: `Reason for dismissal (${DISMISS_REASONS.join('/')})`,
+    },
+    'dry-run': { type: 'boolean', description: 'Show what would be closed without dismissing' },
     yes: { type: 'boolean', description: 'Skip confirmation prompt', alias: 'y' },
   },
   async run({ args }) {
+    if (args.reason && !(DISMISS_REASONS as readonly string[]).includes(args.reason)) {
+      throw new Error(`Invalid --reason "${args.reason}". Allowed: ${DISMISS_REASONS.join(', ')}`)
+    }
     const { token } = await getToken()
-    // Resolve repo full name → numeric ID if needed
-    const repoId = await resolveRepoId(token, args.repo)
+
+    const filters = {
+      repoFullName: args.repo,
+      severity: args.severity,
+      status: args.status,
+      outcomeFilter: args.outcome,
+      overdue: args.overdue,
+      createdAfter: args.from,
+      createdBefore: args.to,
+    }
+    const filterDesc = [
+      filters.repoFullName && `repo=${filters.repoFullName}`,
+      filters.severity && `severity=${filters.severity}`,
+      filters.status && `status=${filters.status}`,
+      filters.outcomeFilter && `outcome=${filters.outcomeFilter}`,
+      filters.overdue && 'overdue',
+      filters.createdAfter && `from=${filters.createdAfter}`,
+      filters.createdBefore && `to=${filters.createdBefore}`,
+    ]
+      .filter(Boolean)
+      .join(', ')
+
+    if (args['dry-run']) {
+      const result = await listFindings(token, {
+        repoFullName: filters.repoFullName,
+        severity: filters.severity,
+        status: filters.status,
+        outcomeFilter: filters.outcomeFilter,
+        overdue: filters.overdue,
+        limit: 100,
+      })
+      let findings = result.findings
+      if (filters.createdAfter || filters.createdBefore) {
+        findings = findings.filter((f) => {
+          const created = f.createdAt ?? f.created_at ?? ''
+          if (filters.createdAfter && created < filters.createdAfter) return false
+          if (filters.createdBefore && created > filters.createdBefore) return false
+          return true
+        })
+      }
+      const total = result.totalCount ?? result.total_count ?? findings.length
+      console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
+      if (filterDesc) console.log(`  filters: ${filterDesc}`)
+      if (findings.length > 0) {
+        console.log('')
+        const previewNames = ['severity', 'title', 'repo', 'status', 'package']
+        printTable(
+          findings.slice(0, 20).map((f) => {
+            const row: Record<string, string> = {}
+            for (const name of previewNames) row[name] = FINDINGS_COLUMNS[name].get(f)
+            return row
+          }),
+          previewNames.map((name) => ({
+            key: name,
+            label: FINDINGS_COLUMNS[name].label,
+            width: FINDINGS_COLUMNS[name].width,
+            format: FINDINGS_COLUMNS[name].format,
+          })),
+        )
+        if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
+      }
+      return
+    }
+
     if (!args.yes) {
-      const ok = await confirm(`Delete ALL findings for repository ${args.repo}?`)
+      const ok = await confirm(`Close all findings matching: ${filterDesc || '(no filters)'}?`)
       if (!ok) {
         console.log('Cancelled.')
         return
       }
     }
-    await deleteFindingsByRepository(token, repoId)
-    console.log(`Deleted findings for repository: ${args.repo}`)
+
+    console.log(`Closing findings (${filterDesc || 'no filters'})…`)
+    const result = await dismissFindingsBulk(
+      token,
+      filters,
+      (args.reason as DismissReason | undefined) ?? 'no_bandwidth',
+    )
+    printSummary([
+      { label: 'Dismissed', value: result.dismissed },
+      { label: 'Total matched', value: result.totalMatched },
+      { label: 'Errors', value: result.errors.length },
+    ])
+    if (result.errors.length > 0) {
+      console.log('\nErrors:')
+      for (const e of result.errors.slice(0, 10)) console.log(`  ${e}`)
+      if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
+    }
+  },
+})
+
+export const securityFindingsDeleteCommand = defineCommand({
+  meta: { name: 'delete', description: 'Delete findings for a repository (all or filtered)' },
+  args: {
+    repo: { type: 'positional', description: 'Repository ID or full name (e.g. user/repo)', required: false },
+    'repo-name': { type: 'string', description: 'Repository full name (alternative to positional)', alias: 'repo' },
+    severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
+    status: { type: 'string', description: 'Filter by status (open/dismissed/remediated/in_progress)' },
+    outcome: { type: 'string', description: 'Filter by remediation outcome' },
+    overdue: { type: 'boolean', description: 'Only overdue findings' },
+    'dry-run': { type: 'boolean', description: 'Show what would be deleted without deleting' },
+    yes: { type: 'boolean', description: 'Skip confirmation prompt', alias: 'y' },
+  },
+  async run({ args }) {
+    const repoName = args.repo ?? args['repo-name']
+    if (!repoName) {
+      console.error('Missing repository. Usage: security findings delete <repo> or --repo=<repo>')
+      process.exit(1)
+    }
+    const { token } = await getToken()
+    const fullName = await resolveRepoFullName(token, repoName)
+
+    const hasFilters = args.severity || args.status || args.outcome || args.overdue
+
+    // Preview — list matching findings
+    const result = await listFindings(token, {
+      repoFullName: fullName,
+      severity: args.severity,
+      status: args.status,
+      outcomeFilter: args.outcome,
+      overdue: args.overdue,
+      limit: 100,
+    })
+    const total = result.totalCount ?? result.total_count ?? result.findings.length
+
+    if (args['dry-run']) {
+      console.log(`Dry run — would delete ${total} findings for ${fullName}`)
+      if (args.severity) console.log(`  severity: ${args.severity}`)
+      if (args.status) console.log(`  status: ${args.status}`)
+      if (args.outcome) console.log(`  outcome: ${args.outcome}`)
+      if (args.overdue) console.log(`  overdue: true`)
+      return
+    }
+
+    if (total === 0) {
+      console.log('No matching findings to delete.')
+      return
+    }
+
+    // API deletes ALL findings for the repo — fetch unfiltered total for the report
+    let repoTotal = total
+    if (hasFilters) {
+      const all = await listFindings(token, { repoFullName: fullName, limit: 1 })
+      repoTotal = all.totalCount ?? all.total_count ?? all.findings.length
+      console.log(
+        `Found ${total} matching findings — note: API deletes ALL ${repoTotal} findings for the repository.`,
+      )
+    }
+
+    if (!args.yes) {
+      const ok = await confirm(`Delete ALL ${repoTotal} findings for repository ${fullName}?`)
+      if (!ok) {
+        console.log('Cancelled.')
+        return
+      }
+    }
+    await deleteFindingsByRepository(token, fullName)
+    printSummary([
+      { label: 'Deleted', value: repoTotal },
+      { label: 'Repository', value: fullName },
+    ])
+  },
+})
+
+export const securityFindingsCommand = defineCommand({
+  meta: { name: 'findings', description: 'Security findings commands' },
+  subCommands: {
+    list: securityFindingsListCommand,
+    detail: securityFindingsDetailCommand,
+    dismiss: securityFindingsDismissCommand,
+    close: securityFindingsCloseCommand,
+    analyze: securityFindingsAnalyzeCommand,
+    remediate: securityFindingsRemediateCommand,
+    retry: securityFindingsRetryCommand,
+    cancel: securityFindingsCancelCommand,
+    delete: securityFindingsDeleteCommand,
+  },
+  async run(ctx) {
+    if (ctx.rawArgs.some((a) => !a.startsWith('-'))) return
+    await showUsage(ctx.cmd, { meta: { name: 'security' } })
   },
 })
