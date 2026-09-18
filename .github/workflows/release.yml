@@ -138,7 +138,7 @@ jobs:
 
       - name: Verify package contents
         working-directory: packages/cli
-        run: npm pack
+        run: npm pack --dry-run
 
       - name: Release
         env:
