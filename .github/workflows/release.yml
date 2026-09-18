@@ -27,21 +27,17 @@ on:
           - 'minor'
           - 'major'
       dry-run:
-        description: 'Dry run (verify only — no tag, publish, or release)'
+        description: 'Dry run (verify only — no branch or PR)'
         required: false
-        default: 'true'
+        default: 'false'
         type: choice
         options:
-          - 'true'
           - 'false'
+          - 'true'
 
-# contents:write — push release branch + tags
-# pull-requests:write — open the release PR (bump mode)
-# id-token:write — npm OIDC trusted publishing
+# Default least-privilege; the release job escalates to what it needs.
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 jobs:
   # Cheap pre-check for push events: package.json changes on every
@@ -56,14 +52,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - name: Compare package.json version against npm + tags
+      - name: Compare package.json version against npm + tags + release
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="$(node -p "require('./packages/cli/package.json').version")"
           NPM="$(npm view kilo-ai-cli version 2>/dev/null || true)"
+          # Distinguish "not published" from "registry unreachable" — a
+          # transient npm outage should fail loudly, not burn the full
+          # gate suite and die inside the publish path.
+          if [ -z "$NPM" ] && ! npm ping >/dev/null 2>&1; then
+            echo "npm registry unreachable — failing guard"
+            exit 1
+          fi
           if [ "$NPM" = "$VERSION" ] && \
-             git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+             git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
+             gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "needed=false" >> "$GITHUB_OUTPUT"
           else
             echo "needed=true" >> "$GITHUB_OUTPUT"
@@ -76,6 +84,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     timeout-minutes: 10
+    # contents:write — push release branch + tags
+    # pull-requests:write — open the release PR (bump mode)
+    # id-token:write — npm OIDC trusted publishing
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
 
     steps:
       - name: Checkout
@@ -136,6 +151,18 @@ jobs:
               --version="$INPUT_VERSION" \
               --mode=bump \
               --dryRun="$INPUT_DRY_RUN"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Manual tag escape hatch: the tag's checkout carries its own
+            # package.json version, so publish mode needs no version arg —
+            # but a non-semver v* tag must not publish anything.
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [[ ! "$VERSION" =~ ^[0-9] ]] || ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
+              echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
+              exit 0
+            fi
+            ./node_modules/.bin/nx run release:release \
+              --mode=publish \
+              --dryRun=false
           else
             ./node_modules/.bin/nx run release:release \
               --mode=publish \
