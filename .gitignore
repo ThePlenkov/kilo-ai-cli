@@ -9,3 +9,6 @@ coverage/
 .env
 .env.local
 tmp/
+
+# npm pack artifacts
+*.tgz
