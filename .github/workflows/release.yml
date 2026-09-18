@@ -151,7 +151,7 @@ jobs:
               --version="$INPUT_VERSION" \
               --mode=bump \
               --dryRun="$INPUT_DRY_RUN"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             # Manual tag escape hatch: the tag's checkout carries its own
             # package.json version, so publish mode needs no version arg —
             # but a non-semver v* tag must not publish anything.
