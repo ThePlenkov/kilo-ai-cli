@@ -5,8 +5,14 @@ name: Release
 concurrency:
   group: release
 
+# Two phases, one file (npm OIDC trust binds to this filename):
+#   workflow_dispatch → mode=bump  → cuts release/v<x.y.z> + opens a PR
+#   push to main      → mode=publish → npm publish + tag + GitHub Release
+# The version bump always lands via PR; automation never pushes to main.
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -21,26 +27,70 @@ on:
           - 'minor'
           - 'major'
       dry-run:
-        description: 'Dry run (verify only — no tag, publish, or release)'
+        description: 'Dry run (verify only — no branch or PR)'
         required: false
-        default: 'true'
+        default: 'false'
         type: choice
         options:
-          - 'true'
           - 'false'
+          - 'true'
 
-# contents:write — push release tag + bump commit to main
-# id-token:write — npm OIDC trusted publishing
+# Default least-privilege; the release job escalates to what it needs.
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
+  # Cheap pre-check for push events: package.json changes on every
+  # dependabot merge, but only a version bump needs a release. Skips the
+  # full gate suite when the committed version is already on npm + tagged.
+  guard:
+    name: Release needed?
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    outputs:
+      needed: ${{ steps.check.outputs.needed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Compare package.json version against npm + tags + release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          NPM="$(npm view kilo-ai-cli version 2>/dev/null || true)"
+          # Distinguish "not published" from "registry unreachable" — a
+          # transient npm outage should fail loudly, not burn the full
+          # gate suite and die inside the publish path.
+          if [ -z "$NPM" ] && ! npm ping >/dev/null 2>&1; then
+            echo "npm registry unreachable — failing guard"
+            exit 1
+          fi
+          if [ "$NPM" = "$VERSION" ] && \
+             git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
+             gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     name: Release
+    needs: guard
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.guard.outputs.needed == 'true') }}
     runs-on: ubuntu-latest
     environment: npm
     timeout-minutes: 10
+    # contents:write — push release branch + tags
+    # pull-requests:write — open the release PR (bump mode)
+    # id-token:write — npm OIDC trusted publishing
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
 
     steps:
       - name: Checkout
@@ -91,31 +141,35 @@ jobs:
         run: npm pack
 
       - name: Release
-        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DRY_RUN: ${{ inputs.dry-run }}
         run: |
-          ./node_modules/.bin/nx run release:release \
-            --version="$INPUT_VERSION" \
-            --dryRun="$INPUT_DRY_RUN"
-
-      # Tag-push path: the tag name is the exact version. The executor is
-      # idempotent — already-published/tagged/released steps are skipped, so
-      # this also safely handles tags pushed by the dispatch path above.
-      - name: Release (tag push)
-        if: ${{ github.event_name == 'push' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          # Gate on a leading digit first — a tag like v--help would be
-          # parsed as a semver CLI option and pass validation.
-          if [[ ! "$VERSION" =~ ^[0-9] ]] || ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
-            echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
-            exit 0
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ./node_modules/.bin/nx run release:release \
+              --version="$INPUT_VERSION" \
+              --mode=bump \
+              --dryRun="$INPUT_DRY_RUN"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Manual tag escape hatch: the tag's checkout carries its own
+            # package.json version, so publish mode needs no version arg —
+            # but a non-semver v* tag must not publish anything.
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [[ ! "$VERSION" =~ ^[0-9] ]] || ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
+              echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
+              exit 0
+            fi
+            PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+            if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match packages/cli version $PKG_VERSION"
+              exit 1
+            fi
+            ./node_modules/.bin/nx run release:release \
+              --mode=publish \
+              --dryRun=false
+          else
+            ./node_modules/.bin/nx run release:release \
+              --mode=publish \
+              --dryRun=false
           fi
-          ./node_modules/.bin/nx run release:release \
-            --version="$VERSION" \
-            --dryRun=false

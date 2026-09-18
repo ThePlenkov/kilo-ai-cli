@@ -74,7 +74,9 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
 - **`$act` is always-on for every PR** — never ask whether to run it. After opening
   a PR, immediately run `$act --loop` (fetch threads → fix → reply → resolve →
   wait for CI → repeat until exit gate passes). This is the central workflow.
-- **Releases are CI-driven, not PR-driven** — trigger via
-  `gh workflow run release.yml -f version=patch -f dry-run=false`. The workflow
-  bumps `package.json` on main, publishes to npm via OIDC, pushes the tag, and
-  creates a GitHub Release with auto-generated changelog. No sync PR.
+- **Releases are two-phase** — trigger via
+  `gh workflow run release.yml -f version=patch` which opens a `release/vX.Y.Z`
+  bump PR. Merging that PR into `main` triggers publish mode: npm via OIDC,
+  `vX.Y.Z` tag, GitHub Release with auto-generated changelog. Automation never
+  pushes to `main`; pushing a semver `v*` tag manually is the escape hatch and
+  must match `packages/cli/package.json`.
