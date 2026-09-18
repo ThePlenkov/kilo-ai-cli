@@ -160,6 +160,11 @@ jobs:
               echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
               exit 0
             fi
+            PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+            if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match packages/cli version $PKG_VERSION"
+              exit 1
+            fi
             ./node_modules/.bin/nx run release:release \
               --mode=publish \
               --dryRun=false
