@@ -191,28 +191,35 @@ const MutationResultSchema = z
   })
   .passthrough()
 
+function mutationErrorDetail(error: unknown): string {
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  return JSON.stringify(error)
+}
+
 function assertMutationOk(procedure: string, result: { success?: boolean; error?: unknown }): void {
   if (result.success === false) {
-    const detail =
-      typeof result.error === 'string'
-        ? result.error
-        : result.error instanceof Error
-          ? result.error.message
-          : JSON.stringify(result.error)
-    throw new Error(`${procedure} failed: ${detail}`)
+    throw new Error(`${procedure} failed: ${mutationErrorDetail(result.error)}`)
   }
+}
+
+async function codeReviewMutation(
+  token: string,
+  procedure: string,
+  reviewId: string,
+): Promise<void> {
+  const r = await trpcMutate(procedure, token, MutationResultSchema, { reviewId })
+  assertMutationOk(procedure, r)
 }
 
 /** codeReviews.cancel — cancel a pending/queued/running review. */
 export async function cancelCodeReview(token: string, reviewId: string): Promise<void> {
-  const r = await trpcMutate('codeReviews.cancel', token, MutationResultSchema, { reviewId })
-  assertMutationOk('codeReviews.cancel', r)
+  await codeReviewMutation(token, 'codeReviews.cancel', reviewId)
 }
 
 /** codeReviews.retrigger — re-run a failed, cancelled, or interrupted review. */
 export async function retriggerCodeReview(token: string, reviewId: string): Promise<void> {
-  const r = await trpcMutate('codeReviews.retrigger', token, MutationResultSchema, { reviewId })
-  assertMutationOk('codeReviews.retrigger', r)
+  await codeReviewMutation(token, 'codeReviews.retrigger', reviewId)
 }
 
 // --- Organization-scoped procedures ---

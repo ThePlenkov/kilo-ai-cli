@@ -263,6 +263,9 @@ export interface CloudAgentTerminal {
 // tRPC Types — Code Reviews
 // ============================================================================
 
+/** GitLab numeric project id arrives as number; some surfaces serialize it as string. */
+export type PlatformProjectId = string | number | null
+
 /** codeReviews.listForUser / codeReviews.get — snake_case server shape. */
 export interface CodeReview {
   id: string
@@ -279,7 +282,7 @@ export interface CodeReview {
   head_ref?: string | null
   head_sha?: string | null
   platform?: string | null
-  platform_project_id?: string | number | null
+  platform_project_id?: PlatformProjectId
   session_id?: string | null
   cli_session_id?: string | null
   status: string
