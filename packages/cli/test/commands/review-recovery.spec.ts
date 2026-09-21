@@ -60,11 +60,35 @@ describe('isRetriggerableStatus', () => {
 describe('isStaleInFlight', () => {
   const now = Date.parse('2026-09-21T11:00:00Z')
   it('marks old pending/queued reviews as stale', () => {
-    const review = makeReview({ status: 'pending', created_at: '2026-09-21T09:00:00Z' })
+    const review = makeReview({
+      status: 'pending',
+      created_at: '2026-09-21T09:00:00Z',
+      updated_at: '2026-09-21T09:00:00Z',
+    })
     expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(true)
   })
   it('ignores fresh pending reviews', () => {
-    const review = makeReview({ status: 'pending', created_at: '2026-09-21T10:59:00Z' })
+    const review = makeReview({
+      status: 'pending',
+      created_at: '2026-09-21T10:59:00Z',
+      updated_at: '2026-09-21T10:59:00Z',
+    })
+    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
+  })
+  it('never marks a running review as stale', () => {
+    const review = makeReview({
+      status: 'running',
+      created_at: '2026-09-21T08:00:00Z',
+      updated_at: '2026-09-21T08:00:00Z',
+    })
+    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
+  })
+  it('measures inactivity from updated_at, not created_at', () => {
+    const review = makeReview({
+      status: 'pending',
+      created_at: '2026-09-21T08:00:00Z',
+      updated_at: '2026-09-21T10:55:00Z',
+    })
     expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
   })
   it('ignores terminal statuses', () => {
@@ -128,10 +152,18 @@ describe('recoverCodeReviews', () => {
     expect(deps.retrigger).not.toHaveBeenCalled()
   })
 
-  it('retriggers anyway when PR state is unknown', async () => {
+  it('skips when PR state cannot be verified', async () => {
     const deps = makeDeps({ prState: vi.fn(async () => 'unknown' as const) })
     const results = await recoverCodeReviews('tok', {}, deps)
+    expect(results[0]!.outcome).toBe('skipped-unknown-pr')
+    expect(deps.retrigger).not.toHaveBeenCalled()
+  })
+
+  it('retriggers an unverifiable PR when the check is disabled', async () => {
+    const deps = makeDeps({ prState: vi.fn(async () => 'unknown' as const) })
+    const results = await recoverCodeReviews('tok', { checkPr: false }, deps)
     expect(results[0]!.outcome).toBe('recovered')
+    expect(deps.prState).not.toHaveBeenCalled()
   })
 
   it('skips reviews that are not in a failed state', async () => {
@@ -146,7 +178,11 @@ describe('recoverCodeReviews', () => {
   it('cancels then retriggers a stale pending review', async () => {
     const deps = makeDeps({
       listReviews: vi.fn(async () => [
-        makeReview({ status: 'pending', created_at: '2026-09-21T08:00:00Z' }),
+        makeReview({
+          status: 'pending',
+          created_at: '2026-09-21T08:00:00Z',
+          updated_at: '2026-09-21T08:00:00Z',
+        }),
       ]),
     })
     const results = await recoverCodeReviews('tok', {}, deps)

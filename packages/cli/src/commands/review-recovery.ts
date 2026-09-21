@@ -32,7 +32,7 @@ import { getToken } from './helpers.ts'
 const execFileAsync = promisify(execFile)
 
 const RETRIGGERABLE_STATUSES = new Set(['failed', 'cancelled', 'interrupted'])
-const IN_FLIGHT_STATUSES = new Set(['pending', 'queued', 'running'])
+const STALE_CANDIDATE_STATUSES = new Set(['pending', 'queued'])
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 
 export const DEFAULT_FALLBACK_MODELS = ['kilo-auto/free', 'minimax/minimax-m3:free']
@@ -80,6 +80,7 @@ export type RecoveryOutcome =
   | 'exhausted'
   | 'timeout'
   | 'skipped-closed-pr'
+  | 'skipped-unknown-pr'
   | 'skipped-status'
   | 'dry-run'
   | 'error'
@@ -101,9 +102,9 @@ export function isRetriggerableStatus(status: string): boolean {
 }
 
 export function isStaleInFlight(review: CodeReview, staleMs: number, now: number): boolean {
-  if (!IN_FLIGHT_STATUSES.has(review.status)) return false
-  const created = Date.parse(review.created_at)
-  return Number.isNaN(created) ? false : now - created > staleMs
+  if (!STALE_CANDIDATE_STATUSES.has(review.status)) return false
+  const touched = Date.parse(review.updated_at ?? review.created_at)
+  return Number.isNaN(touched) ? false : now - touched > staleMs
 }
 
 /** Replace or append a per-repo model override (first-match wins server-side, so dedupe). */
@@ -226,10 +227,11 @@ async function recoverOne(
   if (opts.checkPr !== false) {
     const state = await deps.prState(review)
     if (state === 'closed') return { ...base, outcome: 'skipped-closed-pr' }
+    if (state === 'unknown') return { ...base, outcome: 'skipped-unknown-pr' }
   }
   if (opts.dryRun) return { ...base, outcome: 'dry-run' }
 
-  if (IN_FLIGHT_STATUSES.has(review.status)) {
+  if (STALE_CANDIDATE_STATUSES.has(review.status)) {
     await deps.cancel(token, review.id)
   }
   await deps.retrigger(token, review.id)
@@ -316,6 +318,16 @@ export async function recoverCodeReviews(
   return results
 }
 
+function parsePositiveInt(value: string | undefined, flag: string, fallback: number): number {
+  if (value === undefined) return fallback
+  const trimmed = value.trim()
+  const parsed = /^\d+$/.test(trimmed) ? Number.parseInt(trimmed, 10) : Number.NaN
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`--${flag} must be a positive integer, got "${value}"`)
+  }
+  return parsed
+}
+
 export const reviewsRecoverCommand = defineCommand({
   meta: {
     name: 'recover',
@@ -346,7 +358,7 @@ export const reviewsRecoverCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const limit = args.limit ? Number.parseInt(args.limit, 10) : 10
+    const limit = parsePositiveInt(args.limit, 'limit', 10)
     const opts: RecoverOptions = {
       limit,
       platform: args.platform,
@@ -357,9 +369,9 @@ export const reviewsRecoverCommand = defineCommand({
         .map((s) => s.trim())
         .filter(Boolean),
       wait: args.wait !== false,
-      timeoutMs: args.timeout ? Number.parseInt(args.timeout, 10) * 1000 : 600_000,
-      pollMs: args['poll-interval'] ? Number.parseInt(args['poll-interval'], 10) * 1000 : 15_000,
-      staleMinutes: args['stale-minutes'] ? Number.parseInt(args['stale-minutes'], 10) : 75,
+      timeoutMs: parsePositiveInt(args.timeout, 'timeout', 600) * 1000,
+      pollMs: parsePositiveInt(args['poll-interval'], 'poll-interval', 15) * 1000,
+      staleMinutes: parsePositiveInt(args['stale-minutes'], 'stale-minutes', 75),
       checkPr: args['pr-check'] !== false,
       dryRun: args['dry-run'] === true,
     }
