@@ -59,29 +59,15 @@ describe('isRetriggerableStatus', () => {
 
 describe('isStaleInFlight', () => {
   const now = Date.parse('2026-09-21T11:00:00Z')
-  it('marks old pending/queued reviews as stale', () => {
-    const review = makeReview({
-      status: 'pending',
-      created_at: '2026-09-21T09:00:00Z',
-      updated_at: '2026-09-21T09:00:00Z',
-    })
-    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(true)
-  })
-  it('ignores fresh pending reviews', () => {
-    const review = makeReview({
-      status: 'pending',
-      created_at: '2026-09-21T10:59:00Z',
-      updated_at: '2026-09-21T10:59:00Z',
-    })
-    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
-  })
-  it('never marks a running review as stale', () => {
-    const review = makeReview({
-      status: 'running',
-      created_at: '2026-09-21T08:00:00Z',
-      updated_at: '2026-09-21T08:00:00Z',
-    })
-    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
+  it.each([
+    { status: 'pending', updated_at: '2026-09-21T09:00:00Z', expected: true },
+    { status: 'queued', updated_at: '2026-09-21T09:00:00Z', expected: true },
+    { status: 'pending', updated_at: '2026-09-21T10:59:00Z', expected: false },
+    { status: 'running', updated_at: '2026-09-21T08:00:00Z', expected: false },
+    { status: 'failed', updated_at: '2026-09-21T09:00:00Z', expected: false },
+  ])('status=$status updated_at=$updated_at → $expected', ({ status, updated_at, expected }) => {
+    const review = makeReview({ status, created_at: '2026-09-21T08:00:00Z', updated_at })
+    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(expected)
   })
   it('measures inactivity from updated_at, not created_at', () => {
     const review = makeReview({
@@ -89,10 +75,6 @@ describe('isStaleInFlight', () => {
       created_at: '2026-09-21T08:00:00Z',
       updated_at: '2026-09-21T10:55:00Z',
     })
-    expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
-  })
-  it('ignores terminal statuses', () => {
-    const review = makeReview({ status: 'failed', created_at: '2026-09-21T09:00:00Z' })
     expect(isStaleInFlight(review, 75 * 60_000, now)).toBe(false)
   })
 })
