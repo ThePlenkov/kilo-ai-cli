@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  cancelCodeReview,
   getCodeReview,
   getOrgReviewAgentConfig,
   getPersonalReviewConfig,
@@ -8,6 +9,7 @@ import {
   listCodeReviews,
   listCodeReviewsForUser,
   listGitLabRepositories,
+  retriggerCodeReview,
   saveOrgReviewConfig,
   savePersonalReviewConfig,
   togglePersonalReviewAgent,
@@ -232,5 +234,58 @@ describe('code-reviews API', () => {
       focusAreas: [],
       modelSlug: 'auto',
     })
+  })
+
+  it('toSaveReviewConfigInput forwards repositoryModelOverrides', () => {
+    const overrides = [{ repositoryId: 5, repoFullName: 'a/b', modelSlug: 'kilo-auto/free' }]
+    const input = toSaveReviewConfigInput(
+      'github',
+      { isEnabled: true, repositoryModelOverrides: overrides },
+      {},
+    )
+    expect(input.repositoryModelOverrides).toEqual(overrides)
+  })
+
+  it('listCodeReviewsForUser passes limit/status/repoFullName/platform filters', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ reviews: [] }))
+    await listCodeReviewsForUser('tok', {
+      limit: 5,
+      status: 'failed',
+      repoFullName: 'user/repo',
+      platform: 'github',
+    })
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(JSON.parse(decodeURIComponent(url.split('input=')[1]!))).toEqual({
+      limit: 5,
+      status: 'failed',
+      repoFullName: 'user/repo',
+      platform: 'github',
+    })
+  })
+
+  it('listCodeReviews passes filters alongside organizationId', async () => {
+    fetchMock.mockResolvedValue(mockResponse({ reviews: [] }))
+    await listCodeReviews('tok', 'org1', { limit: 3, status: 'failed' })
+    const url = fetchMock.mock.calls[0]![0] as string
+    const input = JSON.parse(decodeURIComponent(url.split('input=')[1]!)) as Record<string, unknown>
+    expect(input).toMatchObject({ organizationId: 'org1', limit: 3, status: 'failed' })
+  })
+
+  it('retriggerCodeReview posts to codeReviews.retrigger with reviewId', async () => {
+    fetchMock.mockResolvedValue(mockMutationResponse({ message: 'ok', success: true }))
+    await retriggerCodeReview('tok', 'cr1')
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('codeReviews.retrigger')
+    const init = fetchMock.mock.calls[0]![1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ '0': { reviewId: 'cr1' } })
+  })
+
+  it('cancelCodeReview posts to codeReviews.cancel with reviewId', async () => {
+    fetchMock.mockResolvedValue(mockMutationResponse({ message: 'ok', success: true }))
+    await cancelCodeReview('tok', 'cr1')
+    const url = fetchMock.mock.calls[0]![0] as string
+    expect(url).toContain('codeReviews.cancel')
+    const init = fetchMock.mock.calls[0]![1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ '0': { reviewId: 'cr1' } })
   })
 })

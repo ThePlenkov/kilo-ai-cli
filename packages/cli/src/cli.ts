@@ -6,14 +6,12 @@ import { defineCommand, showUsage } from 'citty'
 import pkg from '../package.json' with { type: 'json' }
 
 /** Show subcommand help instead of "No command specified" for parent commands. */
-async function showParentHelp(ctx: {
-  cmd: Parameters<typeof showUsage>[0]
-  rawArgs: string[]
-}) {
+async function showParentHelp(ctx: { cmd: Parameters<typeof showUsage>[0]; rawArgs: string[] }) {
   // Skip if citty already resolved a subcommand — rawArgs contains its name
   if (ctx.rawArgs.some((a) => !a.startsWith('-'))) return
   await showUsage(ctx.cmd)
 }
+
 import {
   analyticsBreakdownCommand,
   analyticsSummaryCommand,
@@ -66,6 +64,7 @@ import {
 import { orgListCommand, orgSetCommand } from './commands/organizations.ts'
 import { byokListCommand, plansListCommand, plansUsageCommand } from './commands/plans.ts'
 import { balanceCommand, profileCommand } from './commands/profile.ts'
+import { reviewsRecoverCommand } from './commands/review-recovery.ts'
 import {
   securityCommandStatusCommand,
   securityCommandsCommand,
@@ -183,6 +182,7 @@ export const mainCommand = defineCommand({
         config: reviewsConfigCommand,
         toggle: reviewsToggleCommand,
         'set-model': reviewsSetModelCommand,
+        recover: reviewsRecoverCommand,
       },
       run: showParentHelp,
     }),
