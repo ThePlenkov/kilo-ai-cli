@@ -263,6 +263,9 @@ export interface CloudAgentTerminal {
 // tRPC Types — Code Reviews
 // ============================================================================
 
+/** GitLab numeric project id arrives as number; some surfaces serialize it as string. */
+export type PlatformProjectId = string | number | null
+
 /** codeReviews.listForUser / codeReviews.get — snake_case server shape. */
 export interface CodeReview {
   id: string
@@ -279,6 +282,7 @@ export interface CodeReview {
   head_ref?: string | null
   head_sha?: string | null
   platform?: string | null
+  platform_project_id?: PlatformProjectId
   session_id?: string | null
   cli_session_id?: string | null
   status: string
@@ -350,7 +354,7 @@ export interface ReviewAgentConfig {
   repositorySelectionMode?: string
   selectedRepositoryIds?: number[]
   manuallyAddedRepositories?: { id: number; name: string; full_name: string; private: boolean }[]
-  repositoryModelOverrides?: unknown[]
+  repositoryModelOverrides?: RepositoryModelOverride[]
   disableReviewMd?: boolean
   skipBotPullRequests?: boolean
   reviewMemoryEnabled?: boolean
@@ -358,6 +362,23 @@ export interface ReviewAgentConfig {
   councilEnabledRepositoryIds?: number[]
   actionRequired?: ReviewAgentActionRequired | null
   [key: string]: unknown
+}
+
+/** Per-repository model override entry (saveReviewConfig.repositoryModelOverrides). */
+export interface RepositoryModelOverride {
+  repositoryId: number
+  repoFullName: string
+  modelSlug: string
+  thinkingEffort?: string | null
+}
+
+/** Filters accepted by codeReviews.listForUser / listForOrganization. */
+export interface ListCodeReviewsOptions {
+  limit?: number
+  offset?: number
+  status?: string
+  repoFullName?: string
+  platform?: string
 }
 
 /** Input for personalReviewAgent.saveReviewConfig / organizations.reviewAgent.saveReviewConfig. */
@@ -371,6 +392,7 @@ export interface SaveReviewConfigInput {
   repositorySelectionMode?: string
   selectedRepositoryIds?: number[]
   manuallyAddedRepositories?: { id: number; name: string; full_name: string; private: boolean }[]
+  repositoryModelOverrides?: RepositoryModelOverride[]
   disableReviewMd?: boolean
   gateThreshold?: string
   autoConfigureWebhooks?: boolean

@@ -10,6 +10,7 @@ import type {
   CodeReviewAttempt,
   CodeReviewConfig,
   CodeReviewDetail,
+  ListCodeReviewsOptions,
   ReviewAgentConfig,
   SaveReviewConfigInput,
 } from './types.ts'
@@ -32,6 +33,7 @@ const CodeReviewSchema: z.ZodType<CodeReview> = z
     head_ref: z.string().nullish(),
     head_sha: z.string().nullish(),
     platform: z.string().nullish(),
+    platform_project_id: z.union([z.string(), z.number()]).nullish(),
     session_id: z.string().nullish(),
     cli_session_id: z.string().nullish(),
     status: z.string(),
@@ -137,6 +139,7 @@ export function toSaveReviewConfigInput(
     repositorySelectionMode: config.repositorySelectionMode,
     selectedRepositoryIds: config.selectedRepositoryIds,
     manuallyAddedRepositories: config.manuallyAddedRepositories,
+    repositoryModelOverrides: config.repositoryModelOverrides,
     disableReviewMd: config.disableReviewMd,
     gateThreshold: config.gateThreshold ?? undefined,
     ...overrides,
@@ -146,12 +149,15 @@ export function toSaveReviewConfigInput(
 // --- Top-level procedures (personal scope) ---
 
 /** codeReviews.listForUser — personal code reviews, no org required. */
-export async function listCodeReviewsForUser(token: string): Promise<CodeReview[]> {
+export async function listCodeReviewsForUser(
+  token: string,
+  options: ListCodeReviewsOptions = {},
+): Promise<CodeReview[]> {
   const r = await trpcQuery(
     'codeReviews.listForUser',
     token,
     z.object({ reviews: z.array(CodeReviewSchema) }),
-    {},
+    options,
   )
   return r.reviews
 }
@@ -165,14 +171,55 @@ export async function getCodeReview(token: string, reviewId: string): Promise<Co
 export async function listCodeReviews(
   token: string,
   organizationId: string,
+  options: ListCodeReviewsOptions = {},
 ): Promise<CodeReview[]> {
   const r = await trpcQuery(
     'codeReviews.listForOrganization',
     token,
     z.union([z.array(CodeReviewSchema), z.object({ reviews: z.array(CodeReviewSchema) })]),
-    { organizationId },
+    { organizationId, ...options },
   )
   return Array.isArray(r) ? r : r.reviews
+}
+
+/** Procedures wrapped in successResult/failureResult return { success, ... } in a 200 envelope. */
+const MutationResultSchema = z
+  .object({
+    success: z.boolean().optional(),
+    message: z.string().optional(),
+    error: z.unknown().optional(),
+  })
+  .passthrough()
+
+function mutationErrorDetail(error: unknown): string {
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  return JSON.stringify(error)
+}
+
+function assertMutationOk(procedure: string, result: { success?: boolean; error?: unknown }): void {
+  if (result.success === false) {
+    throw new Error(`${procedure} failed: ${mutationErrorDetail(result.error)}`)
+  }
+}
+
+async function codeReviewMutation(
+  token: string,
+  procedure: string,
+  reviewId: string,
+): Promise<void> {
+  const r = await trpcMutate(procedure, token, MutationResultSchema, { reviewId })
+  assertMutationOk(procedure, r)
+}
+
+/** codeReviews.cancel — cancel a pending/queued/running review. */
+export async function cancelCodeReview(token: string, reviewId: string): Promise<void> {
+  await codeReviewMutation(token, 'codeReviews.cancel', reviewId)
+}
+
+/** codeReviews.retrigger — re-run a failed, cancelled, or interrupted review. */
+export async function retriggerCodeReview(token: string, reviewId: string): Promise<void> {
+  await codeReviewMutation(token, 'codeReviews.retrigger', reviewId)
 }
 
 // --- Organization-scoped procedures ---
