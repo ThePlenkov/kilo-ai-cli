@@ -9,9 +9,12 @@ Policy layer over `kilo-ai-cli reviews` primitives. The CLI carries mechanics
 (list/get/cancel/retrigger/set-model); this skill carries the decision rules —
 which jobs are worth retrying, and which model to try next.
 
-`reviews recover` is the unattended variant of the same loop (batch, built-in
-fallback chain). Prefer this skill when the model policy matters — e.g. a model
-that already failed on a review must not burn another ~25-minute attempt.
+`reviews recover` is the unattended variant: batch scan + retrigger + a
+fallback chain via `--models`. It does **not** dedupe per PR or read attempt
+history — it retries the current model once before falling back and can
+retrigger superseded jobs. Prefer this skill when the model policy matters —
+e.g. a model that already failed on a review must not burn another
+~25-minute attempt.
 
 ## Primitives
 
@@ -67,9 +70,11 @@ configured model (`reviews config github`). Rules:
 
 ### Default fallback chain
 
-`orcarouter/z-ai/glm-5.3-flash-free` → `kilo-auto/free` → provider-specific
-BYOK models the user has keys for (`reviews` errors on a slug mean "not in
-Kilo's catalog" — check `byok list` first).
+`kilo-auto/free` → `orcarouter/z-ai/glm-5.3-flash-free` (BYOK, needs an
+OrcaRouter key — `byok list`; without one it fails fast, not slow) → other
+BYOK models the user has keys for. This matches `reviews recover`'s default
+`--models` chain. `minimax/minimax-m3:free` is documented as free but rejected
+by cloud sessions (`selected_model_unavailable`) — do not retry it.
 
 Caveats:
 

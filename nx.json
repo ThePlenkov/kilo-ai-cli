@@ -17,7 +17,8 @@
         "{projectRoot}/src/**/*",
         "{projectRoot}/tsdown.config.*",
         "{projectRoot}/tsconfig.json",
-        "{projectRoot}/package.json"
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/package-lock.json"
       ],
       "outputs": ["{projectRoot}/dist"]
     },
@@ -29,7 +30,8 @@
         "{projectRoot}/test/**/*",
         "{projectRoot}/vitest.config.*",
         "{projectRoot}/tsconfig.json",
-        "{projectRoot}/package.json"
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/package-lock.json"
       ]
     },
     "typecheck": {
@@ -39,7 +41,8 @@
         "{projectRoot}/src/**/*",
         "{projectRoot}/test/**/*",
         "{projectRoot}/tsconfig.json",
-        "{projectRoot}/package.json"
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/package-lock.json"
       ]
     },
     "lint": {
@@ -48,7 +51,8 @@
         "{projectRoot}/src/**/*",
         "{projectRoot}/test/**/*",
         "{projectRoot}/.oxlintrc.*",
-        "{projectRoot}/package.json"
+        "{projectRoot}/package.json",
+        "{workspaceRoot}/package-lock.json"
       ]
     },
     "format-check": {
