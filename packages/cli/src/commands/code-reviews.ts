@@ -5,11 +5,13 @@
 import { defineCommand } from 'citty'
 
 import {
+  cancelCodeReview,
   getCodeReview,
   getOrgReviewAgentConfig,
   getPersonalReviewConfig,
   listCodeReviews,
   listCodeReviewsForUser,
+  retriggerCodeReview,
   saveOrgReviewConfig,
   savePersonalReviewConfig,
   togglePersonalReviewAgent,
@@ -285,5 +287,31 @@ export const reviewsSetModelCommand = defineCommand({
         `Note: agent is disabled. Re-enable with: reviews toggle ${platform} --enabled${orgId ? ` --org ${orgId}` : ''}`,
       )
     }
+  },
+})
+
+export const reviewsRetriggerCommand = defineCommand({
+  meta: {
+    name: 'retrigger',
+    description: 'Retrigger a failed, cancelled or interrupted code review',
+  },
+  args: { id: { type: 'positional', description: 'Review ID', required: true } },
+  async run({ args }) {
+    const { token } = await getToken()
+    await retriggerCodeReview(token, args.id)
+    console.log(`Review ${args.id} retriggered`)
+  },
+})
+
+export const reviewsCancelCommand = defineCommand({
+  meta: {
+    name: 'cancel',
+    description: 'Cancel a pending, queued or running code review',
+  },
+  args: { id: { type: 'positional', description: 'Review ID', required: true } },
+  async run({ args }) {
+    const { token } = await getToken()
+    await cancelCodeReview(token, args.id)
+    console.log(`Review ${args.id} cancelled`)
   },
 })

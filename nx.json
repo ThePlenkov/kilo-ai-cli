@@ -5,11 +5,55 @@
     "libsDir": "packages"
   },
   "plugins": [
-    "./.nx-devkit/packages/tsdown/dist/plugin.mjs",
-    "./.nx-devkit/packages/oxlint/dist/plugin.mjs",
-    "./.nx-devkit/packages/biome/dist/plugin.mjs",
     "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs",
-    "./.nx-devkit/packages/release/dist/plugin.mjs"
+    "./.nx-devkit/packages/release/dist/plugin.mjs",
+    "./.nx-devkit/packages/skill/dist/plugin.mjs"
   ],
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": [
+        "{projectRoot}/src/**/*",
+        "{projectRoot}/tsdown.config.*",
+        "{projectRoot}/tsconfig.json",
+        "{projectRoot}/package.json"
+      ],
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": [
+        "{projectRoot}/src/**/*",
+        "{projectRoot}/test/**/*",
+        "{projectRoot}/vitest.config.*",
+        "{projectRoot}/tsconfig.json",
+        "{projectRoot}/package.json"
+      ]
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": [
+        "{projectRoot}/src/**/*",
+        "{projectRoot}/test/**/*",
+        "{projectRoot}/tsconfig.json",
+        "{projectRoot}/package.json"
+      ]
+    },
+    "lint": {
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/src/**/*",
+        "{projectRoot}/test/**/*",
+        "{projectRoot}/.oxlintrc.*",
+        "{projectRoot}/package.json"
+      ]
+    },
+    "format-check": {
+      "cache": true
+    }
+  },
   "analytics": false
 }
