@@ -30,9 +30,11 @@ import {
   cloudAgentSessionCommand,
 } from './commands/cloud-agent.ts'
 import {
+  reviewsCancelCommand,
   reviewsConfigCommand,
   reviewsGetCommand,
   reviewsListCommand,
+  reviewsRetriggerCommand,
   reviewsSetModelCommand,
   reviewsToggleCommand,
 } from './commands/code-reviews.ts'
@@ -183,6 +185,8 @@ export const mainCommand = defineCommand({
         toggle: reviewsToggleCommand,
         'set-model': reviewsSetModelCommand,
         recover: reviewsRecoverCommand,
+        retrigger: reviewsRetriggerCommand,
+        cancel: reviewsCancelCommand,
       },
       run: showParentHelp,
     }),

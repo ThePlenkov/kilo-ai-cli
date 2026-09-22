@@ -23,11 +23,13 @@
     "@nx/devkit": "22.7.1",
     "@types/node": "22.20.2",
     "@types/react": "^18.3.31",
+    "markdownlint-cli2": "^0.23.3",
     "memfs": "^4.50.0",
     "nx": "22.7.12",
     "oxlint": "1.82.0",
     "semver": "^7.8.5",
     "tsdown": "0.23.0",
+    "tsx": "^4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
   },

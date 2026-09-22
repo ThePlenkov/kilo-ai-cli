@@ -35,7 +35,10 @@ const RETRIGGERABLE_STATUSES = new Set(['failed', 'cancelled', 'interrupted'])
 const STALE_CANDIDATE_STATUSES = new Set(['pending', 'queued'])
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
 
-export const DEFAULT_FALLBACK_MODELS = ['kilo-auto/free', 'minimax/minimax-m3:free']
+export const DEFAULT_FALLBACK_MODELS = [
+  'kilo-auto/free',
+  'orcarouter/z-ai/glm-5.3-flash-free',
+]
 
 export type PrState = 'open' | 'closed' | 'unknown'
 
