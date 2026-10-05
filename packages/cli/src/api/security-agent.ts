@@ -401,12 +401,10 @@ export async function dismissFinding(
   findingId: string,
   reason?: DismissReason,
 ): Promise<QueuedMutationResult> {
-  const result = await trpcMutate(
-    'securityAgent.dismissFinding',
-    token,
-    QueuedMutationSchema,
-    { findingId, reason },
-  )
+  const result = await trpcMutate('securityAgent.dismissFinding', token, QueuedMutationSchema, {
+    findingId,
+    reason,
+  })
   return { accepted: result.accepted ?? result.success ?? false, commandId: result.commandId }
 }
 
@@ -540,6 +538,7 @@ export async function dismissFindingsBulk(
   const commandIds: string[] = []
   for (const id of ids) {
     try {
+      // eslint-disable-next-line no-await-in-loop -- one dismissal per request, in order
       const result = await dismissFinding(token, id, reason)
       if (result.accepted) queued++
       if (result.commandId) commandIds.push(result.commandId)

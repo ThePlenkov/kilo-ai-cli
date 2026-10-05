@@ -336,9 +336,7 @@ describe('security-agent API (personal level)', () => {
     it('returns the terminal command as soon as it is no longer pending', async () => {
       fetchMock
         .mockResolvedValueOnce(mockResponse({ id: 'c1', status: 'pending' }))
-        .mockResolvedValueOnce(
-          mockResponse({ id: 'c1', status: 'completed', resultCode: 'OK' }),
-        )
+        .mockResolvedValueOnce(mockResponse({ id: 'c1', status: 'completed', resultCode: 'OK' }))
       const cmd = await waitForCommand('tok', 'c1', { pollIntervalMs: 0, pollTimeoutMs: 1000 })
       expect(cmd.status).toBe('completed')
       expect(cmd.resultCode).toBe('OK')

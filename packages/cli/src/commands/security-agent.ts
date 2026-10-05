@@ -473,9 +473,8 @@ export const securityFindingsDismissCommand = defineCommand({
       process.exit(1)
     }
     if (args['no-wait'] || !result.commandId) {
-      console.log(
-        `Dismissal of ${args.id} queued${result.commandId ? ` (command ${result.commandId})` : ''}.`,
-      )
+      const suffix = result.commandId ? ` (command ${result.commandId})` : ''
+      console.log(`Dismissal of ${args.id} queued${suffix}.`)
       return
     }
     console.log(`Dismissal of ${args.id} queued (command ${result.commandId}) — waiting…`)
@@ -564,9 +563,12 @@ export const securityCommandStatusCommand = defineCommand({
     console.log(`  Type:        ${cmd.type ?? cmd.commandType ?? '-'}`)
     console.log(`  Status:      ${cmd.status ?? '-'}`)
     if (cmd.resultCode) console.log(`  Result:      ${cmd.resultCode}`)
-    console.log(`  Repository:  ${cmd.repoFullName ?? cmd.repositoryId ?? cmd.repository_id ?? '-'}`)
+    console.log(
+      `  Repository:  ${cmd.repoFullName ?? cmd.repositoryId ?? cmd.repository_id ?? '-'}`,
+    )
     console.log(`  Started:     ${cmd.startedAt ?? cmd.started_at ?? '-'}`)
-    if (cmd.completedAt ?? cmd.completed_at) console.log(`  Completed:   ${cmd.completedAt ?? cmd.completed_at}`)
+    if (cmd.completedAt ?? cmd.completed_at)
+      console.log(`  Completed:   ${cmd.completedAt ?? cmd.completed_at}`)
     if (cmd.lastErrorRedacted) console.log(`  Error:       ${cmd.lastErrorRedacted}`)
     if (cmd.output) console.log(`  Output:      ${cmd.output}`)
     if (commandFailed(cmd)) process.exit(1)
@@ -621,7 +623,10 @@ export const securityFindingsCloseCommand = defineCommand({
     },
     outcome: { type: 'string', description: 'Filter by remediation outcome' },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
-    from: { type: 'string', description: 'Only findings created after this date (ISO, e.g. 2025-01-01)' },
+    from: {
+      type: 'string',
+      description: 'Only findings created after this date (ISO, e.g. 2025-01-01)',
+    },
     to: { type: 'string', description: 'Only findings created before this date (ISO)' },
     reason: {
       type: 'string',
@@ -738,10 +743,21 @@ export const securityFindingsCloseCommand = defineCommand({
 export const securityFindingsDeleteCommand = defineCommand({
   meta: { name: 'delete', description: 'Delete findings for a repository (all or filtered)' },
   args: {
-    repo: { type: 'positional', description: 'Repository ID or full name (e.g. user/repo)', required: false },
-    'repo-name': { type: 'string', description: 'Repository full name (alternative to positional)', alias: 'repo' },
+    repo: {
+      type: 'positional',
+      description: 'Repository ID or full name (e.g. user/repo)',
+      required: false,
+    },
+    'repo-name': {
+      type: 'string',
+      description: 'Repository full name (alternative to positional)',
+      alias: 'repo',
+    },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
-    status: { type: 'string', description: 'Filter by status (open/dismissed/remediated/in_progress)' },
+    status: {
+      type: 'string',
+      description: 'Filter by status (open/dismissed/remediated/in_progress)',
+    },
     outcome: { type: 'string', description: 'Filter by remediation outcome' },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
     'dry-run': { type: 'boolean', description: 'Show what would be deleted without deleting' },

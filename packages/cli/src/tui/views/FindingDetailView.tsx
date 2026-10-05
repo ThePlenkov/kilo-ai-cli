@@ -15,6 +15,12 @@ import type {
   SecurityFinding,
 } from '../../api/types.ts'
 
+/** Inline result banner shown after a mutation. */
+interface Notice {
+  text: string
+  error: boolean
+}
+
 export interface FindingDetailViewProps {
   token: string
   findingId: string
@@ -48,7 +54,7 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const [confirm, setConfirm] = useState<'dismiss' | 'remediate' | null>(null)
   const [dismissReason, setDismissReason] = useState<DismissReason>('tolerable_risk')
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
 
   useEffect(() => {
     let stale = false
@@ -64,40 +70,38 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
         if (!stale) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => {
       stale = true
     }
   }, [token, findingId, reloadKey])
 
+  const dismiss = async (): Promise<Notice> => {
+    const queued = await dismissFinding(token, findingId, dismissReason)
+    if (!queued.accepted) {
+      return { text: 'Dismissal was not accepted by the server', error: true }
+    }
+    if (!queued.commandId) {
+      return { text: `Dismissal queued (${dismissReason})`, error: false }
+    }
+    const command = await waitForCommand(token, queued.commandId)
+    const status = (command.status ?? '').toLowerCase()
+    if (status === 'failed' || status === 'error') {
+      const detail = [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
+      return { text: detail ? `Dismissal failed: ${detail}` : 'Dismissal failed', error: true }
+    }
+    return { text: `Finding dismissed (${dismissReason})`, error: false }
+  }
+
+  const remediate = async (): Promise<Notice> => {
+    const { attemptId } = await startRemediation(token, findingId)
+    return { text: `Remediation started (attempt ${attemptId})`, error: false }
+  }
+
   const act = async (what: 'dismiss' | 'remediate') => {
     setBusy(true)
     try {
-      if (what === 'dismiss') {
-        const queued = await dismissFinding(token, findingId, dismissReason)
-        if (!queued.accepted) {
-          setNotice({ text: 'Dismissal was not accepted by the server', error: true })
-          return
-        }
-        if (!queued.commandId) {
-          setNotice({ text: `Dismissal queued (${dismissReason})`, error: false })
-          return
-        }
-        const command = await waitForCommand(token, queued.commandId)
-        const status = (command.status ?? '').toLowerCase()
-        const detail = [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
-        if (status === 'failed' || status === 'error') {
-          setNotice({
-            text: `Dismissal failed${detail ? `: ${detail}` : ''}`,
-            error: true,
-          })
-          return
-        }
-        setNotice({ text: `Finding dismissed (${dismissReason})`, error: false })
-      } else {
-        const { attemptId } = await startRemediation(token, findingId)
-        setNotice({ text: `Remediation started (attempt ${attemptId})`, error: false })
-      }
+      setNotice(await (what === 'dismiss' ? dismiss() : remediate()))
       setReloadKey((k) => k + 1)
     } catch (e) {
       setNotice({
