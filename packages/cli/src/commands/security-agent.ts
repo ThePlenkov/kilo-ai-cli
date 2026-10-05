@@ -6,6 +6,8 @@ import { defineCommand, showUsage } from 'citty'
 
 import {
   cancelRemediation,
+  commandFailureDetail,
+  commandOutcome,
   DISMISS_REASONS,
   type DismissReason,
   deleteFindingsByRepository,
@@ -27,8 +29,9 @@ import {
   startAnalysis,
   startRemediation,
   triggerSync,
+  waitForCommand,
 } from '../api/security-agent.ts'
-import type { SecurityFinding } from '../api/types.ts'
+import type { SecurityAgentCommand, SecurityFinding } from '../api/types.ts'
 import { confirm } from './confirm.ts'
 import { type Column, printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
@@ -46,6 +49,29 @@ async function resolveRepoFullName(token: string, idOrName: string): Promise<str
     )
   }
   return fullName
+}
+
+/** Exit code for "the server never confirmed the outcome" — not a clean run. */
+const EXIT_UNVERIFIED = 2
+
+/** Print the real outcome of a queued command and return the exit code it implies. */
+function reportCommandOutcome(command: SecurityAgentCommand, subject: string): number {
+  const outcome = commandOutcome(command)
+  const status = command.status ?? 'unknown'
+  if (outcome === 'failed') {
+    console.error(`  ${subject}: ${status}`)
+    const detail = commandFailureDetail(command)
+    if (detail) console.error(`    ${detail}`)
+    return 1
+  }
+  if (outcome === 'pending') {
+    console.error(
+      `  ${subject}: still ${status} — not confirmed, check \`security command ${command.id}\``,
+    )
+    return EXIT_UNVERIFIED
+  }
+  console.log(`  ${subject}: ${status}`)
+  return 0
 }
 
 export const securityStatusCommand = defineCommand({
@@ -427,6 +453,11 @@ export const securityFindingsDismissCommand = defineCommand({
       type: 'string',
       description: `Reason for dismissal (${DISMISS_REASONS.join('/')})`,
     },
+    'no-wait': {
+      type: 'boolean',
+      description: 'Queue the dismissal without waiting for the command to finish',
+      default: false,
+    },
   },
   async run({ args }) {
     if (args.reason && !(DISMISS_REASONS as readonly string[]).includes(args.reason)) {
@@ -434,8 +465,20 @@ export const securityFindingsDismissCommand = defineCommand({
       throw new Error(`Invalid --reason "${args.reason}". Allowed: ${allowed}`)
     }
     const { token } = await getToken()
-    await dismissFinding(token, args.id, args.reason as DismissReason | undefined)
-    console.log(`Finding ${args.id} dismissed.`)
+    const result = await dismissFinding(token, args.id, args.reason as DismissReason | undefined)
+    if (!result.accepted) {
+      console.error(`Dismissal of ${args.id} was not accepted by the server.`)
+      process.exit(1)
+    }
+    if (args['no-wait'] || !result.commandId) {
+      const suffix = result.commandId ? ` (command ${result.commandId})` : ''
+      console.log(`Dismissal of ${args.id} queued${suffix}.`)
+      return
+    }
+    console.log(`Dismissal of ${args.id} queued (command ${result.commandId}) — waiting…`)
+    const command = await waitForCommand(token, result.commandId)
+    const code = reportCommandOutcome(command, `Finding ${args.id}`)
+    if (code !== 0) process.exit(code)
   },
 })
 
@@ -515,12 +558,18 @@ export const securityCommandStatusCommand = defineCommand({
     const { token } = await getToken()
     const cmd = await getCommandStatus(token, args.id)
     console.log(`  ID:          ${cmd.id ?? '-'}`)
-    console.log(`  Type:        ${cmd.type ?? '-'}`)
+    console.log(`  Type:        ${cmd.type ?? cmd.commandType ?? '-'}`)
     console.log(`  Status:      ${cmd.status ?? '-'}`)
-    console.log(`  Repository:  ${cmd.repositoryId ?? cmd.repository_id ?? '-'}`)
+    if (cmd.resultCode) console.log(`  Result:      ${cmd.resultCode}`)
+    console.log(
+      `  Repository:  ${cmd.repoFullName ?? cmd.repositoryId ?? cmd.repository_id ?? '-'}`,
+    )
     console.log(`  Started:     ${cmd.startedAt ?? cmd.started_at ?? '-'}`)
-    if (cmd.completedAt) console.log(`  Completed:   ${cmd.completedAt}`)
+    if (cmd.completedAt ?? cmd.completed_at)
+      console.log(`  Completed:   ${cmd.completedAt ?? cmd.completed_at}`)
+    if (cmd.lastErrorRedacted) console.log(`  Error:       ${cmd.lastErrorRedacted}`)
     if (cmd.output) console.log(`  Output:      ${cmd.output}`)
+    if (commandOutcome(cmd) === 'failed') process.exit(1)
   },
 })
 
@@ -572,7 +621,10 @@ export const securityFindingsCloseCommand = defineCommand({
     },
     outcome: { type: 'string', description: 'Filter by remediation outcome' },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
-    from: { type: 'string', description: 'Only findings created after this date (ISO, e.g. 2025-01-01)' },
+    from: {
+      type: 'string',
+      description: 'Only findings created after this date (ISO, e.g. 2025-01-01)',
+    },
     to: { type: 'string', description: 'Only findings created before this date (ISO)' },
     reason: {
       type: 'string',
@@ -663,27 +715,56 @@ export const securityFindingsCloseCommand = defineCommand({
       token,
       filters,
       (args.reason as DismissReason | undefined) ?? 'no_bandwidth',
+      { probeQueue: true },
     )
     printSummary([
-      { label: 'Dismissed', value: result.dismissed },
+      { label: 'Queued', value: result.queued },
+      { label: 'Rejected', value: result.rejected },
       { label: 'Total matched', value: result.totalMatched },
       { label: 'Errors', value: result.errors.length },
     ])
+    if (result.probe === 'failed') {
+      console.error(`\n  First queued command failed: ${result.failureDetail ?? 'unknown error'}`)
+      console.error(
+        '  The other queued commands are unverified — re-check with `security findings list`.',
+      )
+    } else if (result.probe === 'pending') {
+      console.error('\n  First queued command is still in flight — outcome unverified.')
+    } else if (result.probeError) {
+      console.error(`\n  Could not check the first queued command: ${result.probeError}`)
+      console.error('  Outcomes are unverified — re-check with `security findings list`.')
+    } else if (result.probe === 'succeeded') {
+      console.log('\n  First queued command completed; the rest may still be running.')
+    }
     if (result.errors.length > 0) {
       console.log('\nErrors:')
       for (const e of result.errors.slice(0, 10)) console.log(`  ${e}`)
       if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
     }
+    if (result.rejected > 0 || result.errors.length > 0) process.exit(1)
+    if (result.probe === 'pending') process.exit(EXIT_UNVERIFIED)
+    if (result.probe === 'failed' || result.probeError) process.exit(1)
   },
 })
 
 export const securityFindingsDeleteCommand = defineCommand({
   meta: { name: 'delete', description: 'Delete findings for a repository (all or filtered)' },
   args: {
-    repo: { type: 'positional', description: 'Repository ID or full name (e.g. user/repo)', required: false },
-    'repo-name': { type: 'string', description: 'Repository full name (alternative to positional)', alias: 'repo' },
+    repo: {
+      type: 'positional',
+      description: 'Repository ID or full name (e.g. user/repo)',
+      required: false,
+    },
+    'repo-name': {
+      type: 'string',
+      description: 'Repository full name (alternative to positional)',
+      alias: 'repo',
+    },
     severity: { type: 'string', description: 'Filter by severity (critical/high/medium/low/info)' },
-    status: { type: 'string', description: 'Filter by status (open/dismissed/remediated/in_progress)' },
+    status: {
+      type: 'string',
+      description: 'Filter by status (open/dismissed/remediated/in_progress)',
+    },
     outcome: { type: 'string', description: 'Filter by remediation outcome' },
     overdue: { type: 'boolean', description: 'Only overdue findings' },
     'dry-run': { type: 'boolean', description: 'Show what would be deleted without deleting' },
