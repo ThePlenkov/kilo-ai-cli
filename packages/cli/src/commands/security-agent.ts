@@ -6,6 +6,8 @@ import { defineCommand, showUsage } from 'citty'
 
 import {
   cancelRemediation,
+  commandFailureDetail,
+  commandOutcome,
   DISMISS_REASONS,
   type DismissReason,
   deleteFindingsByRepository,
@@ -49,31 +51,27 @@ async function resolveRepoFullName(token: string, idOrName: string): Promise<str
   return fullName
 }
 
-/** True when a queued command reached a terminal failure state. */
-function commandFailed(command: SecurityAgentCommand): boolean {
-  const status = (command.status ?? '').toLowerCase()
-  return status === 'failed' || status === 'error'
-}
+/** Exit code for "the server never confirmed the outcome" — not a clean run. */
+const EXIT_UNVERIFIED = 2
 
-/** Backend failure detail for a command, e.g. `QUEUE_RETRIES_EXHAUSTED: <message>`. */
-function commandFailureDetail(command: SecurityAgentCommand): string {
-  return [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
-}
-
-/** Print the real outcome of a queued command instead of assuming success. */
-function printCommandOutcome(command: SecurityAgentCommand, subject: string): void {
+/** Print the real outcome of a queued command and return the exit code it implies. */
+function reportCommandOutcome(command: SecurityAgentCommand, subject: string): number {
+  const outcome = commandOutcome(command)
   const status = command.status ?? 'unknown'
-  if (commandFailed(command)) {
+  if (outcome === 'failed') {
     console.error(`  ${subject}: ${status}`)
     const detail = commandFailureDetail(command)
     if (detail) console.error(`    ${detail}`)
-    return
+    return 1
   }
-  if (status === 'pending' || status === 'queued' || status === 'running') {
-    console.log(`  ${subject}: still ${status} — check \`security findings command ${command.id}\``)
-    return
+  if (outcome === 'pending') {
+    console.error(
+      `  ${subject}: still ${status} — not confirmed, check \`security command ${command.id}\``,
+    )
+    return EXIT_UNVERIFIED
   }
   console.log(`  ${subject}: ${status}`)
+  return 0
 }
 
 export const securityStatusCommand = defineCommand({
@@ -479,8 +477,8 @@ export const securityFindingsDismissCommand = defineCommand({
     }
     console.log(`Dismissal of ${args.id} queued (command ${result.commandId}) — waiting…`)
     const command = await waitForCommand(token, result.commandId)
-    printCommandOutcome(command, `Finding ${args.id}`)
-    if (commandFailed(command)) process.exit(1)
+    const code = reportCommandOutcome(command, `Finding ${args.id}`)
+    if (code !== 0) process.exit(code)
   },
 })
 
@@ -571,7 +569,7 @@ export const securityCommandStatusCommand = defineCommand({
       console.log(`  Completed:   ${cmd.completedAt ?? cmd.completed_at}`)
     if (cmd.lastErrorRedacted) console.log(`  Error:       ${cmd.lastErrorRedacted}`)
     if (cmd.output) console.log(`  Output:      ${cmd.output}`)
-    if (commandFailed(cmd)) process.exit(1)
+    if (commandOutcome(cmd) === 'failed') process.exit(1)
   },
 })
 
@@ -721,22 +719,31 @@ export const securityFindingsCloseCommand = defineCommand({
     )
     printSummary([
       { label: 'Queued', value: result.queued },
+      { label: 'Rejected', value: result.rejected },
       { label: 'Total matched', value: result.totalMatched },
-      { label: 'Failed', value: result.failed },
       { label: 'Errors', value: result.errors.length },
     ])
-    if (result.failureDetail) {
-      console.log(`\n  Backend rejected the queued dismissals: ${result.failureDetail}`)
-      console.log('  No finding was dismissed. Retry later or use `security sync`.')
-    } else if (result.queued > 0) {
-      console.log('\n  Dismissals are queued server-side and may still be running.')
+    if (result.probe === 'failed') {
+      console.error(`\n  First queued command failed: ${result.failureDetail ?? 'unknown error'}`)
+      console.error(
+        '  The other queued commands are unverified — re-check with `security findings list`.',
+      )
+    } else if (result.probe === 'pending') {
+      console.error('\n  First queued command is still in flight — outcome unverified.')
+    } else if (result.probeError) {
+      console.error(`\n  Could not check the first queued command: ${result.probeError}`)
+      console.error('  Outcomes are unverified — re-check with `security findings list`.')
+    } else if (result.probe === 'succeeded') {
+      console.log('\n  First queued command completed; the rest may still be running.')
     }
     if (result.errors.length > 0) {
       console.log('\nErrors:')
       for (const e of result.errors.slice(0, 10)) console.log(`  ${e}`)
       if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
     }
-    if (result.failed > 0 || result.errors.length > 0) process.exit(1)
+    if (result.rejected > 0 || result.errors.length > 0) process.exit(1)
+    if (result.probe === 'pending') process.exit(EXIT_UNVERIFIED)
+    if (result.probe === 'failed' || result.probeError) process.exit(1)
   },
 })
 

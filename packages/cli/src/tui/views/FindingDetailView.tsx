@@ -2,6 +2,8 @@ import { Box, Text, useInput } from 'ink'
 import React, { useEffect, useState } from 'react'
 
 import {
+  commandFailureDetail,
+  commandOutcome,
   DISMISS_REASONS,
   type DismissReason,
   dismissFinding,
@@ -85,10 +87,14 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
       return { text: `Dismissal queued (${dismissReason})`, error: false }
     }
     const command = await waitForCommand(token, queued.commandId)
-    const status = (command.status ?? '').toLowerCase()
-    if (status === 'failed' || status === 'error') {
-      const detail = [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
+    const outcome = commandOutcome(command)
+    if (outcome === 'failed') {
+      const detail = commandFailureDetail(command)
       return { text: detail ? `Dismissal failed: ${detail}` : 'Dismissal failed', error: true }
+    }
+    if (outcome === 'pending') {
+      const status = command.status ?? 'unknown'
+      return { text: `Dismissal still ${status} (command ${queued.commandId})`, error: false }
     }
     return { text: `Finding dismissed (${dismissReason})`, error: false }
   }

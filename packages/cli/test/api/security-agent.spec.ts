@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   cancelRemediation,
+  commandOutcome,
   deleteFindingsByRepository,
   dismissFinding,
   dismissFindingsBulk,
@@ -303,8 +304,71 @@ describe('security-agent API (personal level)', () => {
         { probeQueue: true, pollIntervalMs: 0, pollTimeoutMs: 50 },
       )
       expect(result.queued).toBe(1)
-      expect(result.failed).toBe(1)
+      expect(result.probe).toBe('failed')
       expect(result.failureDetail).toContain('QUEUE_RETRIES_EXHAUSTED')
+    })
+
+    it('dismissFindingsBulk keeps the queued count when the probe itself errors', async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse({ success: true, accepted: true, commandId: 'c-1' })
+        }
+        if (url.includes('securityAgent.getCommandStatus')) throw new Error('network down')
+        return mockResponse({
+          findings: [{ id: 'f1', severity: 'high', title: 't1', status: 'open' }],
+          totalCount: 1,
+        })
+      })
+
+      const result = await dismissFindingsBulk(
+        'tok',
+        { repoFullName: 'user/repo', status: 'open' },
+        'not_used',
+        { probeQueue: true, pollIntervalMs: 0, pollTimeoutMs: 50 },
+      )
+      expect(result.queued).toBe(1)
+      expect(result.probeError).toContain('network down')
+    })
+
+    it('dismissFindingsBulk records a dismissal the server refused to accept', async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse({ success: false, accepted: false })
+        }
+        return mockResponse({
+          findings: [{ id: 'f1', severity: 'high', title: 't1', status: 'open' }],
+          totalCount: 1,
+        })
+      })
+
+      const result = await dismissFindingsBulk('tok', { repoFullName: 'user/repo' })
+      expect(result.queued).toBe(0)
+      expect(result.rejected).toBe(1)
+      expect(result.errors[0]).toContain('f1')
+    })
+
+    it('dismissFindingsBulk does not claim success when the probe is still pending', async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse({ success: true, accepted: true, commandId: 'c-1' })
+        }
+        if (url.includes('securityAgent.getCommandStatus')) {
+          return mockResponse({ id: 'c-1', status: 'running' })
+        }
+        return mockResponse({
+          findings: [{ id: 'f1', severity: 'high', title: 't1', status: 'open' }],
+          totalCount: 1,
+        })
+      })
+
+      const result = await dismissFindingsBulk(
+        'tok',
+        { repoFullName: 'user/repo', status: 'open' },
+        'not_used',
+        { probeQueue: true, pollIntervalMs: 0, pollTimeoutMs: 20 },
+      )
+      expect(result.probe).toBe('pending')
+      expect(result.failureDetail).toBeUndefined()
     })
 
     it('dismissFindingsBulk collects transport errors and keeps going', async () => {
@@ -329,6 +393,26 @@ describe('security-agent API (personal level)', () => {
       expect(result.queued).toBe(2)
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0]).toContain('f2')
+    })
+  })
+
+  describe('commandOutcome', () => {
+    it.each([
+      ['completed', 'succeeded'],
+      ['succeeded', 'succeeded'],
+      ['success', 'succeeded'],
+      ['failed', 'failed'],
+      ['error', 'failed'],
+      ['pending', 'pending'],
+      ['queued', 'pending'],
+      ['running', 'pending'],
+      ['', 'pending'],
+    ])('classifies %s as %s', (status, expected) => {
+      expect(commandOutcome({ status })).toBe(expected)
+    })
+
+    it('treats a missing status as pending, never success', () => {
+      expect(commandOutcome({})).toBe('pending')
     })
   })
 

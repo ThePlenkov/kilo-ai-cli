@@ -299,8 +299,30 @@ export async function listActiveCommands(token: string): Promise<SecurityAgentCo
   return trpcQuery('securityAgent.listActiveCommands', token, z.array(CommandSchema), {})
 }
 
-/** Command statuses that mean the queued work has reached a final state. */
-const TERMINAL_COMMAND_STATUSES = new Set(['completed', 'succeeded', 'success', 'failed', 'error'])
+/**
+ * How a queued command ended.
+ *
+ * `pending` covers everything that is not a confirmed terminal state — an
+ * unknown or missing status included. Callers must never read `pending` as
+ * success: the work is still in flight (or the server told us nothing).
+ */
+export type CommandOutcome = 'succeeded' | 'failed' | 'pending'
+
+const SUCCEEDED_COMMAND_STATUSES = new Set(['completed', 'succeeded', 'success'])
+const FAILED_COMMAND_STATUSES = new Set(['failed', 'error'])
+
+/** Classify a command status. Anything unrecognised is `pending`, never success. */
+export function commandOutcome(command: SecurityAgentCommand): CommandOutcome {
+  const status = (command.status ?? '').toLowerCase()
+  if (FAILED_COMMAND_STATUSES.has(status)) return 'failed'
+  if (SUCCEEDED_COMMAND_STATUSES.has(status)) return 'succeeded'
+  return 'pending'
+}
+
+/** Backend failure detail for a command, e.g. `QUEUE_RETRIES_EXHAUSTED: <message>`. */
+export function commandFailureDetail(command: SecurityAgentCommand): string {
+  return [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
+}
 
 /** Options for {@link waitForCommand}. */
 export interface WaitForCommandOptions {
@@ -313,11 +335,12 @@ export interface WaitForCommandOptions {
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Poll `securityAgent.getCommandStatus` until the command leaves a pending state.
+ * Poll `securityAgent.getCommandStatus` until the command reaches a terminal state.
  *
  * Dismissals and remediations are queued server-side: the mutation only returns
  * `accepted`, so the caller must poll to learn whether the work actually ran.
- * Returns the last observed command — on timeout it may still be pending.
+ * Returns the last observed command — on timeout it may still be pending, so
+ * callers must check {@link commandOutcome} rather than assuming success.
  */
 export async function waitForCommand(
   token: string,
@@ -331,8 +354,7 @@ export async function waitForCommand(
   for (;;) {
     // eslint-disable-next-line no-await-in-loop -- polling a command is sequential by design
     const command = await getCommandStatus(token, commandId)
-    const status = (command.status ?? '').toLowerCase()
-    if (TERMINAL_COMMAND_STATUSES.has(status)) return command
+    if (commandOutcome(command) !== 'pending') return command
     if (Date.now() >= deadline) return command
     // eslint-disable-next-line no-await-in-loop -- polling a command is sequential by design
     await sleep(pollIntervalMs)
@@ -477,10 +499,17 @@ export interface BulkDismissOptions {
 export interface BulkDismissResult {
   /** Requests the server accepted for processing. */
   queued: number
-  /** Commands observed to have failed (only when `probeQueue` is set). */
-  failed: number
-  /** Backend failure detail, e.g. `QUEUE_RETRIES_EXHAUSTED: <message>`. */
+  /** Requests the server explicitly refused (`accepted: false`). */
+  rejected: number
+  /**
+   * Result of polling the first queued command, when `probeQueue` is set.
+   * It speaks for that one command only — the rest stay unverified.
+   */
+  probe?: CommandOutcome
+  /** Backend failure detail for a failed probe, e.g. `QUEUE_RETRIES_EXHAUSTED: <msg>`. */
   failureDetail?: string
+  /** Transport/protocol error while polling the probe command. */
+  probeError?: string
   totalMatched: number
   errors: string[]
 }
@@ -492,7 +521,8 @@ export interface BulkDismissResult {
  *
  * Each dismissal is queued server-side, so `queued` counts accepted requests,
  * not applied dismissals. With `probeQueue`, the first queued command is polled
- * so a dead queue is reported instead of silently reported as success.
+ * so a dead queue is reported instead of silently reported as success — the
+ * probe speaks for itself only, never for the commands behind it.
  */
 export async function dismissFindingsBulk(
   token: string,
@@ -535,31 +565,42 @@ export async function dismissFindingsBulk(
   }
 
   let queued = 0
+  let rejected = 0
   const commandIds: string[] = []
   for (const id of ids) {
     try {
       // eslint-disable-next-line no-await-in-loop -- one dismissal per request, in order
       const result = await dismissFinding(token, id, reason)
-      if (result.accepted) queued++
-      if (result.commandId) commandIds.push(result.commandId)
+      if (result.accepted) {
+        queued++
+        if (result.commandId) commandIds.push(result.commandId)
+      } else {
+        rejected++
+        errors.push(`${id}: server did not accept the dismissal`)
+      }
     } catch (e) {
       errors.push(`${id}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
-  let failed = 0
+  let probe: CommandOutcome | undefined
   let failureDetail: string | undefined
+  let probeError: string | undefined
   if (options.probeQueue && commandIds.length > 0) {
-    const probe = await waitForCommand(token, commandIds[0], options)
-    const status = (probe.status ?? '').toLowerCase()
-    if (status === 'failed' || status === 'error') {
-      failed = queued
-      failureDetail = [probe.resultCode, probe.lastErrorRedacted].filter(Boolean).join(': ')
-      if (!failureDetail) failureDetail = `command ${probe.id ?? commandIds[0]} ${status}`
+    // A failed poll must not discard the queued count — report it, don't throw.
+    try {
+      const first = await waitForCommand(token, commandIds[0], options)
+      probe = commandOutcome(first)
+      if (probe === 'failed') {
+        failureDetail = commandFailureDetail(first)
+        if (!failureDetail) failureDetail = `command ${first.id ?? commandIds[0]} failed`
+      }
+    } catch (e) {
+      probeError = e instanceof Error ? e.message : String(e)
     }
   }
 
-  return { queued, failed, failureDetail, totalMatched, errors }
+  return { queued, rejected, probe, failureDetail, probeError, totalMatched, errors }
 }
 
 /** securityAgent.trackUiInteraction */
