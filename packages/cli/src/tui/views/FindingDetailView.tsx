@@ -7,6 +7,7 @@ import {
   dismissFinding,
   getFinding,
   startRemediation,
+  waitForCommand,
 } from '../../api/security-agent.ts'
 import type {
   RemediationCapability as RemediationCapabilityType,
@@ -73,7 +74,25 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
     setBusy(true)
     try {
       if (what === 'dismiss') {
-        await dismissFinding(token, findingId, dismissReason)
+        const queued = await dismissFinding(token, findingId, dismissReason)
+        if (!queued.accepted) {
+          setNotice({ text: 'Dismissal was not accepted by the server', error: true })
+          return
+        }
+        if (!queued.commandId) {
+          setNotice({ text: `Dismissal queued (${dismissReason})`, error: false })
+          return
+        }
+        const command = await waitForCommand(token, queued.commandId)
+        const status = (command.status ?? '').toLowerCase()
+        const detail = [command.resultCode, command.lastErrorRedacted].filter(Boolean).join(': ')
+        if (status === 'failed' || status === 'error') {
+          setNotice({
+            text: `Dismissal failed${detail ? `: ${detail}` : ''}`,
+            error: true,
+          })
+          return
+        }
         setNotice({ text: `Finding dismissed (${dismissReason})`, error: false })
       } else {
         const { attemptId } = await startRemediation(token, findingId)

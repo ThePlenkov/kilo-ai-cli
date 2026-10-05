@@ -757,7 +757,12 @@ export interface SecurityAgentAnalysis {
 export interface SecurityAgentCommand {
   id?: string
   type?: string
+  commandType?: string
   status?: string
+  resultCode?: string | null
+  lastErrorRedacted?: string | null
+  findingId?: string | null
+  repoFullName?: string | null
   repositoryId?: string
   repository_id?: string
   startedAt?: string | null

@@ -20,6 +20,7 @@ import {
   startAnalysis,
   startRemediation,
   triggerSync,
+  waitForCommand,
 } from '../../src/api/security-agent.ts'
 import { mockMutationResponse, mockResponse, setupFetchMock } from './helpers.ts'
 
@@ -193,10 +194,18 @@ describe('security-agent API (personal level)', () => {
     })
 
     it('dismissFinding posts with findingId and reason', async () => {
-      fetchMock.mockResolvedValue(mockMutationResponse(null))
+      fetchMock.mockResolvedValue(mockMutationResponse({ success: true, accepted: true }))
       await dismissFinding('tok', 'f1', 'inaccurate')
       const init = fetchMock.mock.calls[0]![1] as { body: string }
       expect(JSON.parse(init.body)).toEqual({ '0': { findingId: 'f1', reason: 'inaccurate' } })
+    })
+
+    it('dismissFinding returns the queued command id (dismiss is async)', async () => {
+      fetchMock.mockResolvedValue(
+        mockMutationResponse({ success: true, accepted: true, commandId: 'cmd-1' }),
+      )
+      const result = await dismissFinding('tok', 'f1', 'not_used')
+      expect(result).toEqual({ accepted: true, commandId: 'cmd-1' })
     })
 
     it('startAnalysis posts with findingId and returns commandId', async () => {
@@ -238,10 +247,10 @@ describe('security-agent API (personal level)', () => {
       expect(JSON.parse(init.body)).toEqual({ '0': { repoFullName: 'r1' } })
     })
 
-    it('dismissFindingsBulk dismisses all matching findings', async () => {
+    it('dismissFindingsBulk queues all matching findings', async () => {
       fetchMock.mockImplementation(async (url: string) => {
         if (url.includes('securityAgent.dismissFinding')) {
-          return mockMutationResponse(null)
+          return mockMutationResponse({ success: true, accepted: true, commandId: `c-${url}` })
         }
         return mockResponse({
           findings: [
@@ -258,7 +267,7 @@ describe('security-agent API (personal level)', () => {
         { repoFullName: 'user/repo', status: 'open' },
         'no_bandwidth',
       )
-      expect(result.dismissed).toBe(3)
+      expect(result.queued).toBe(3)
       expect(result.totalMatched).toBe(3)
       expect(result.errors).toHaveLength(0)
       const dismissCalls = fetchMock.mock.calls.filter((c) =>
@@ -267,13 +276,44 @@ describe('security-agent API (personal level)', () => {
       expect(dismissCalls).toHaveLength(3)
     })
 
-    it('dismissFindingsBulk collects errors and keeps going', async () => {
+    it('dismissFindingsBulk reports queue failure instead of counting it as dismissed', async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.includes('securityAgent.dismissFinding')) {
+          return mockMutationResponse({ success: true, accepted: true, commandId: 'c-1' })
+        }
+        if (url.includes('securityAgent.getCommandStatus')) {
+          return mockResponse({
+            id: 'c-1',
+            commandType: 'dismiss_finding',
+            status: 'failed',
+            resultCode: 'QUEUE_RETRIES_EXHAUSTED',
+            lastErrorRedacted: 'Queue command failed after maximum delivery attempts',
+          })
+        }
+        return mockResponse({
+          findings: [{ id: 'f1', severity: 'high', title: 't1', status: 'open' }],
+          totalCount: 1,
+        })
+      })
+
+      const result = await dismissFindingsBulk(
+        'tok',
+        { repoFullName: 'user/repo', status: 'open' },
+        'not_used',
+        { probeQueue: true, pollIntervalMs: 0, pollTimeoutMs: 50 },
+      )
+      expect(result.queued).toBe(1)
+      expect(result.failed).toBe(1)
+      expect(result.failureDetail).toContain('QUEUE_RETRIES_EXHAUSTED')
+    })
+
+    it('dismissFindingsBulk collects transport errors and keeps going', async () => {
       let dismissCount = 0
       fetchMock.mockImplementation(async (url: string) => {
         if (url.includes('securityAgent.dismissFinding')) {
           dismissCount++
           if (dismissCount === 2) throw new Error('API error')
-          return mockMutationResponse(null)
+          return mockMutationResponse({ success: true, accepted: true })
         }
         return mockResponse({
           findings: [
@@ -286,9 +326,44 @@ describe('security-agent API (personal level)', () => {
       })
 
       const result = await dismissFindingsBulk('tok', { repoFullName: 'user/repo' })
-      expect(result.dismissed).toBe(2)
+      expect(result.queued).toBe(2)
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0]).toContain('f2')
+    })
+  })
+
+  describe('waitForCommand', () => {
+    it('returns the terminal command as soon as it is no longer pending', async () => {
+      fetchMock
+        .mockResolvedValueOnce(mockResponse({ id: 'c1', status: 'pending' }))
+        .mockResolvedValueOnce(
+          mockResponse({ id: 'c1', status: 'completed', resultCode: 'OK' }),
+        )
+      const cmd = await waitForCommand('tok', 'c1', { pollIntervalMs: 0, pollTimeoutMs: 1000 })
+      expect(cmd.status).toBe('completed')
+      expect(cmd.resultCode).toBe('OK')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('surfaces the backend failure code and redacted error', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          id: 'c1',
+          status: 'failed',
+          resultCode: 'QUEUE_RETRIES_EXHAUSTED',
+          lastErrorRedacted: 'Queue command failed after maximum delivery attempts',
+        }),
+      )
+      const cmd = await waitForCommand('tok', 'c1', { pollIntervalMs: 0, pollTimeoutMs: 1000 })
+      expect(cmd.status).toBe('failed')
+      expect(cmd.resultCode).toBe('QUEUE_RETRIES_EXHAUSTED')
+      expect(cmd.lastErrorRedacted).toBe('Queue command failed after maximum delivery attempts')
+    })
+
+    it('gives up after the timeout instead of hanging', async () => {
+      fetchMock.mockResolvedValue(mockResponse({ id: 'c1', status: 'pending' }))
+      const cmd = await waitForCommand('tok', 'c1', { pollIntervalMs: 0, pollTimeoutMs: 20 })
+      expect(cmd.status).toBe('pending')
     })
   })
 })
