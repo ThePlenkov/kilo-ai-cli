@@ -12,9 +12,22 @@ export function BriefingScreen({ ctx, focused }: ScreenProps) {
   return (
     <QueryListScreen<BriefingReport>
       focused={focused}
-      fetch={async () =>
-        (await listBriefings(ctx.token, { organizationId: ctx.organizationId })).reports
-      }
+      fetch={async () => {
+        // Follow nextCursor until the server stops paginating (bounded to 20 pages).
+        const all: BriefingReport[] = []
+        let cursor: string | undefined
+        for (let i = 0; i < 20; i++) {
+          // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+          const page = await listBriefings(ctx.token, {
+            organizationId: ctx.organizationId,
+            cursor,
+          })
+          all.push(...page.reports)
+          if (!page.nextCursor) break
+          cursor = page.nextCursor
+        }
+        return all
+      }}
       columns={[
         { label: 'Date', width: 12, value: (r) => r.localDate ?? '-' },
         {

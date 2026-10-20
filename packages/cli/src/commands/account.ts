@@ -43,8 +43,8 @@ export const accountDevicesCommand = defineCommand({
     printTable(
       devices.map((d) => ({
         id: d.id,
-        agent: d.userAgent ?? '-',
-        lastSeen: d.last_seen_at ?? '-',
+        agent: d.user_agent ?? d.userAgent ?? '-',
+        lastSeen: d.last_seen_at ?? d.lastUsedAt ?? '-',
         current: d.isCurrent ? 'yes' : 'no',
       })),
       [
@@ -141,9 +141,10 @@ export const accountTopUpCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     if (args.amount) {
-      const amountCents = Number.parseInt(args.amount, 10)
-      if (!Number.isFinite(amountCents) || amountCents <= 0) {
-        throw new Error('Amount must be a positive number of cents.')
+      // Strict parsing: `parseInt` would accept "125oops" and truncate "1.9".
+      const amountCents = Number(args.amount)
+      if (!Number.isInteger(amountCents) || amountCents <= 0) {
+        throw new Error('Amount must be a positive whole number of cents.')
       }
       await updateAutoTopUpAmount(token, amountCents)
       console.log(`Auto top-up amount set to ${amountCents} cents.`)

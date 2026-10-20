@@ -86,6 +86,33 @@ describe('cursor-store', () => {
     expect((await store.get('reviews'))?.value).toBe('a')
   })
 
+  it('keeps both writes when two stores update different cursors concurrently', async () => {
+    const first = createCursorStore(CONFIG_DIR)
+    const second = createCursorStore(CONFIG_DIR)
+
+    await Promise.all([first.set('reviews', 'a'), second.set('sessions', 'b')])
+
+    const cursors = await createCursorStore(CONFIG_DIR).list()
+    expect(cursors.reviews?.value).toBe('a')
+    expect(cursors.sessions?.value).toBe('b')
+  })
+
+  it('leaves no lock file behind', async () => {
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', 'a')
+    expect(fs.existsSync(`${CURSORS_PATH}.lock`)).toBe(false)
+  })
+
+  it('writes the file atomically, so a crash cannot truncate it', async () => {
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', 'a')
+    await store.set('sessions', 'b')
+
+    const raw = fs.readFileSync(CURSORS_PATH, 'utf8') as string
+    expect(() => JSON.parse(raw)).not.toThrow()
+    expect(raw.endsWith('\n')).toBe(true)
+  })
+
   it('ignores entries without a value', async () => {
     fs.mkdirSync(CONFIG_DIR, { recursive: true })
     fs.writeFileSync(

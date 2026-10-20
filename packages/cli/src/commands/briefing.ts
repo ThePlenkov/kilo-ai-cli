@@ -12,7 +12,7 @@ import {
   listBriefings,
   markBriefingRead,
 } from '../api/briefing.ts'
-import { printTable } from './format.ts'
+import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const briefingListCommand = defineCommand({
@@ -21,6 +21,7 @@ export const briefingListCommand = defineCommand({
     scope: { type: 'string', description: 'Scope (all|personal|organization)' },
     org: { type: 'string', description: 'Organization ID' },
     limit: { type: 'string', description: 'Max briefings', default: '20' },
+    cursor: { type: 'string', description: 'Pagination cursor from a previous list' },
     current: { type: 'boolean', description: 'Only the current briefing' },
   },
   async run({ args }) {
@@ -29,6 +30,7 @@ export const briefingListCommand = defineCommand({
       scope: args.scope as 'all' | 'personal' | 'organization' | undefined,
       organizationId: args.org,
       limit: Number.parseInt(args.limit, 10) || 20,
+      cursor: args.cursor,
       currentOnly: args.current,
     })
     if (reports.length === 0) {
@@ -65,7 +67,7 @@ export const briefingGetCommand = defineCommand({
     console.log(`  date: ${report.localDate ?? '-'}`)
     console.log(`  published: ${report.publishedAt ?? '-'}`)
     console.log(`  read: ${report.readAt ?? 'no'}`)
-    if (report.summary) console.log(`\n${report.summary}`)
+    if (report.summary) console.log(`\n${sanitize(report.summary)}`)
   },
 })
 

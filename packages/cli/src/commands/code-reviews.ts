@@ -11,6 +11,8 @@ import {
   getPersonalReviewConfig,
   listCodeReviews,
   listCodeReviewsForUser,
+  listCodeReviewsPage,
+  listOrgCodeReviewsPage,
   retriggerCodeReview,
   saveOrgReviewConfig,
   savePersonalReviewConfig,
@@ -26,8 +28,8 @@ import {
   setReviewMemoryEnabled,
   triggerReviewMemoryAnalysis,
 } from '../api/review-memory.ts'
-import type { ReviewAgentConfig } from '../api/types.ts'
-import { applyDeltaAsync } from '../state/delta.ts'
+import type { CodeReview, ReviewAgentConfig } from '../api/types.ts'
+import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
 import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
 
@@ -109,6 +111,74 @@ function resolveScope(args: { scope?: string; platform?: string; org?: string })
   return { platform, orgId }
 }
 
+/**
+ * Cursor name for the reviews delta. Personal and organization reviews live
+ * in separate scopes, so they get separate cursors — reading one scope must
+ * not advance past the other.
+ */
+export function reviewsCursorName(orgId?: string): string {
+  return orgId ? `${REVIEWS_CURSOR}:${orgId}` : REVIEWS_CURSOR
+}
+
+/** Page size used when walking the review list for a delta read. */
+const REVIEWS_PAGE_LIMIT = 100
+
+/** Upper bound on the number of pages a delta read walks. */
+const REVIEWS_MAX_PAGES = 20
+
+/** Pages read past the last page that still contained a newer review. */
+const REVIEWS_TRAILING_PAGES = 2
+
+/**
+ * Walk the review list until the delta window is exhausted, so the cursor is
+ * only advanced once every newer review has been seen.
+ *
+ * The list is ordered by `created_at` descending and reviews are updated
+ * shortly after they are created, so a page without any review newer than
+ * the bound marks the end of the window. Two extra pages are read past that
+ * point as slack for long-running reviews.
+ *
+ * Returns `complete: false` when the page budget runs out — the cursor must
+ * then stay put, otherwise unseen reviews would be skipped.
+ */
+async function fetchReviewWindow(
+  token: string,
+  orgId: string | undefined,
+  options: { limit?: number; status?: string; platform?: string; repoFullName?: string },
+  bound: string | undefined,
+): Promise<{ reviews: CodeReview[]; complete: boolean }> {
+  const reviews: CodeReview[] = []
+  const boundEpoch = bound ? Date.parse(bound) : undefined
+  let offset = 0
+  let emptyPages = 0
+  for (let page = 0; page < REVIEWS_MAX_PAGES; page++) {
+    const request = { ...options, limit: options.limit ?? REVIEWS_PAGE_LIMIT, offset }
+    const result = orgId
+      ? await listOrgCodeReviewsPage(token, orgId, request)
+      : await listCodeReviewsPage(token, request)
+    reviews.push(...result.reviews)
+
+    if (boundEpoch !== undefined) {
+      const hasNewer = result.reviews.some((r) => {
+        const at = Date.parse(r.updated_at ?? r.created_at)
+        return Number.isFinite(at) && at > boundEpoch
+      })
+      emptyPages = hasNewer ? 0 : emptyPages + 1
+      if (emptyPages > REVIEWS_TRAILING_PAGES) return { reviews, complete: true }
+    }
+
+    if (!result.hasMore) return { reviews, complete: true }
+    offset += request.limit
+    if (page === REVIEWS_MAX_PAGES - 1) {
+      console.log(
+        `More than ${REVIEWS_MAX_PAGES * REVIEWS_PAGE_LIMIT} reviews match; the cursor was not advanced.`,
+      )
+      return { reviews, complete: false }
+    }
+  }
+  return { reviews, complete: false }
+}
+
 export const reviewsListCommand = defineCommand({
   meta: {
     name: 'list',
@@ -121,29 +191,33 @@ export const reviewsListCommand = defineCommand({
     new: { type: 'boolean', description: 'Only reviews newer than the stored cursor' },
     since: { type: 'string', description: 'Explicit lower bound (ISO timestamp)' },
     'no-advance': { type: 'boolean', description: 'Do not advance the stored cursor' },
-    limit: { type: 'string', description: 'Max reviews to fetch (default 50)' },
+    limit: { type: 'string', description: 'Max reviews per page (default 50)' },
   },
   async run({ args }) {
     const { token } = await getToken()
     const orgId = args.org ?? args.id
     const options = { limit: args.limit ? Number.parseInt(args.limit, 10) : undefined }
-    const reviews = orgId
-      ? await listCodeReviews(token, orgId, options)
-      : await listCodeReviewsForUser(token, options)
+    const cursorName = reviewsCursorName(orgId)
 
     const isDeltaRead = args.new || args.since !== undefined
     if (!isDeltaRead) {
+      const reviews = orgId
+        ? await listCodeReviews(token, orgId, options)
+        : await listCodeReviewsForUser(token, options)
       printReviews(reviews)
       return
     }
 
+    const bound = await resolveSince({ cursor: cursorName, since: args.since })
+    const { reviews, complete } = await fetchReviewWindow(token, orgId, options, bound)
     const delta = await applyDeltaAsync(reviews, (r) => r.updated_at ?? r.created_at, {
-      cursor: REVIEWS_CURSOR,
+      cursor: cursorName,
       since: args.since,
       advance: !args['no-advance'],
+      complete,
     })
     if (delta.advancedTo) {
-      console.log(`Cursor "${REVIEWS_CURSOR}" advanced to ${delta.advancedTo}`)
+      console.log(`Cursor "${cursorName}" advanced to ${delta.advancedTo}`)
     }
     printReviews(delta.items)
   },

@@ -32,6 +32,7 @@ import {
   waitForCommand,
 } from '../api/security-agent.ts'
 import type { SecurityAgentCommand, SecurityFinding } from '../api/types.ts'
+import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync } from '../state/delta.ts'
 import { confirm } from './confirm.ts'
 import { type Column, printSummary, printTable } from './format.ts'
@@ -40,6 +41,31 @@ import { colorSeverity, colorStatus, repoLink } from './theme.ts'
 
 /** Cursor name used by `security findings list --new`. */
 export const FINDINGS_CURSOR = 'security-findings'
+
+/** Upper bound on the number of pages a delta read walks. */
+const FINDINGS_MAX_PAGES = 20
+
+/**
+ * Cursor name for the findings delta. A filtered read gets its own cursor:
+ * advancing the shared one from a filtered subset would skip the findings
+ * the filter hid.
+ */
+export function findingsCursorName(filters: {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  outcomeFilter?: string
+  overdue?: boolean
+}): string {
+  const parts = [
+    filters.repoFullName,
+    filters.severity,
+    filters.status,
+    filters.outcomeFilter,
+    filters.overdue ? 'overdue' : undefined,
+  ].filter(Boolean)
+  return parts.length === 0 ? FINDINGS_CURSOR : `${FINDINGS_CURSOR}:${parts.join(':')}`
+}
 
 /** Resolve a numeric repo ID or full name to the full name (owner/repo). */
 async function resolveRepoFullName(token: string, idOrName: string): Promise<string> {
@@ -328,18 +354,46 @@ export const securityFindingsListCommand = defineCommand({
 
     let findings = result.findings
     if (args.new || args.since !== undefined) {
+      // A filtered read must not move the shared cursor: the filter selects a
+      // subset, so advancing on it would skip the findings the filter hid.
+      const cursorName = findingsCursorName(input)
+      const store = createCursorStore()
+      // The findings API caps a page at 100 rows.
+      const pageLimit = Math.max(input.limit ?? 100, 100)
+
+      // Walk every page of the window, so the cursor is only advanced once
+      // the whole window has been seen.
+      let complete = findings.length < pageLimit
+      for (let page = 0; !complete && page < FINDINGS_MAX_PAGES; page++) {
+        const more = await listFindings(token, {
+          ...input,
+          limit: pageLimit,
+          offset: (input.offset ?? 0) + pageLimit * (page + 1),
+        })
+        if (more.findings.length === 0) break
+        findings = findings.concat(more.findings)
+        complete = more.findings.length < pageLimit
+        if (!complete && page === FINDINGS_MAX_PAGES - 1) {
+          console.log(
+            `More than ${FINDINGS_MAX_PAGES * pageLimit} findings match; the cursor was not advanced.`,
+          )
+        }
+      }
+
       const delta = await applyDeltaAsync(
         findings,
         (f) => f.updated_at ?? f.created_at ?? f.first_detected_at,
         {
-          cursor: FINDINGS_CURSOR,
+          cursor: cursorName,
           since: args.since,
           advance: !args['no-advance'],
+          complete,
+          store,
         },
       )
       findings = delta.items
       if (delta.advancedTo) {
-        console.log(`Cursor "${FINDINGS_CURSOR}" advanced to ${delta.advancedTo}`)
+        console.log(`Cursor "${cursorName}" advanced to ${delta.advancedTo}`)
       }
     }
 

@@ -17,12 +17,16 @@ import {
   unshareSession,
 } from '../api/sessions.ts'
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
+import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
 /** Cursor name used by `sessions unified --new`. */
 export const SESSIONS_CURSOR = 'sessions'
+
+/** Upper bound on the number of pages a delta read walks. */
+const SESSIONS_MAX_PAGES = 10
 
 export const sessionsListCommand = defineCommand({
   meta: { name: 'list', description: 'List cloud CLI sessions' },
@@ -108,35 +112,59 @@ export const sessionsUnifiedCommand = defineCommand({
       description: 'Order by (created_at|updated_at)',
       default: 'updated_at',
     },
+    cursor: { type: 'string', description: 'Pagination cursor from a previous list' },
     new: { type: 'boolean', description: 'Only sessions newer than the stored cursor' },
     since: { type: 'string', description: 'Explicit lower bound (ISO timestamp)' },
     'no-advance': { type: 'boolean', description: 'Do not advance the stored cursor' },
   },
   async run({ args }) {
-    const { token } = await getToken()
+    const { token, organizationId } = await getToken()
     const limit = Number.parseInt(args.limit, 10) || 20
     const explicitSince = args.since
     const isDeltaRead = args.new || explicitSince !== undefined
+    // Fall back to the active organization, like `sessions list` does.
+    const orgId = args.org ?? organizationId
+    const store = createCursorStore()
 
     // The cursor is read first so the server can filter on it.
     const since = isDeltaRead
-      ? await resolveSince({ cursor: SESSIONS_CURSOR, since: explicitSince })
+      ? await resolveSince({ cursor: SESSIONS_CURSOR, since: explicitSince, store })
       : undefined
 
-    const result = await listUnifiedSessions(token, {
+    const request = {
       limit,
-      organizationId: args.org,
+      organizationId: orgId,
       createdOnPlatform: args.platform,
       orderBy: args.order as 'created_at' | 'updated_at' | undefined,
       updatedSince: since,
-    })
+    }
+
+    const result = await listUnifiedSessions(token, { ...request, cursor: args.cursor })
 
     let sessions = result.cliSessions
+    let nextCursor = result.nextCursor
     if (isDeltaRead) {
+      // Walk every page of the delta window, so the cursor is only advanced
+      // once the whole window has been seen.
+      let complete = !nextCursor
+      for (let page = 0; page < SESSIONS_MAX_PAGES && nextCursor; page++) {
+        const more = await listUnifiedSessions(token, { ...request, cursor: nextCursor })
+        sessions = sessions.concat(more.cliSessions)
+        nextCursor = more.nextCursor
+        if (!nextCursor) break
+        if (page === SESSIONS_MAX_PAGES - 1) complete = false
+      }
+      if (!complete) {
+        console.log(
+          `More than ${SESSIONS_MAX_PAGES * limit} sessions match; the cursor was not advanced.`,
+        )
+      }
       const delta = await applyDeltaAsync(sessions, (s) => s.updated_at, {
         cursor: SESSIONS_CURSOR,
         since: explicitSince,
         advance: !args['no-advance'],
+        complete,
+        store,
       })
       sessions = delta.items
       if (delta.advancedTo) {
@@ -166,8 +194,8 @@ export const sessionsUnifiedCommand = defineCommand({
         { key: 'updated', label: 'Updated', width: 24 },
       ],
     )
-    if (result.nextCursor) {
-      console.log(`More sessions available (--cursor ${result.nextCursor})`)
+    if (nextCursor) {
+      console.log(`More sessions available (--cursor ${nextCursor})`)
     }
   },
 })

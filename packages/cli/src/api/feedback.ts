@@ -18,9 +18,9 @@ export async function submitFeedback(
   },
 ): Promise<unknown> {
   return trpcMutate('feedback.submit', token, z.unknown(), {
-    feedback_for: 'unknown',
-    source: 'kilo-ai-cli',
-    context_json: {},
     ...input,
+    feedback_for: input.feedback_for ?? 'unknown',
+    source: input.source ?? 'kilo-ai-cli',
+    context_json: input.context_json ?? {},
   })
 }

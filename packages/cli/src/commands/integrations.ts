@@ -130,7 +130,10 @@ export const integrationsDetailCommand = defineCommand({
     let installation: Record<string, unknown>
     switch (args.platform) {
       case 'github':
-        installation = await getGitHubInstallation(token, args.id ?? '')
+        if (!args.id) {
+          throw new Error('GitHub details need an installation id (--id).')
+        }
+        installation = await getGitHubInstallation(token, args.id)
         break
       case 'gitlab':
         installation = await getGitLabInstallation(token)

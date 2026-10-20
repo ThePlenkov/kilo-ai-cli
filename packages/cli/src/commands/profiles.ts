@@ -163,16 +163,27 @@ export const profilesSetVarCommand = defineCommand({
   args: {
     id: { type: 'positional', description: 'Profile ID', required: true },
     key: { type: 'positional', description: 'Variable name', required: true },
-    value: { type: 'positional', description: 'Variable value', required: true },
+    value: {
+      type: 'positional',
+      description:
+        'Variable value (or set KILO_PROFILE_VAR_VALUE — CLI args are visible in shell history)',
+      required: false,
+    },
     secret: { type: 'boolean', description: 'Mark the value as secret' },
     org: { type: 'string', description: 'Organization ID' },
   },
   async run({ args }) {
     const { token } = await getToken()
+    // Secrets must not travel as CLI arguments — they end up in shell history
+    // and in /proc/<pid>/cmdline. The environment variable wins.
+    const value = process.env.KILO_PROFILE_VAR_VALUE ?? args.value
+    if (value === undefined) {
+      throw new Error('Provide a value or set KILO_PROFILE_VAR_VALUE.')
+    }
     await setProfileVariable(
       token,
       args.id,
-      { key: args.key, value: args.value, isSecret: args.secret ?? false },
+      { key: args.key, value, isSecret: args.secret ?? false },
       args.org,
     )
     console.log(`Set ${args.key} on profile ${args.id}`)

@@ -242,7 +242,10 @@ export function FindingsListView({
       // Other fields are sorted client-side — page-local only.
       const input =
         sortField === 'severity'
-          ? { ...filter, sortBy: sortDir === 'asc' ? ('severity_asc' as const) : ('severity_desc' as const) }
+          ? {
+              ...filter,
+              sortBy: sortDir === 'asc' ? ('severity_asc' as const) : ('severity_desc' as const),
+            }
           : filter
       const result = await listFindings(token, input)
       if (seq !== loadSeqRef.current) return // stale response, discard
@@ -527,7 +530,9 @@ export function FindingsListView({
         {columnList.map((col) => (
           <React.Fragment key={col}>
             <Text bold dimColor>
-              {TUI_COLUMNS[col].label.padEnd(TUI_COLUMNS[col].width).slice(0, TUI_COLUMNS[col].width)}
+              {TUI_COLUMNS[col].label
+                .padEnd(TUI_COLUMNS[col].width)
+                .slice(0, TUI_COLUMNS[col].width)}
             </Text>
             <Text> </Text>
           </React.Fragment>

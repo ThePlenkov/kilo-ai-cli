@@ -159,12 +159,56 @@ describe('applyDeltaAsync', () => {
     expect(store.entries.reviews?.value).toBe('2026-10-20T12:00:00.000Z')
   })
 
-  it('keeps items without a parseable timestamp', async () => {
+  it('keeps items without a parseable timestamp when there is no bound', async () => {
+    const store = memoryStore()
+    const result = await applyDeltaAsync([{ id: 'x', at: 'not a date' }, ...items], (i) => i.at, {
+      cursor: 'reviews',
+      store,
+    })
+    expect(result.items.map((i) => i.id)).toEqual(['x', 'a', 'b', 'c'])
+  })
+
+  it('drops items without a parseable timestamp when a bound is active', async () => {
+    // Their age is unknown, so they may well be older than the bound.
     const store = memoryStore({ reviews: '2026-10-20T10:30:00.000Z' })
     const result = await applyDeltaAsync([{ id: 'x', at: 'not a date' }, ...items], (i) => i.at, {
       cursor: 'reviews',
       store,
     })
-    expect(result.items.map((i) => i.id)).toEqual(['x', 'b', 'c'])
+    expect(result.items.map((i) => i.id)).toEqual(['b', 'c'])
+  })
+
+  it('rejects an unparseable explicit since instead of dropping the bound', async () => {
+    const store = memoryStore()
+    await expect(
+      applyDeltaAsync(items, (i) => i.at, { cursor: 'reviews', since: 'yesterday', store }),
+    ).rejects.toThrow(/Invalid --since timestamp/)
+  })
+
+  it('rejects an unparseable explicit since in resolveSince', async () => {
+    const store = memoryStore()
+    await expect(resolveSince({ cursor: 'reviews', since: 'yesterday', store })).rejects.toThrow(
+      /Invalid --since timestamp/,
+    )
+  })
+
+  it('does not advance the cursor when the fetch was truncated', async () => {
+    const store = memoryStore({ reviews: '2026-10-20T10:30:00.000Z' })
+    const result = await applyDeltaAsync(items, (i) => i.at, {
+      cursor: 'reviews',
+      store,
+      complete: false,
+    })
+
+    expect(result.truncated).toBe(true)
+    expect(result.advancedTo).toBeUndefined()
+    expect(store.entries.reviews?.value).toBe('2026-10-20T10:30:00.000Z')
+  })
+
+  it('reports truncated false for a complete fetch', async () => {
+    const store = memoryStore()
+    const result = await applyDeltaAsync(items, (i) => i.at, { cursor: 'reviews', store })
+    expect(result.truncated).toBe(false)
+    expect(result.advancedTo).toBe('2026-10-20T12:00:00.000Z')
   })
 })

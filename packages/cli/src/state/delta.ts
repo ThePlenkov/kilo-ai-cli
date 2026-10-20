@@ -16,6 +16,12 @@ export interface DeltaOptions {
   cursor?: string
   /** Write the newest seen timestamp back to the store. Default: true. */
   advance?: boolean
+  /**
+   * False when the fetched set is a truncated page of a larger result set.
+   * The cursor must not move past unseen rows, so the advance is skipped.
+   * Default: true.
+   */
+  complete?: boolean
   /** Store to use — injected in tests, defaults to the on-disk store. */
   store?: CursorStore
 }
@@ -30,12 +36,17 @@ export interface DeltaResult<T> {
   advancedTo: string | undefined
   /** Whether the bound came from the stored cursor rather than an explicit one. */
   fromCursor: boolean
+  /** True when the source was truncated and the cursor was therefore held back. */
+  truncated: boolean
 }
 
 /**
  * Parse a timestamp into epoch milliseconds.
+ *
  * Handles ISO strings and the Postgres-style `2026-10-20 12:47:45.360461+00`
- * the cloud API returns for some rows.
+ * the cloud API returns for some rows. `Date.parse` already understands both
+ * the `+00` and the `+00:00` offset forms; the explicit rewrites below only
+ * cover shapes it rejects.
  */
 export function toEpochMs(value: string | number | null | undefined): number | undefined {
   if (value == null) return undefined
@@ -49,7 +60,12 @@ export function toEpochMs(value: string | number | null | undefined): number | u
   // Postgres style: space separator and a short (+00) UTC offset.
   const normalized = trimmed.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')
   const retry = Date.parse(normalized)
-  return Number.isFinite(retry) ? retry : undefined
+  if (Number.isFinite(retry)) return retry
+
+  // Last resort: a space separator with an offset V8 still rejects.
+  const spaceToT = trimmed.replace(' ', 'T')
+  const spaceRetry = Date.parse(spaceToT)
+  return Number.isFinite(spaceRetry) ? spaceRetry : undefined
 }
 
 /** Normalize a timestamp to an ISO UTC instant, or `undefined` when unparseable. */
@@ -61,13 +77,21 @@ export function toIsoTimestamp(value: string | number | null | undefined): strin
 /**
  * Resolve the effective lower bound of a delta read: the explicit `since`
  * when given, otherwise the value of the stored cursor.
+ *
+ * An explicit `since` that cannot be parsed is a user error and throws — it
+ * must not silently degrade into "no bound", which would return everything.
  */
 export async function resolveSince(options: DeltaOptions = {}): Promise<string | undefined> {
-  if (options.since) return toIsoTimestamp(options.since)
+  if (options.since !== undefined) {
+    const parsed = toIsoTimestamp(options.since)
+    if (!parsed) throw new Error(`Invalid --since timestamp: ${options.since}`)
+    return parsed
+  }
   if (!options.cursor) return undefined
   const store = options.store ?? createCursorStore()
   const entry = await store.get(options.cursor)
   if (!entry) return undefined
+  // A corrupt stored value is self-healing: treat it as "no bound".
   return toIsoTimestamp(entry.value)
 }
 
@@ -76,7 +100,8 @@ export async function resolveSince(options: DeltaOptions = {}): Promise<string |
  *
  * Items are kept when their timestamp is strictly newer than the effective
  * lower bound. The cursor advances to the newest timestamp of the *fetched*
- * set so the next read continues where this one stopped.
+ * set so the next read continues where this one stopped — but only when the
+ * fetch was complete, so a truncated page can never hide unseen rows.
  */
 export async function applyDeltaAsync<T>(
   items: T[],
@@ -86,11 +111,14 @@ export async function applyDeltaAsync<T>(
   const store = options.store ?? createCursorStore()
   const cursorName = options.cursor
 
+  const explicitSince = options.since !== undefined
   let since: string | undefined
   let fromCursor = false
 
-  if (options.since) {
-    since = toIsoTimestamp(options.since)
+  if (explicitSince) {
+    const parsed = toIsoTimestamp(options.since)
+    if (!parsed) throw new Error(`Invalid --since timestamp: ${options.since}`)
+    since = parsed
   } else if (cursorName) {
     const entry = await store.get(cursorName)
     if (entry) {
@@ -106,7 +134,9 @@ export async function applyDeltaAsync<T>(
   for (const item of items) {
     const epoch = toEpochMs(timestampOf(item))
     if (epoch === undefined) {
-      filtered.push(item)
+      // Without a bound the item cannot be older than anything, so keep it.
+      // With a bound its age is unknown — it may well be old, so drop it.
+      if (sinceEpoch === undefined) filtered.push(item)
       continue
     }
     if (newest === undefined || epoch > (toEpochMs(newest) ?? 0)) {
@@ -117,8 +147,9 @@ export async function applyDeltaAsync<T>(
     }
   }
 
+  const truncated = options.complete === false
   let advancedTo: string | undefined
-  const shouldAdvance = options.advance ?? true
+  const shouldAdvance = (options.advance ?? true) && !truncated
   if (shouldAdvance && cursorName && newest) {
     const current = await store.get(cursorName)
     const currentEpoch = current ? toEpochMs(current.value) : undefined
@@ -130,5 +161,5 @@ export async function applyDeltaAsync<T>(
     }
   }
 
-  return { items: filtered, since, advancedTo, fromCursor }
+  return { items: filtered, since, advancedTo, fromCursor, truncated }
 }

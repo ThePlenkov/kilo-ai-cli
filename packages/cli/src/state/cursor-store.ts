@@ -40,6 +40,12 @@ const DEFAULT_CONFIG_DIR: string = join(homedir(), '.kilo')
 /** File name used to persist cursors inside the config directory. */
 const CURSORS_FILENAME = 'cursors.json'
 
+/** How long to wait for a competing writer to release the lock. */
+const LOCK_TIMEOUT_MS = 5_000
+
+/** Delay between lock acquisition attempts. */
+const LOCK_RETRY_MS = 25
+
 /** Resolve the cursors file path for a given config directory. */
 function cursorsPath(configDir: string): string {
   return join(configDir, CURSORS_FILENAME)
@@ -71,13 +77,19 @@ function parseFile(raw: string): CursorFile {
   }
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
  * Create a cursor store backed by a JSON file at `${configDir}/cursors.json`.
  * Defaults to `~/.kilo/cursors.json` when no config dir is provided.
+ *
+ * Writes are atomic (temp file + rename) and guarded by an exclusive lock
+ * file, so two concurrent CLI invocations cannot clobber each other's cursor.
  */
 export function createCursorStore(configDir?: string): CursorStore {
   const dir = configDir ?? DEFAULT_CONFIG_DIR
   const filePath = cursorsPath(dir)
+  const lockPath = `${filePath}.lock`
 
   async function read(): Promise<CursorFile> {
     try {
@@ -90,9 +102,44 @@ export function createCursorStore(configDir?: string): CursorStore {
     }
   }
 
+  /** Write the file atomically: a temp file plus a rename. */
   async function write(file: CursorFile): Promise<void> {
     await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(filePath, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
+    const tmpPath = `${filePath}.${process.pid}.tmp`
+    try {
+      await fs.writeFile(tmpPath, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
+      await fs.rename(tmpPath, filePath)
+    } catch (err) {
+      await fs.rm(tmpPath, { force: true }).catch(() => undefined)
+      throw err
+    }
+  }
+
+  /** Run `fn` while holding the exclusive lock file. */
+  async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+    await fs.mkdir(dir, { recursive: true })
+    const deadline = Date.now() + LOCK_TIMEOUT_MS
+    let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+    for (;;) {
+      try {
+        handle = await fs.open(lockPath, 'wx')
+        break
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+        if (Date.now() >= deadline) {
+          // A stale lock must not block the CLI forever — take it over.
+          await fs.rm(lockPath, { force: true }).catch(() => undefined)
+          continue
+        }
+        await sleep(LOCK_RETRY_MS)
+      }
+    }
+    try {
+      return await fn()
+    } finally {
+      await handle?.close().catch(() => undefined)
+      await fs.rm(lockPath, { force: true }).catch(() => undefined)
+    }
   }
 
   return {
@@ -102,18 +149,22 @@ export function createCursorStore(configDir?: string): CursorStore {
     },
 
     async set(name: string, value: string): Promise<CursorEntry> {
-      const file = await read()
-      const entry: CursorEntry = { value, updatedAt: new Date().toISOString() }
-      file.cursors[name] = entry
-      await write(file)
-      return entry
+      return withLock(async () => {
+        const file = await read()
+        const entry: CursorEntry = { value, updatedAt: new Date().toISOString() }
+        file.cursors[name] = entry
+        await write(file)
+        return entry
+      })
     },
 
     async remove(name: string): Promise<void> {
-      const file = await read()
-      if (!(name in file.cursors)) return
-      delete file.cursors[name]
-      await write(file)
+      await withLock(async () => {
+        const file = await read()
+        if (!(name in file.cursors)) return
+        delete file.cursors[name]
+        await write(file)
+      })
     },
 
     async list(): Promise<Record<string, CursorEntry>> {
@@ -121,7 +172,9 @@ export function createCursorStore(configDir?: string): CursorStore {
     },
 
     async clear(): Promise<void> {
-      await write(emptyFile())
+      await withLock(async () => {
+        await write(emptyFile())
+      })
     },
   }
 }

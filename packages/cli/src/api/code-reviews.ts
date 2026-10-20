@@ -162,6 +162,48 @@ export async function listCodeReviewsForUser(
   return r.reviews
 }
 
+/** One page of code reviews plus the paging metadata the delta read needs. */
+export interface CodeReviewPage {
+  reviews: CodeReview[]
+  total?: number
+  hasMore?: boolean
+}
+
+const CodeReviewPageSchema = z
+  .object({
+    reviews: z.array(CodeReviewSchema),
+    total: z.number().optional(),
+    hasMore: z.boolean().optional(),
+  })
+  .passthrough()
+
+/**
+ * codeReviews.listForUser — one page, including `hasMore` so a delta read
+ * knows whether the window it fetched is complete.
+ */
+export async function listCodeReviewsPage(
+  token: string,
+  options: ListCodeReviewsOptions = {},
+): Promise<CodeReviewPage> {
+  return trpcQuery('codeReviews.listForUser', token, CodeReviewPageSchema, options)
+}
+
+/** codeReviews.listForOrganization — one page, including `hasMore`. */
+export async function listOrgCodeReviewsPage(
+  token: string,
+  organizationId: string,
+  options: ListCodeReviewsOptions = {},
+): Promise<CodeReviewPage> {
+  const result = await trpcQuery(
+    'codeReviews.listForOrganization',
+    token,
+    z.union([z.array(CodeReviewSchema), CodeReviewPageSchema]),
+    { organizationId, ...options },
+  )
+  if (Array.isArray(result)) return { reviews: result }
+  return result
+}
+
 /** codeReviews.get — single review with attempts + token usage. */
 export async function getCodeReview(token: string, reviewId: string): Promise<CodeReviewDetail> {
   return trpcQuery('codeReviews.get', token, CodeReviewDetailSchema, { reviewId })

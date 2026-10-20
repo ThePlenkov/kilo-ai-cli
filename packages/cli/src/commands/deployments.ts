@@ -11,7 +11,7 @@ import {
   getDeployment,
   listDeployments,
 } from '../api/deployments.ts'
-import { printTable } from './format.ts'
+import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const deploymentsListCommand = defineCommand({
@@ -25,11 +25,11 @@ export const deploymentsListCommand = defineCommand({
     }
     printTable(
       deployments.map((d) => ({
-        id: d.id,
-        name: d.name ?? '-',
-        slug: d.slug ?? '-',
-        status: d.status ?? '-',
-        url: d.url ?? '-',
+        id: sanitize(String(d.id ?? '-')),
+        name: sanitize(String(d.name ?? '-')),
+        slug: sanitize(String(d.slug ?? '-')),
+        status: sanitize(String(d.status ?? '-')),
+        url: sanitize(String(d.url ?? '-')),
       })),
       [
         { key: 'id', label: 'ID', width: 36 },
@@ -49,7 +49,8 @@ export const deploymentsGetCommand = defineCommand({
     const { token } = await getToken()
     const deployment = await getDeployment(token, args.id)
     for (const [key, value] of Object.entries(deployment)) {
-      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      const rendered = typeof value === 'object' ? JSON.stringify(value) : String(value)
+      console.log(`  ${key}: ${sanitize(rendered)}`)
     }
   },
 })
@@ -74,8 +75,11 @@ export const deploymentsEventsCommand = defineCommand({
       return
     }
     for (const event of events) {
+      const created = event.createdAt ?? event.timestamp ?? ''
+      const kind = event.type ?? event.status ?? ''
+      const message = event.message ?? ''
       console.log(
-        `${event.createdAt ?? event.timestamp ?? ''} ${event.type ?? event.status ?? ''} ${event.message ?? ''}`,
+        `${sanitize(String(created))} ${sanitize(String(kind))} ${sanitize(String(message))}`,
       )
     }
   },
