@@ -212,19 +212,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="$(gh pr list --state open --json headRefName \
-            --jq '[.[] | select(.headRefName | startswith("release/"))] | .[0].headRefName' 2>/dev/null || true)"
-          if [ -z "$BRANCH" ]; then
+          # Match the run by the PR's head commit — a branch can carry an
+          # older run that is still awaiting approval, and approving that one
+          # would leave the current PR without a `check`.
+          read -r BRANCH SHA <<< "$(gh pr list --state open --json headRefName,headRefOid \
+            --jq '[.[] | select(.headRefName | startswith("release/"))] | .[0] | "\(.headRefName) \(.headRefOid)"' 2>/dev/null || true)"
+          if [ -z "$BRANCH" ] || [ -z "$SHA" ]; then
             echo "::warning::No open release PR found — nothing to approve"
             exit 0
           fi
-          echo "Approving the CI run for $BRANCH"
+          echo "Approving the CI run for $BRANCH ($SHA)"
           for attempt in $(seq 1 12); do
             RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&event=pull_request" \
-              --jq '[.workflow_runs[] | select(.conclusion == "action_required")] | .[0].id' 2>/dev/null || true)"
+              --jq "[.workflow_runs[] | select(.head_sha == \"$SHA\" and .conclusion == \"action_required\")] | .[0].id" 2>/dev/null || true)"
             if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
-              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/approve" \
-                --jq '"approved run \(.id)"'
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/approve" > /dev/null
+              echo "approved run $RUN_ID"
               exit 0
             fi
             echo "No run awaiting approval yet (attempt $attempt/12)"
