@@ -60,12 +60,15 @@ jobs:
       - name: npm view (what the executor checks)
         working-directory: packages/cli
         run: |
-          echo "--- npm view kilo-ai-cli@0.4.6 version ---"
-          npm view "kilo-ai-cli@0.4.6" version; echo "exit=$?"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "--- npm view kilo-ai-cli@$VERSION version ---"
+          npm view "kilo-ai-cli@$VERSION" version || echo "view failed with $?"
 
       - name: npm publish (output visible)
         working-directory: packages/cli
         run: |
           set -x
-          npm publish --access public --provenance --registry https://registry.npmjs.org/ 2>&1
-          echo "publish exit=$?"
+          PUBLISH_EXIT=0
+          npm publish --access public --provenance --registry https://registry.npmjs.org/ 2>&1 || PUBLISH_EXIT=$?
+          echo "publish exit=$PUBLISH_EXIT"
+          exit "$PUBLISH_EXIT"
