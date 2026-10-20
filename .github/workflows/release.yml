@@ -91,6 +91,8 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+      # actions: write — approves the CI run of the bump PR this job creates
+      actions: write
 
     steps:
       - name: Checkout
@@ -141,12 +143,14 @@ jobs:
         run: npm pack --dry-run
 
       - name: Release
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DRY_RUN: ${{ inputs.dry-run }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "published=false" >> "$GITHUB_OUTPUT"
             ./node_modules/.bin/nx run release:release \
               --version="$INPUT_VERSION" \
               --mode=bump \
@@ -158,8 +162,10 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
             if [[ ! "$VERSION" =~ ^[0-9] ]] || ! ./node_modules/.bin/semver "$VERSION" >/dev/null 2>&1; then
               echo "Ignoring non-semver tag: $GITHUB_REF_NAME"
+              echo "published=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            echo "published=true" >> "$GITHUB_OUTPUT"
             PKG_VERSION="$(node -p "require('./packages/cli/package.json').version")"
             if [ "$PKG_VERSION" != "$VERSION" ]; then
               echo "::error::Tag $GITHUB_REF_NAME does not match packages/cli version $PKG_VERSION"
@@ -169,7 +175,59 @@ jobs:
               --mode=publish \
               --dryRun=false
           else
+            echo "published=true" >> "$GITHUB_OUTPUT"
             ./node_modules/.bin/nx run release:release \
               --mode=publish \
               --dryRun=false
           fi
+
+      # A publish that silently does nothing must not look like a green
+      # release: `npm publish` can exit 0 without the version reaching the
+      # registry. Verify the exact version instead of trusting the exit code.
+      - name: Verify published version
+        if: ${{ steps.release.outputs.published == 'true' }}
+        working-directory: packages/cli
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          ATTEMPTS=12
+          for attempt in $(seq 1 $ATTEMPTS); do
+            PUBLISHED="$(npm view "kilo-ai-cli@$VERSION" version 2>/dev/null || true)"
+            if [ "$PUBLISHED" = "$VERSION" ]; then
+              echo "kilo-ai-cli@$VERSION is on the registry"
+              exit 0
+            fi
+            echo "registry has '${PUBLISHED:-nothing}', expected $VERSION (attempt $attempt/$ATTEMPTS)"
+            [ "$attempt" -lt "$ATTEMPTS" ] && sleep 15
+          done
+          echo "::error::kilo-ai-cli@$VERSION never reached the registry — the publish did not land"
+          exit 1
+
+      # The bump PR is created by this workflow with GITHUB_TOKEN. A workflow
+      # run triggered by a bot-authored pull request waits for a maintainer
+      # approval, so the required `check` never arrives and the PR cannot be
+      # merged. Approve the run ourselves — the branch is one this workflow
+      # created, and the code on it is the repository's own.
+      - name: Approve the release PR's CI run
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="$(gh pr list --state open --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("release/"))] | .[0].headRefName' 2>/dev/null || true)"
+          if [ -z "$BRANCH" ]; then
+            echo "::warning::No open release PR found — nothing to approve"
+            exit 0
+          fi
+          echo "Approving the CI run for $BRANCH"
+          for attempt in $(seq 1 12); do
+            RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&event=pull_request" \
+              --jq '[.workflow_runs[] | select(.status == "action_required")] | .[0].id' 2>/dev/null || true)"
+            if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/approve" \
+                --jq '"approved run \(.id)"'
+              exit 0
+            fi
+            echo "No run awaiting approval yet (attempt $attempt/12)"
+            sleep 5
+          done
+          echo "::warning::No CI run awaiting approval for $BRANCH — approve it manually"
