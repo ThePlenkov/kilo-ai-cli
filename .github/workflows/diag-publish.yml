@@ -64,11 +64,18 @@ jobs:
           echo "--- npm view kilo-ai-cli@$VERSION version ---"
           npm view "kilo-ai-cli@$VERSION" version || echo "view failed with $?"
 
-      - name: npm publish (output visible)
+      # The exact probe the release workflow uses to decide whether the
+      # publish landed — exercised in both directions.
+      - name: Verification probe
         working-directory: packages/cli
         run: |
-          set -x
-          PUBLISH_EXIT=0
-          npm publish --access public --provenance --registry https://registry.npmjs.org/ 2>&1 || PUBLISH_EXIT=$?
-          echo "publish exit=$PUBLISH_EXIT"
-          exit "$PUBLISH_EXIT"
+          probe() {
+            VERSION="$1"
+            PUBLISHED="$(curl -sf "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).version||"")}catch{}})' \
+              2>/dev/null || true)"
+            echo "version=$VERSION published='${PUBLISHED:-nothing}'"
+          }
+          CURRENT="$(node -p "require('./package.json').version")"
+          probe "$CURRENT"
+          probe "0.0.0-not-a-version"

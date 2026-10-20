@@ -191,7 +191,15 @@ jobs:
           VERSION="$(node -p "require('./package.json').version")"
           ATTEMPTS=12
           for attempt in $(seq 1 $ATTEMPTS); do
-            PUBLISHED="$(npm view "kilo-ai-cli@$VERSION" version 2>/dev/null || true)"
+            # The version manifest, not the packument: the packument is
+            # served with `max-age=300` and stays stale for minutes after a
+            # publish, so `npm view <pkg>@<version>` and a plain
+            # `npm view <pkg>` both report the version as missing. The
+            # per-version document is created with the version, and the
+            # cache-buster keeps a stale 404 from being served.
+            PUBLISHED="$(curl -sf "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).version||"")}catch{}})' \
+              2>/dev/null || true)"
             if [ "$PUBLISHED" = "$VERSION" ]; then
               echo "kilo-ai-cli@$VERSION is on the registry"
               exit 0
