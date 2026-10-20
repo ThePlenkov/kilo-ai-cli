@@ -66,18 +66,29 @@ jobs:
           # and a stale "not published" would send the release job into a
           # second publish of a version that is already out. The per-version
           # manifest is created together with the version, so probe that.
+          # `curl` prints 000 and exits non-zero when it cannot connect.
+          # `|| echo 000` would append a second 000 ("000000") and every
+          # comparison below would miss it, so the status is normalised here.
           STATUS="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-            "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" || echo 000)"
-          if [ "$STATUS" = "000" ]; then
-            echo "npm registry unreachable — failing guard"
-            exit 1
-          fi
-          if [ "$STATUS" = "200" ] && \
-             git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
-             gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-          else
+            "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)")" || STATUS="000"
+          if [ "$STATUS" = "200" ]; then
+            # The version is on the registry. A release is still needed when
+            # its tag or its GitHub Release is missing — the executor skips
+            # the publish and finishes the rest.
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
+               gh release view "v$VERSION" >/dev/null 2>&1; then
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "needed=true" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "$STATUS" = "404" ]; then
             echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            # The registry state is unknown. Publishing on a guess risks a
+            # second publish of a version that is already out, so fail
+            # loudly instead.
+            echo "::error::npm registry probe failed with HTTP $STATUS — failing guard"
+            exit 1
           fi
 
   release:
@@ -202,7 +213,7 @@ jobs:
             # per-version document is created with the version, and the
             # cache-buster keeps a stale 404 from being served.
             STATUS="$(curl -s -o "$MANIFEST" -w '%{http_code}' --max-time 20 \
-              "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" || echo 000)"
+              "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)")" || STATUS="000"
             PUBLISHED=""
             if [ "$STATUS" = "200" ]; then
               PUBLISHED="$(jq -r '.version // ""' "$MANIFEST" 2>/dev/null || true)"
