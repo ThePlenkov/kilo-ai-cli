@@ -61,15 +61,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="$(node -p "require('./packages/cli/package.json').version")"
-          NPM="$(npm view kilo-ai-cli version 2>/dev/null || true)"
-          # Distinguish "not published" from "registry unreachable" — a
-          # transient npm outage should fail loudly, not burn the full
-          # gate suite and die inside the publish path.
-          if [ -z "$NPM" ] && ! npm ping >/dev/null 2>&1; then
+          # The packument is served with `max-age=300`, so `npm view <pkg>
+          # version` can report a stale value for minutes after a publish —
+          # and a stale "not published" would send the release job into a
+          # second publish of a version that is already out. The per-version
+          # manifest is created together with the version, so probe that.
+          STATUS="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+            "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" || echo 000)"
+          if [ "$STATUS" = "000" ]; then
             echo "npm registry unreachable — failing guard"
             exit 1
           fi
-          if [ "$NPM" = "$VERSION" ] && \
+          if [ "$STATUS" = "200" ] && \
              git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
              gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "needed=false" >> "$GITHUB_OUTPUT"
@@ -189,6 +192,7 @@ jobs:
         working-directory: packages/cli
         run: |
           VERSION="$(node -p "require('./package.json').version")"
+          MANIFEST="$(mktemp)"
           ATTEMPTS=12
           for attempt in $(seq 1 $ATTEMPTS); do
             # The version manifest, not the packument: the packument is
@@ -197,14 +201,21 @@ jobs:
             # `npm view <pkg>` both report the version as missing. The
             # per-version document is created with the version, and the
             # cache-buster keeps a stale 404 from being served.
-            PUBLISHED="$(curl -sf "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" \
-              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).version||"")}catch{}})' \
-              2>/dev/null || true)"
+            STATUS="$(curl -s -o "$MANIFEST" -w '%{http_code}' --max-time 20 \
+              "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" || echo 000)"
+            PUBLISHED=""
+            if [ "$STATUS" = "200" ]; then
+              PUBLISHED="$(jq -r '.version // ""' "$MANIFEST" 2>/dev/null || true)"
+            fi
             if [ "$PUBLISHED" = "$VERSION" ]; then
               echo "kilo-ai-cli@$VERSION is on the registry"
               exit 0
             fi
-            echo "registry has '${PUBLISHED:-nothing}', expected $VERSION (attempt $attempt/$ATTEMPTS)"
+            if [ "$STATUS" = "404" ]; then
+              echo "registry does not have $VERSION yet (attempt $attempt/$ATTEMPTS)"
+            else
+              echo "registry probe failed with HTTP $STATUS (attempt $attempt/$ATTEMPTS)"
+            fi
             [ "$attempt" -lt "$ATTEMPTS" ] && sleep 15
           done
           echo "::error::kilo-ai-cli@$VERSION never reached the registry — the publish did not land"

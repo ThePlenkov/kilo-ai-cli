@@ -6,17 +6,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   diag:
     name: Diagnose
     runs-on: ubuntu-latest
-    environment: npm
     timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -69,13 +66,36 @@ jobs:
       - name: Verification probe
         working-directory: packages/cli
         run: |
+          MANIFEST="$(mktemp)"
           probe() {
             VERSION="$1"
-            PUBLISHED="$(curl -sf "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" \
-              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).version||"")}catch{}})' \
-              2>/dev/null || true)"
-            echo "version=$VERSION published='${PUBLISHED:-nothing}'"
+            STATUS="$(curl -s -o "$MANIFEST" -w '%{http_code}' --max-time 20 \
+              "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)" || echo 000)"
+            PUBLISHED=""
+            if [ "$STATUS" = "200" ]; then
+              PUBLISHED="$(jq -r '.version // ""' "$MANIFEST" 2>/dev/null || true)"
+            fi
+            echo "version=$VERSION status=$STATUS published='${PUBLISHED:-nothing}'"
+            PROBE_STATUS="$STATUS"
+            PROBE_PUBLISHED="$PUBLISHED"
           }
-          CURRENT="$(node -p "require('./package.json').version")"
-          probe "$CURRENT"
+          # A version that is on the registry, and one that is not. The
+          # positive case is pinned to a published version — the version in
+          # package.json moves with every release and would be missing here.
+          probe "0.4.6"
+          POSITIVE_STATUS="$PROBE_STATUS"
+          POSITIVE_PUBLISHED="$PROBE_PUBLISHED"
           probe "0.0.0-not-a-version"
+          NEGATIVE_STATUS="$PROBE_STATUS"
+          NEGATIVE_PUBLISHED="$PROBE_PUBLISHED"
+
+          FAILED=0
+          if [ "$POSITIVE_STATUS" != "200" ] || [ "$POSITIVE_PUBLISHED" != "0.4.6" ]; then
+            echo "::error::the published version was not found (status=$POSITIVE_STATUS published=$POSITIVE_PUBLISHED)"
+            FAILED=1
+          fi
+          if [ "$NEGATIVE_STATUS" != "404" ] || [ -n "$NEGATIVE_PUBLISHED" ]; then
+            echo "::error::the missing version was reported as published (status=$NEGATIVE_STATUS published=$NEGATIVE_PUBLISHED)"
+            FAILED=1
+          fi
+          exit "$FAILED"
