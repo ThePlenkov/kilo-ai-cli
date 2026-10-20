@@ -141,7 +141,13 @@ export const sessionsUnifiedCommand = defineCommand({
       updatedSince: since,
     }
 
-    const result = await listUnifiedSessions(token, { ...request, cursor: args.cursor })
+    // The server combines the page cursor (`updated_at < cursor`) with the
+    // delta bound (`updated_at >= since`), so a page cursor from an earlier
+    // listing would cut newer sessions out of the delta window.
+    const result = await listUnifiedSessions(token, {
+      ...request,
+      cursor: isDeltaRead ? undefined : args.cursor,
+    })
 
     let sessions = result.cliSessions
     let nextCursor = result.nextCursor

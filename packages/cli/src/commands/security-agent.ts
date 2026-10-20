@@ -354,6 +354,11 @@ export const securityFindingsListCommand = defineCommand({
 
     let findings = result.findings
     if (args.new || args.since !== undefined) {
+      if (input.offset) {
+        throw new Error(
+          '--offset cannot be combined with --new/--since: the delta read has to start at the first page.',
+        )
+      }
       // A filtered read must not move the shared cursor: the filter selects a
       // subset, so advancing on it would skip the findings the filter hid.
       const cursorName = findingsCursorName(input)

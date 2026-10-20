@@ -158,6 +158,10 @@ async function fetchReviewWindow(
       : await listCodeReviewsPage(token, request)
     reviews.push(...result.reviews)
 
+    // A bare-array response carries no `hasMore`; a full page then means
+    // there are more pages behind it.
+    const hasMore = result.hasMore ?? result.reviews.length >= request.limit
+
     if (boundEpoch !== undefined) {
       const hasNewer = result.reviews.some((r) => {
         const at = Date.parse(r.updated_at ?? r.created_at)
@@ -167,7 +171,7 @@ async function fetchReviewWindow(
       if (emptyPages > REVIEWS_TRAILING_PAGES) return { reviews, complete: true }
     }
 
-    if (!result.hasMore) return { reviews, complete: true }
+    if (!hasMore) return { reviews, complete: true }
     offset += request.limit
     if (page === REVIEWS_MAX_PAGES - 1) {
       console.log(

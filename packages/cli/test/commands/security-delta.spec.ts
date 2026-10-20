@@ -73,6 +73,21 @@ describe('security findings delta walk', () => {
     expect(store.entries['security-findings']?.value).toBe('2026-10-20T11:00:00.000Z')
   })
 
+  it('rejects --offset in a delta read', async () => {
+    const { securityFindingsListCommand } = await import('../../src/commands/security-agent.ts')
+    const capture = captureConsole()
+    await expect(
+      runCommand(securityFindingsListCommand, {
+        new: true,
+        offset: '100',
+        columns: 'severity',
+      }),
+    ).rejects.toThrow(/--offset cannot be combined/)
+    capture.restore()
+
+    expect(store.entries['security-findings']).toBeUndefined()
+  })
+
   it('does not advance the cursor when the window could not be read completely', async () => {
     // Every page is full: the walk never reaches the end of the window.
     fillPages = 100

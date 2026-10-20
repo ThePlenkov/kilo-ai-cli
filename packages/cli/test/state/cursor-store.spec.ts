@@ -97,6 +97,18 @@ describe('cursor-store', () => {
     expect(cursors.sessions?.value).toBe('b')
   })
 
+  it('takes over a lock whose holder is gone', async () => {
+    // A lock file left behind by a process that no longer exists.
+    fs.mkdirSync(CONFIG_DIR, { recursive: true })
+    fs.writeFileSync(`${CURSORS_PATH}.lock`, '999999')
+
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', 'a')
+
+    expect((await store.get('reviews'))?.value).toBe('a')
+    expect(fs.existsSync(`${CURSORS_PATH}.lock`)).toBe(false)
+  })
+
   it('leaves no lock file behind', async () => {
     const store = createCursorStore(CONFIG_DIR)
     await store.set('reviews', 'a')

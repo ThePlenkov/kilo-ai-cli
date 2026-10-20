@@ -141,11 +141,17 @@ export const accountTopUpCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     if (args.amount) {
-      // Strict parsing: `parseInt` would accept "125oops" and truncate "1.9".
-      const amountCents = Number(args.amount)
-      if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      // Strict parsing: `parseInt` would accept "125oops" and truncate "1.9",
+      // and `Number` silently rounds values beyond the safe-integer range.
+      const raw = args.amount.trim()
+      if (!/^\d+$/.test(raw)) {
         throw new Error('Amount must be a positive whole number of cents.')
       }
+      const cents = BigInt(raw)
+      if (cents <= 0n || cents > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('Amount must be a positive whole number of cents.')
+      }
+      const amountCents = Number(cents)
       await updateAutoTopUpAmount(token, amountCents)
       console.log(`Auto top-up amount set to ${amountCents} cents.`)
       return

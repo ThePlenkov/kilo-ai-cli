@@ -24,6 +24,9 @@ export function BriefingScreen({ ctx, focused }: ScreenProps) {
           })
           all.push(...page.reports)
           if (!page.nextCursor) break
+          if (page.nextCursor === cursor) {
+            throw new Error('Briefing pagination cursor did not advance.')
+          }
           cursor = page.nextCursor
         }
         return all
