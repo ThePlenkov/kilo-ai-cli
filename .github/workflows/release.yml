@@ -221,7 +221,7 @@ jobs:
           echo "Approving the CI run for $BRANCH"
           for attempt in $(seq 1 12); do
             RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&event=pull_request" \
-              --jq '[.workflow_runs[] | select(.status == "action_required")] | .[0].id' 2>/dev/null || true)"
+              --jq '[.workflow_runs[] | select(.conclusion == "action_required")] | .[0].id' 2>/dev/null || true)"
             if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
               gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/approve" \
                 --jq '"approved run \(.id)"'
