@@ -46,6 +46,7 @@ const session = (id: string, updated: string): Record<string, unknown> => ({
 
 describe('sessions unified delta walk', () => {
   beforeEach(() => {
+    vi.resetModules()
     pages = {}
     pageRequests = []
     firstPage = { cliSessions: [], nextCursor: null }

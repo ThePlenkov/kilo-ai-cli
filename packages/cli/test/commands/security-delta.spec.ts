@@ -50,6 +50,7 @@ const finding = (id: string, updated: string): Record<string, unknown> => ({
 
 describe('security findings delta walk', () => {
   beforeEach(() => {
+    vi.resetModules()
     pages = {}
     fillPages = 0
     delete store.entries['security-findings']

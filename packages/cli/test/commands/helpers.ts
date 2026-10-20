@@ -1,5 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import type { CursorEntry, CursorStore } from '../../src/state/cursor-store.ts'
 
 /** In-memory cursor store shared by the tests. */
@@ -55,7 +53,3 @@ export function captureConsole(): { restore: () => void; lines: string[] } {
     },
   }
 }
-
-beforeEach(() => {
-  vi.resetModules()
-})
