@@ -4,6 +4,12 @@ import React, { useState } from 'react'
 
 import type { FindingsFilter, ScreenDef, ScreenProps } from './types.ts'
 import {
+  AccountScreen,
+  ActiveSessionsScreen,
+  CursorsScreen,
+  UnifiedSessionsScreen,
+} from './views/account.tsx'
+import {
   AnalyticsBreakdownScreen,
   AnalyticsSummaryScreen,
   AnalyticsTableScreen,
@@ -26,6 +32,7 @@ import {
   KiloclawSubscriptionsScreen,
   KiloclawVersionScreen,
 } from './views/kiloclaw.tsx'
+import { ModelsScreen } from './views/models.tsx'
 import {
   OrgCreditsScreen,
   OrgDetailScreen,
@@ -38,7 +45,9 @@ import {
   OrgUsageScreen,
 } from './views/orgs.tsx'
 import { PlansScreen, PlanUsageScreen } from './views/plans.tsx'
+import { BriefingScreen, IntegrationsScreen, WebhooksScreen } from './views/platform.tsx'
 import { ProfileScreen } from './views/profile.tsx'
+import { ProfileDetailScreen, ProfilesScreen } from './views/profiles.tsx'
 import { ReviewAgentScreen, ReviewDetailScreen, ReviewsScreen } from './views/reviews.tsx'
 import { StatsView } from './views/StatsView.tsx'
 import {
@@ -48,6 +57,7 @@ import {
   SecurityStatusScreen,
 } from './views/security-extra.tsx'
 import { SessionDetailScreen, SessionsScreen } from './views/sessions.tsx'
+import { TodoItemsScreen, TodosScreen, UpNextScreen } from './views/todos.tsx'
 
 // Persisted across mounts so returning from a finding detail keeps filters/page.
 let savedFindingsFilter: FindingsFilter = { limit: 50, offset: 0 }
@@ -72,6 +82,7 @@ function FindingsScreen({ ctx, focused }: ScreenProps) {
 export const SCREENS: ScreenDef[] = [
   // Dashboard
   { name: 'profile', group: 'Dashboard', title: 'Your Profile', component: ProfileScreen },
+  { name: 'account', group: 'Dashboard', title: 'Account', component: AccountScreen },
 
   // Cloud
   { name: 'sessions', group: 'Cloud', title: 'Sessions', component: SessionsScreen },
@@ -81,6 +92,18 @@ export const SCREENS: ScreenDef[] = [
     title: 'Session',
     hidden: true,
     component: SessionDetailScreen,
+  },
+  {
+    name: 'unified-sessions',
+    group: 'Cloud',
+    title: 'All Sessions',
+    component: UnifiedSessionsScreen,
+  },
+  {
+    name: 'active-sessions',
+    group: 'Cloud',
+    title: 'Active Sessions',
+    component: ActiveSessionsScreen,
   },
   {
     name: 'cloud-github',
@@ -100,6 +123,25 @@ export const SCREENS: ScreenDef[] = [
     title: 'Agent · Session lookup',
     component: CloudAgentSessionScreen,
   },
+  { name: 'todos', group: 'Cloud', title: 'Todos', component: TodosScreen },
+  {
+    name: 'todo-items',
+    group: 'Cloud',
+    title: 'Todo Items',
+    hidden: true,
+    component: TodoItemsScreen,
+  },
+  { name: 'up-next', group: 'Cloud', title: 'Up Next', component: UpNextScreen },
+  { name: 'profiles', group: 'Cloud', title: 'Agent Profiles', component: ProfilesScreen },
+  {
+    name: 'agent-profile',
+    group: 'Cloud',
+    title: 'Profile',
+    hidden: true,
+    component: ProfileDetailScreen,
+  },
+  { name: 'briefing', group: 'Cloud', title: 'Briefing', component: BriefingScreen },
+  { name: 'webhooks', group: 'Cloud', title: 'Webhooks', component: WebhooksScreen },
   { name: 'reviews', group: 'Cloud', title: 'Code Reviewer', component: ReviewsScreen },
   {
     name: 'review-detail',
@@ -166,6 +208,7 @@ export const SCREENS: ScreenDef[] = [
   },
   { name: 'analytics-table', group: 'Usage', title: 'Table', component: AnalyticsTableScreen },
   { name: 'plans', group: 'Usage', title: 'Coding Plans', component: PlansScreen },
+  { name: 'models', group: 'Usage', title: 'Models', component: ModelsScreen },
   {
     name: 'plan-usage',
     group: 'Usage',
@@ -282,6 +325,13 @@ export const SCREENS: ScreenDef[] = [
 
   // Account
   { name: 'byok', group: 'Account', title: 'BYOK Keys', component: ByokScreen },
+  {
+    name: 'integrations',
+    group: 'Account',
+    title: 'Integrations',
+    component: IntegrationsScreen,
+  },
+  { name: 'cursors', group: 'Account', title: 'Cursors', component: CursorsScreen },
 ]
 
 function FindingDetailWrapper({ ctx, focused }: ScreenProps) {

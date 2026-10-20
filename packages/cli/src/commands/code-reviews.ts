@@ -18,11 +18,23 @@ import {
   toggleReviewAgent,
   toSaveReviewConfigInput,
 } from '../api/code-reviews.ts'
+import {
+  approveReviewMemoryProposal,
+  getReviewMemorySummary,
+  listReviewMemoryProposals,
+  rejectReviewMemoryProposal,
+  setReviewMemoryEnabled,
+  triggerReviewMemoryAnalysis,
+} from '../api/review-memory.ts'
 import type { ReviewAgentConfig } from '../api/types.ts'
+import { applyDeltaAsync } from '../state/delta.ts'
 import { printTable, sanitize } from './format.ts'
 import { getToken } from './helpers.ts'
 
 const PLATFORMS = ['github', 'gitlab'] as const
+
+/** Cursor name used by `reviews list --new`. */
+export const REVIEWS_CURSOR = 'reviews'
 
 function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>>) {
   if (reviews.length === 0) {
@@ -64,7 +76,8 @@ function printAgentConfig(config: ReviewAgentConfig, platform: string, scope: st
   if (config.gateThreshold) console.log(`Gate threshold: ${sanitize(config.gateThreshold)}`)
   if (config.focusAreas?.length)
     console.log(`Focus areas: ${config.focusAreas.map(sanitize).join(', ')}`)
-  if (config.customInstructions) console.log(`Custom instructions: ${sanitize(config.customInstructions)}`)
+  if (config.customInstructions)
+    console.log(`Custom instructions: ${sanitize(config.customInstructions)}`)
   if (config.thinkingEffort) console.log(`Thinking effort: ${sanitize(config.thinkingEffort)}`)
   if (config.repositorySelectionMode)
     console.log(`Repositories: ${sanitize(config.repositorySelectionMode)}`)
@@ -99,19 +112,40 @@ function resolveScope(args: { scope?: string; platform?: string; org?: string })
 export const reviewsListCommand = defineCommand({
   meta: {
     name: 'list',
-    description: 'List code reviews (personal by default; pass an org id for org reviews)',
+    description:
+      'List code reviews (personal by default; pass an org id for org reviews). Use --new for the delta since the last run.',
   },
   args: {
     id: { type: 'positional', description: 'Organization ID (same as --org)', required: false },
     org: { type: 'string', description: 'Organization ID (omit for personal reviews)' },
+    new: { type: 'boolean', description: 'Only reviews newer than the stored cursor' },
+    since: { type: 'string', description: 'Explicit lower bound (ISO timestamp)' },
+    'no-advance': { type: 'boolean', description: 'Do not advance the stored cursor' },
+    limit: { type: 'string', description: 'Max reviews to fetch (default 50)' },
   },
   async run({ args }) {
     const { token } = await getToken()
     const orgId = args.org ?? args.id
+    const options = { limit: args.limit ? Number.parseInt(args.limit, 10) : undefined }
     const reviews = orgId
-      ? await listCodeReviews(token, orgId)
-      : await listCodeReviewsForUser(token)
-    printReviews(reviews)
+      ? await listCodeReviews(token, orgId, options)
+      : await listCodeReviewsForUser(token, options)
+
+    const isDeltaRead = args.new || args.since !== undefined
+    if (!isDeltaRead) {
+      printReviews(reviews)
+      return
+    }
+
+    const delta = await applyDeltaAsync(reviews, (r) => r.updated_at ?? r.created_at, {
+      cursor: REVIEWS_CURSOR,
+      since: args.since,
+      advance: !args['no-advance'],
+    })
+    if (delta.advancedTo) {
+      console.log(`Cursor "${REVIEWS_CURSOR}" advanced to ${delta.advancedTo}`)
+    }
+    printReviews(delta.items)
   },
 })
 
@@ -134,9 +168,7 @@ export const reviewsGetCommand = defineCommand({
     if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
     if (review.terminal_reason) console.log(`Terminal reason: ${sanitize(review.terminal_reason)}`)
     if (review.total_tokens_in != null || review.total_tokens_out != null) {
-      console.log(
-        `Tokens: in ${review.total_tokens_in ?? 0} / out ${review.total_tokens_out ?? 0}`,
-      )
+      console.log(`Tokens: in ${review.total_tokens_in ?? 0} / out ${review.total_tokens_out ?? 0}`)
     }
     if (review.total_cost_musd != null)
       console.log(`Cost: $${(review.total_cost_musd / 1000).toFixed(3)}`)
@@ -266,10 +298,20 @@ export const reviewsSetModelCommand = defineCommand({
     const config = orgId
       ? await getOrgReviewAgentConfig(token, orgId, platform)
       : await getPersonalReviewConfig(token, platform)
-    const overrides: { modelSlug: string; reviewStyle?: string; focusAreas?: string[]; customInstructions?: string; thinkingEffort?: string; gateThreshold?: string } = { modelSlug: args.model }
+    const overrides: {
+      modelSlug: string
+      reviewStyle?: string
+      focusAreas?: string[]
+      customInstructions?: string
+      thinkingEffort?: string
+      gateThreshold?: string
+    } = { modelSlug: args.model }
     if (args.style !== undefined) overrides.reviewStyle = args.style
     if (args['focus-areas'] !== undefined)
-      overrides.focusAreas = args['focus-areas'].split(',').map((s) => s.trim()).filter(Boolean)
+      overrides.focusAreas = args['focus-areas']
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     if (args.instructions !== undefined) overrides.customInstructions = args.instructions
     if (args.thinking !== undefined) overrides.thinkingEffort = args.thinking
     if (args.gate !== undefined) overrides.gateThreshold = args.gate
@@ -313,5 +355,123 @@ export const reviewsCancelCommand = defineCommand({
     const { token } = await getToken()
     await cancelCodeReview(token, args.id)
     console.log(`Review ${args.id} cancelled`)
+  },
+})
+
+// --- Review memory ---
+
+export const reviewsMemorySummaryCommand = defineCommand({
+  meta: { name: 'memory-summary', description: 'Show the review memory dashboard summary' },
+  args: {
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+    org: { type: 'string', description: 'Organization ID' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    const summary = await getReviewMemorySummary(
+      token,
+      args.platform as 'github' | 'gitlab',
+      args.org,
+    )
+    for (const [key, value] of Object.entries(summary)) {
+      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+    }
+  },
+})
+
+export const reviewsMemoryProposalsCommand = defineCommand({
+  meta: { name: 'memory-proposals', description: 'List review memory proposals' },
+  args: {
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+    org: { type: 'string', description: 'Organization ID' },
+    status: { type: 'string', description: 'Filter by status' },
+    limit: { type: 'string', description: 'Max proposals', default: '20' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    const proposals = await listReviewMemoryProposals(token, {
+      platform: args.platform as 'github' | 'gitlab',
+      organizationId: args.org,
+      status: args.status,
+      limit: Number.parseInt(args.limit, 10) || 20,
+    })
+    if (proposals.length === 0) {
+      console.log('No review memory proposals found.')
+      return
+    }
+    printTable(
+      proposals.map((p) => ({
+        id: p.id,
+        status: p.status ?? '-',
+        title: p.title ?? '-',
+        repo: p.repositoryFullName ?? '-',
+      })),
+      [
+        { key: 'id', label: 'ID', width: 36 },
+        { key: 'status', label: 'Status', width: 12 },
+        { key: 'title', label: 'Title', width: 40 },
+        { key: 'repo', label: 'Repository', width: 32 },
+      ],
+    )
+  },
+})
+
+export const reviewsMemoryEnableCommand = defineCommand({
+  meta: { name: 'memory-enable', description: 'Enable or disable the review memory' },
+  args: {
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+    org: { type: 'string', description: 'Organization ID' },
+    disable: { type: 'boolean', description: 'Disable instead of enable' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    const enabled = !args.disable
+    await setReviewMemoryEnabled(token, args.platform as 'github' | 'gitlab', enabled, args.org)
+    console.log(`Review memory ${enabled ? 'enabled' : 'disabled'} for ${args.platform}`)
+  },
+})
+
+export const reviewsMemoryAnalyzeCommand = defineCommand({
+  meta: { name: 'memory-analyze', description: 'Trigger a review memory analysis' },
+  args: {
+    repo: { type: 'positional', description: 'Repository full name (owner/repo)', required: true },
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+    org: { type: 'string', description: 'Organization ID' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    await triggerReviewMemoryAnalysis(
+      token,
+      args.platform as 'github' | 'gitlab',
+      args.repo,
+      args.org,
+    )
+    console.log(`Review memory analysis triggered for ${args.repo}`)
+  },
+})
+
+export const reviewsMemoryApproveCommand = defineCommand({
+  meta: { name: 'memory-approve', description: 'Approve a review memory proposal' },
+  args: {
+    id: { type: 'positional', description: 'Proposal ID', required: true },
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    await approveReviewMemoryProposal(token, args.id, args.platform as 'github' | 'gitlab')
+    console.log(`Approved proposal ${args.id}`)
+  },
+})
+
+export const reviewsMemoryRejectCommand = defineCommand({
+  meta: { name: 'memory-reject', description: 'Reject a review memory proposal' },
+  args: {
+    id: { type: 'positional', description: 'Proposal ID', required: true },
+    platform: { type: 'string', description: 'Platform (github|gitlab)', default: 'github' },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    await rejectReviewMemoryProposal(token, args.id, args.platform as 'github' | 'gitlab')
+    console.log(`Rejected proposal ${args.id}`)
   },
 })

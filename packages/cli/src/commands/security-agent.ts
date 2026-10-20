@@ -32,10 +32,14 @@ import {
   waitForCommand,
 } from '../api/security-agent.ts'
 import type { SecurityAgentCommand, SecurityFinding } from '../api/types.ts'
+import { applyDeltaAsync } from '../state/delta.ts'
 import { confirm } from './confirm.ts'
 import { type Column, printSummary, printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 import { colorSeverity, colorStatus, repoLink } from './theme.ts'
+
+/** Cursor name used by `security findings list --new`. */
+export const FINDINGS_CURSOR = 'security-findings'
 
 /** Resolve a numeric repo ID or full name to the full name (owner/repo). */
 async function resolveRepoFullName(token: string, idOrName: string): Promise<string> {
@@ -248,6 +252,9 @@ export const securityFindingsListCommand = defineCommand({
     },
     limit: { type: 'string', description: 'Max findings to show (1-100)', default: '50' },
     offset: { type: 'string', description: 'Pagination offset', default: '0' },
+    new: { type: 'boolean', description: 'Only findings newer than the stored cursor' },
+    since: { type: 'string', description: 'Explicit lower bound (ISO timestamp)' },
+    'no-advance': { type: 'boolean', description: 'Do not advance the stored cursor' },
     columns: {
       type: 'string',
       description: 'Columns to show: id,severity,title,repo,status,package (or "all")',
@@ -318,13 +325,31 @@ export const securityFindingsListCommand = defineCommand({
       { label: 'Running', value: result.runningCount ?? result.running_count ?? 0 },
       { label: 'Concurrency', value: result.concurrencyLimit ?? result.concurrency_limit ?? '?' },
     ])
-    if (result.findings.length === 0) {
+
+    let findings = result.findings
+    if (args.new || args.since !== undefined) {
+      const delta = await applyDeltaAsync(
+        findings,
+        (f) => f.updated_at ?? f.created_at ?? f.first_detected_at,
+        {
+          cursor: FINDINGS_CURSOR,
+          since: args.since,
+          advance: !args['no-advance'],
+        },
+      )
+      findings = delta.items
+      if (delta.advancedTo) {
+        console.log(`Cursor "${FINDINGS_CURSOR}" advanced to ${delta.advancedTo}`)
+      }
+    }
+
+    if (findings.length === 0) {
       console.log('No findings found.')
       return
     }
     console.log('')
     printTable(
-      result.findings.map((f) => {
+      findings.map((f) => {
         const row: Record<string, string> = {}
         for (const name of requested) row[name] = FINDINGS_COLUMNS[name].get(f)
         return row

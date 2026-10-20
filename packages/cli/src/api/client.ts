@@ -105,15 +105,48 @@ function isAuthError(status: number): boolean {
 }
 
 /**
+ * Detect the tRPC/zod error for a procedure that expects an object input but
+ * received none. Those procedures accept `{}`, so the call can be retried.
+ */
+function needsEmptyObjectInput(detail: string | undefined): boolean {
+  return detail?.includes('expected object, received undefined') === true
+}
+
+/**
  * Query a tRPC procedure with typed input and Zod-validated output.
  * Uses GET with `?input=<json>` query parameter.
  * Parses the tRPC response envelope: `{ result: { data: { json } } }` or `{ error }`.
+ *
+ * Procedures that declare an object input but were called without one are
+ * retried once with `{}` — the server rejects them otherwise.
  */
 export async function trpcQuery<T>(
   procedure: string,
   token: string,
   schema: z.ZodType<T>,
   input?: unknown,
+  options?: { baseUrl?: string; organizationId?: string },
+): Promise<T> {
+  try {
+    return await requestQuery(procedure, token, schema, input, options)
+  } catch (err) {
+    if (
+      input === undefined &&
+      err instanceof CloudTrpcError &&
+      err.kind === 'procedure' &&
+      needsEmptyObjectInput(err.detail)
+    ) {
+      return await requestQuery(procedure, token, schema, {}, options)
+    }
+    throw err
+  }
+}
+
+async function requestQuery<T>(
+  procedure: string,
+  token: string,
+  schema: z.ZodType<T>,
+  input: unknown,
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
   const baseUrl = options?.baseUrl ?? KILO_API_BASE
@@ -205,6 +238,28 @@ export async function trpcQuery<T>(
  * Parses the batched response: `json[0].result.data.json` or `json[0].error`.
  */
 export async function trpcMutate<T>(
+  procedure: string,
+  token: string,
+  schema: z.ZodType<T>,
+  input: unknown,
+  options?: { baseUrl?: string; organizationId?: string },
+): Promise<T> {
+  try {
+    return await requestMutation(procedure, token, schema, input, options)
+  } catch (err) {
+    if (
+      input === undefined &&
+      err instanceof CloudTrpcError &&
+      err.kind === 'procedure' &&
+      needsEmptyObjectInput(err.detail)
+    ) {
+      return await requestMutation(procedure, token, schema, {}, options)
+    }
+    throw err
+  }
+}
+
+async function requestMutation<T>(
   procedure: string,
   token: string,
   schema: z.ZodType<T>,

@@ -130,6 +130,29 @@ tRPC queries use GET with `?input=<json>` and parse `{ result: { data: { json } 
 | `organizations.reviewAgent.saveReviewConfig` | mutation | Save org review agent config |
 | `usageAnalytics.*` | — | Usage analytics |
 | `securityAgent.*` | — | Security agent findings |
+| `unifiedSessions.list` | query | v1 + v2 sessions in one feed (`updatedSince` delta filter) |
+| `unifiedSessions.recentRepositories` | query | Repositories touched since an instant |
+| `activeSessions.list` | query | Sessions that are alive right now |
+| `cliSessionsV2.getSessionDiff` | query | Worktree diff of a session |
+| `cliSessionsV2.getSessionMessages` | query | Transcript of a session |
+| `todos.lists.*` / `todos.items.*` | query/mutation | Todo lists and their items |
+| `agentProfiles.*` | query/mutation | Agent profiles, variables, bindings |
+| `agentBriefing.*` | query/mutation | The daily agent briefing |
+| `models.list` / `models.preferred` | query | Model catalog |
+| `modelPreferences.*` | query/mutation | Favorites and last selected model |
+| `webhookTriggers.*` | query/mutation | Inbound webhooks and cron triggers |
+| `codeIndexing.*` | query | Semantic code search and index manifests |
+| `deployments.*` | query/mutation | App builder builds and deployments |
+| `reviewMemory.*` | query/mutation | What the review agent learned |
+| `platformIntegrations.listSetupStatus` | query | Which platforms are connected |
+| `user.getContextBalance` | query | Session context budget |
+| `spendAlerts.*` | query/mutation | Spend alert rules |
+| `cloudAgentSettings.*` | query/mutation | Sandbox allocation and repo bindings |
+| `workspaceFolders.*` | query/mutation | Sidebar grouping of worktrees |
+
+The full router map lives in `Kilo-Org/cloud` at
+`apps/web/src/routers/root-router.ts` — clone it shallow to enumerate
+procedures and their input schemas.
 
 ## TypeScript Types
 
@@ -147,6 +170,32 @@ interface CodingPlanUsage { schemaVersion: 1; fetchedAt: string; subscription: {
 interface DeviceAuthInitiateResponse { code: string; verificationUrl: string; expiresIn: number }
 interface DeviceAuthPollResponse { status: "pending" | "approved" | "denied" | "expired"; token?: string; userEmail?: string }
 ```
+
+## Delta Reads (Cursors)
+
+The cloud API has no generic change feed, so the CLI keeps one **cursor** per
+resource and computes the delta between two reads itself.
+
+```text
+src/state/cursor-store.ts   # Named cursors persisted in ~/.kilo/cursors.json
+src/state/delta.ts          # resolveSince / applyDeltaAsync / timestamp parsing
+```
+
+A cursor entry is `{ value, updatedAt }`, where `value` is an ISO UTC instant.
+`applyDeltaAsync` keeps the items strictly newer than the bound, then advances
+the cursor to the newest timestamp of the fetched set — never backwards.
+
+Delta reads are exposed as `--new` (bound = stored cursor), `--since <iso>`
+(bound = explicit) and `--no-advance` (read without moving the cursor):
+
+| Command | Cursor name |
+| --- | --- |
+| `reviews list --new` | `reviews` |
+| `sessions unified --new` | `sessions` |
+| `security findings list --new` | `security-findings` |
+
+`unifiedSessions.list` accepts `updatedSince`, so the sessions delta is
+filtered server-side; the other two filter client-side.
 
 ## CLI Commands
 
@@ -170,8 +219,14 @@ kilo-ai-cli plans usage <id>    # Show usage for a subscription
 
 kilo-ai-cli byok list           # List BYOK entries
 
-kilo-ai-cli claw status         # KiloClaw status
-kilo-ai-cli claw files [path]   # KiloClaw file tree
+kilo-ai-cli cursor list         # Stored cursors ("where was I")
+kilo-ai-cli cursor set <n> <v>  # Set a cursor manually
+
+kilo-ai-cli todos lists         # Todo lists
+kilo-ai-cli models list         # Model catalog
+kilo-ai-cli profiles list       # Agent profiles
+kilo-ai-cli webhooks list       # Webhook triggers
+kilo-ai-cli account balance     # Balance and context budget
 ```
 
 ## Tech Stack
@@ -202,22 +257,53 @@ kilo-ai-cli/
 │   │   ├── token-store.ts   # Token storage (~/.kilo/)
 │   │   └── types.ts         # KiloAuth types
 │   ├── api/
-│   │   ├── client.ts        # tRPC query helper
+│   │   ├── client.ts        # tRPC query/mutation helpers
 │   │   ├── constants.ts     # API base URLs, headers
 │   │   ├── headers.ts       # buildKiloHeaders()
 │   │   ├── profile.ts       # Profile/balance/defaults
 │   │   ├── trpc.ts          # tRPC procedures (sessions, plans, byok)
 │   │   ├── cloud-sessions.ts # Cloud session fetch/import
+│   │   ├── sessions.ts      # Unified + active sessions, diffs, transcripts
+│   │   ├── todos.ts         # Todo lists and items
+│   │   ├── profiles.ts      # Agent profiles
+│   │   ├── models.ts        # Model catalog and preferences
+│   │   ├── briefing.ts      # Agent briefings
+│   │   ├── integrations.ts  # GitHub/GitLab/Slack/Linear/Discord/DoltHub
+│   │   ├── webhooks.ts      # Webhook triggers
+│   │   ├── indexing.ts      # Semantic code search
+│   │   ├── deployments.ts   # App builder deployments
+│   │   ├── account.ts       # Balance, devices, notifications, spend alerts
+│   │   ├── review-memory.ts # Review memory proposals
+│   │   ├── workspace-folders.ts # Worktree grouping
+│   │   ├── cloud-agent-settings.ts # Sandbox allocation
+│   │   ├── feedback.ts      # Feedback submission
 │   │   └── types.ts         # API response types
+│   ├── state/
+│   │   ├── cursor-store.ts  # Named cursors (~/.kilo/cursors.json)
+│   │   └── delta.ts         # Delta reads and timestamp parsing
 │   └── commands/
 │       ├── auth.ts          # auth login/logout/status
 │       ├── profile.ts       # profile commands
 │       ├── sessions.ts      # sessions commands
+│       ├── cursor.ts        # cursor commands
+│       ├── todos.ts         # todo commands
+│       ├── models.ts        # model commands
+│       ├── profiles.ts      # agent profile commands
+│       ├── briefing.ts      # briefing commands
+│       ├── integrations.ts  # integration commands
+│       ├── webhooks.ts      # webhook trigger commands
+│       ├── indexing.ts      # code index commands
+│       ├── deployments.ts   # deployment commands
+│       ├── account.ts       # account commands
+│       ├── feedback.ts      # feedback commands
+│       ├── folders.ts       # workspace folder commands
 │       ├── organizations.ts # org commands
 │       └── plans.ts         # plans + byok commands
 ├── test/
 │   ├── auth/
 │   ├── api/
+│   ├── state/
+│   ├── tui/
 │   └── commands/
 ├── package.json
 ├── tsconfig.json
