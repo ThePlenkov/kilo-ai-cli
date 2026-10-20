@@ -358,8 +358,9 @@ export const securityFindingsListCommand = defineCommand({
       // subset, so advancing on it would skip the findings the filter hid.
       const cursorName = findingsCursorName(input)
       const store = createCursorStore()
-      // The findings API caps a page at 100 rows.
-      const pageLimit = Math.max(input.limit ?? 100, 100)
+      // The page size the first page was fetched with — the walk must use
+      // the same one, or "was the page full?" compares the wrong numbers.
+      const pageLimit = input.limit ?? 100
 
       // Walk every page of the window, so the cursor is only advanced once
       // the whole window has been seen.
@@ -370,7 +371,11 @@ export const securityFindingsListCommand = defineCommand({
           limit: pageLimit,
           offset: (input.offset ?? 0) + pageLimit * (page + 1),
         })
-        if (more.findings.length === 0) break
+        // An empty page means the window ended exactly on a page boundary.
+        if (more.findings.length === 0) {
+          complete = true
+          break
+        }
         findings = findings.concat(more.findings)
         complete = more.findings.length < pageLimit
         if (!complete && page === FINDINGS_MAX_PAGES - 1) {

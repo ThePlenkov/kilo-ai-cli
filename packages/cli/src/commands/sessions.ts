@@ -109,7 +109,7 @@ export const sessionsUnifiedCommand = defineCommand({
     platform: { type: 'string', description: 'Filter by platform (cli, code-review, …)' },
     order: {
       type: 'string',
-      description: 'Order by (created_at|updated_at)',
+      description: 'Order by (created_at|updated_at) — a delta read always uses updated_at',
       default: 'updated_at',
     },
     cursor: { type: 'string', description: 'Pagination cursor from a previous list' },
@@ -135,7 +135,9 @@ export const sessionsUnifiedCommand = defineCommand({
       limit,
       organizationId: orgId,
       createdOnPlatform: args.platform,
-      orderBy: args.order as 'created_at' | 'updated_at' | undefined,
+      // A delta read is ordered by updated_at: the newest item has to be on
+      // the first page, because the watermark is taken from it.
+      orderBy: (isDeltaRead ? 'updated_at' : args.order) as 'created_at' | 'updated_at' | undefined,
       updatedSince: since,
     }
 
@@ -144,15 +146,23 @@ export const sessionsUnifiedCommand = defineCommand({
     let sessions = result.cliSessions
     let nextCursor = result.nextCursor
     if (isDeltaRead) {
-      // Walk every page of the delta window, so the cursor is only advanced
-      // once the whole window has been seen.
-      let complete = !nextCursor
-      for (let page = 0; page < SESSIONS_MAX_PAGES && nextCursor; page++) {
-        const more = await listUnifiedSessions(token, { ...request, cursor: nextCursor })
-        sessions = sessions.concat(more.cliSessions)
-        nextCursor = more.nextCursor
-        if (!nextCursor) break
-        if (page === SESSIONS_MAX_PAGES - 1) complete = false
+      // With a bound the server filters the window, so every page of it has
+      // to be read before the cursor may move. Without a bound there is no
+      // window yet — the first page establishes the watermark, and everything
+      // older than it is not part of any later delta.
+      let complete = true
+      if (since) {
+        let cursor = nextCursor
+        for (let page = 0; cursor; page++) {
+          if (page >= SESSIONS_MAX_PAGES) {
+            complete = false
+            break
+          }
+          const more = await listUnifiedSessions(token, { ...request, cursor })
+          sessions = sessions.concat(more.cliSessions)
+          cursor = more.nextCursor
+        }
+        nextCursor = cursor
       }
       if (!complete) {
         console.log(
