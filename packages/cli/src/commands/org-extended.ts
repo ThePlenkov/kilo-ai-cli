@@ -25,7 +25,8 @@ import { getToken } from './helpers.ts'
  * Otherwise, list organizations and find one matching the name.
  */
 async function resolveOrgId(token: string, idOrName: string): Promise<string> {
-  const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+  const UUID_RE =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
   if (UUID_RE.test(idOrName)) return idOrName
   const orgs = await listOrganizations(token)
   const matches = orgs.filter((o) => o.name === idOrName)

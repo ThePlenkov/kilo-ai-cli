@@ -61,7 +61,9 @@ export const orgSetCommand = defineCommand({
     }
     const nameMatches = orgs.filter((o) => o.name === args.id)
     if (nameMatches.length > 1) {
-      console.error(`Organization name "${args.id}" is ambiguous; use its UUID from \`kilo-ai-cli org list\`.`)
+      console.error(
+        `Organization name "${args.id}" is ambiguous; use its UUID from \`kilo-ai-cli org list\`.`,
+      )
       process.exitCode = 1
       return
     }

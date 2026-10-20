@@ -9,6 +9,7 @@ import {
   listGitHubRepositories,
   listGitLabRepositories,
 } from '../api/cloud-agent.ts'
+import { getCloudAgentSettings, setContextAllocation } from '../api/cloud-agent-settings.ts'
 import { printTable } from './format.ts'
 import { getToken } from './helpers.ts'
 
@@ -67,5 +68,48 @@ export const cloudAgentGitlabReposCommand = defineCommand({
   args: { refresh: { type: 'boolean', description: 'Force refresh', alias: 'f' } },
   async run({ args }) {
     await listRepos(listGitLabRepositories, args.refresh)
+  },
+})
+
+export const cloudAgentSettingsCommand = defineCommand({
+  meta: { name: 'settings', description: 'Show or change the cloud agent settings' },
+  args: {
+    org: { type: 'string', description: 'Organization ID' },
+    allocation: {
+      type: 'string',
+      description: 'Set the sandbox allocation (pass "none" to clear it)',
+    },
+  },
+  async run({ args }) {
+    const { token } = await getToken()
+    if (args.allocation !== undefined) {
+      const allocation = args.allocation === 'none' ? null : args.allocation
+      await setContextAllocation(token, allocation, args.org)
+      console.log(
+        allocation ? `Context allocation set to ${allocation}` : 'Context allocation cleared.',
+      )
+      return
+    }
+    const settings = await getCloudAgentSettings(token, args.org)
+    console.log(`  can manage: ${settings.canManage ? 'yes' : 'no'}`)
+    console.log(`  context allocation: ${settings.contextAllocation ?? '(none)'}`)
+    if (settings.repositories.length === 0) {
+      console.log('  repositories: none')
+      return
+    }
+    printTable(
+      settings.repositories.map((r) => ({
+        repo: r.repositoryFullName,
+        platform: r.repositoryPlatform ?? '-',
+        profile: r.profileName ?? r.profileId ?? '-',
+        allocation: r.allocation ?? '-',
+      })),
+      [
+        { key: 'repo', label: 'Repository', width: 40 },
+        { key: 'platform', label: 'Platform', width: 10 },
+        { key: 'profile', label: 'Profile', width: 24 },
+        { key: 'allocation', label: 'Allocation', width: 20 },
+      ],
+    )
   },
 })

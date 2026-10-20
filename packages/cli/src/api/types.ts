@@ -774,6 +774,269 @@ export interface SecurityAgentCommand {
 }
 
 // ============================================================================
+// tRPC Types — Todos
+// ============================================================================
+
+export interface TodoList {
+  id: string
+  organizationId?: string | null
+  name: string
+  emoji?: string | null
+  gitUrl?: string | null
+  mode?: string | null
+  model?: string | null
+  variant?: string | null
+  position: string
+  archivedAt?: string | null
+  createdAt: string
+  updatedAt: string
+  openCount?: number
+}
+
+export interface TodoItem {
+  id: string
+  listId: string
+  title: string
+  notes?: string | null
+  doneAt?: string | null
+  position?: string
+  createdAt?: string
+  updatedAt?: string
+  sessions?: unknown[]
+}
+
+export interface TodoUpNextItem extends TodoItem {
+  listName?: string
+  listEmoji?: string | null
+}
+
+// ============================================================================
+// tRPC Types — Unified & Active Sessions
+// ============================================================================
+
+export interface UnifiedSession {
+  session_id: string
+  title?: string | null
+  git_url?: string | null
+  cloud_agent_session_id?: string | null
+  created_on_platform?: string
+  organization_id?: string | null
+  created_at: string
+  updated_at: string
+  version?: number
+  last_mode?: string | null
+  last_model?: string | null
+  git_branch?: string | null
+  parent_session_id?: string | null
+  status?: string | null
+  status_updated_at?: string | null
+  source?: string
+}
+
+export interface UnifiedSessionsResult {
+  cliSessions: UnifiedSession[]
+  nextCursor?: string | null
+}
+
+export interface ActiveSession {
+  sessionId?: string
+  session_id?: string
+  name?: string
+  projectName?: string
+  project_name?: string
+  kind?: string
+  version?: string
+  startedAt?: string | null
+  gitBranch?: string | null
+  git_branch?: string | null
+  lastActivityAt?: string | null
+  organizationId?: string | null
+}
+
+export interface SessionDiffFile {
+  file: string
+  patch?: string
+  additions?: number
+  deletions?: number
+  status?: string
+}
+
+export interface SessionDiff {
+  kind: string
+  files?: SessionDiffFile[]
+  value?: unknown
+}
+
+// ============================================================================
+// tRPC Types — Agent Profiles
+// ============================================================================
+
+export interface AgentProfileSummary {
+  id: string
+  name: string
+  description?: string | null
+  isDefault?: boolean
+  createdAt?: string
+  updatedAt?: string
+  varCount?: number
+  commandCount?: number
+  mcpServerCount?: number
+  skillCount?: number
+  agentCount?: number
+  kiloCommandCount?: number
+  instructionCount?: number
+}
+
+export interface AgentProfile extends AgentProfileSummary {
+  variables?: Record<string, string>
+  commands?: { name: string; description?: string | null; content?: string }[]
+  agents?: { id: string; name: string; description?: string | null }[]
+  mcpServers?: { id: string; name: string; command?: string; disabled?: boolean }[]
+  skills?: { id: string; name: string; enabled?: boolean }[]
+  repoBindings?: { repositoryId: number; repoFullName: string }[]
+}
+
+// ============================================================================
+// tRPC Types — Agent Briefing
+// ============================================================================
+
+export interface BriefingReport {
+  id: string
+  title?: string | null
+  summary?: string | null
+  createdAt?: string
+  localDate?: string
+  publishedAt?: string | null
+  readAt?: string | null
+  dismissedAt?: string | null
+  scope?: string
+  organizationId?: string | null
+}
+
+// ============================================================================
+// tRPC Types — Models & Model Preferences
+// ============================================================================
+
+export interface CloudModel {
+  id: string
+  name: string
+  supportsVision?: boolean
+  isPreferred?: boolean
+}
+
+export interface ModelPreferences {
+  favorites: string[]
+  lastSelected?: { model: string; variant?: string } | null
+}
+
+// ============================================================================
+// tRPC Types — Integrations
+// ============================================================================
+
+export interface PlatformIntegrationStatus {
+  platform: string
+  installed: boolean
+  installation?: { accountLogin?: string; [key: string]: unknown } | null
+}
+
+// ============================================================================
+// tRPC Types — Webhook Triggers
+// ============================================================================
+
+export interface WebhookTrigger {
+  id: string
+  triggerId?: string
+  name?: string | null
+  targetType?: string
+  activationMode?: string
+  githubRepo?: string | null
+  promptTemplate?: string
+  enabled?: boolean
+  createdAt?: string
+  updatedAt?: string
+  [key: string]: unknown
+}
+
+// ============================================================================
+// tRPC Types — Code Indexing
+// ============================================================================
+
+export interface CodeIndexSearchResult {
+  id: string
+  filePath: string
+  startLine?: number
+  endLine?: number
+  content?: string
+  score?: number
+}
+
+export interface CodeIndexManifest {
+  organizationId?: string
+  projectId: string
+  gitBranch: string
+  totalFiles: number
+  totalLines?: number
+  totalAILines?: number
+  percentageOfAILines?: number
+  lastUpdated?: string
+}
+
+// ============================================================================
+// tRPC Types — Account
+// ============================================================================
+
+export interface ContextBalance {
+  balance: number
+  isDepleted: boolean
+}
+
+export interface DeviceSession {
+  id: string
+  createdAt?: string
+  created_at?: string
+  lastUsedAt?: string
+  last_seen_at?: string
+  userAgent?: string | null
+  user_agent?: string | null
+  ipAddress?: string | null
+  isCurrent?: boolean
+}
+
+export interface SpendAlertRule {
+  kind: string
+  enabled: boolean
+  threshold?: number | null
+  windowHours?: number | null
+  multiplierBasisPoints?: number | null
+  emailEnabled?: boolean
+  pushEnabled?: boolean
+  firing?: boolean
+}
+
+export interface SpendAlertConfig {
+  scope: string
+  scopeName?: string
+  canManage?: boolean
+  enabled: boolean
+  rules: SpendAlertRule[]
+}
+
+// ============================================================================
+// tRPC Types — Review Memory
+// ============================================================================
+
+export interface ReviewMemoryProposal {
+  id: string
+  status?: string
+  title?: string
+  description?: string
+  repositoryFullName?: string
+  createdAt?: string
+  updatedAt?: string
+  [key: string]: unknown
+}
+
+// ============================================================================
 // Error Types
 // ============================================================================
 
