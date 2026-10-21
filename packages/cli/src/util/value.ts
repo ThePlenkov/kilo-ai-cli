@@ -9,14 +9,20 @@
 export function stringifyValue(value: unknown): string {
   if (value === undefined) return ''
   if (value === null) return 'null'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   if (typeof value === 'object') {
     try {
-      return JSON.stringify(value) ?? String(value)
+      const json = JSON.stringify(value)
+      // A value JSON cannot represent (undefined, a function) falls back to
+      // its tag — `String(value)` would print "[object Object]".
+      return json === undefined ? Object.prototype.toString.call(value) : json
     } catch {
-      // Circular structures cannot be serialized — fall back to the tag.
+      // Circular structures cannot be serialized either — fall back to the tag.
       return Object.prototype.toString.call(value)
     }
   }
+  // Symbols, bigints and functions.
   return String(value)
 }
 
