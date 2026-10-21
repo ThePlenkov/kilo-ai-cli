@@ -10,7 +10,7 @@ import { useQuery, useTermSize } from './hooks.ts'
  * row has one — every table this CLI prints keys on `id` — so the key
  * survives a refresh or a re-sort. Rows without one fall back to the index.
  */
-function rowKey(row: unknown, index: number): string {
+function defaultRowKey(row: unknown, index: number): string {
   const record = row as Record<string, unknown> | undefined
   if (!record) return `row-${index}`
   const id = record.id ?? record.session_id ?? record.name
@@ -58,10 +58,12 @@ export function DataTable<T>({
   rows,
   columns,
   selected,
+  rowKey: keyOf,
 }: {
   rows: T[]
   columns: Column<T>[]
   selected?: number
+  rowKey?: (row: T, index: number) => string
 }) {
   const { columns: termColumns } = useTermSize()
   const avail = Math.max(20, termColumns - PANE_OVERHEAD)
@@ -91,7 +93,7 @@ export function DataTable<T>({
         <Text dimColor>{widths.map((w) => '─'.repeat(w)).join('  ')}</Text>
       </Box>
       {rows.map((row, i) => (
-        <Box key={rowKey(row, i)}>
+        <Box key={keyOf ? keyOf(row, i) : defaultRowKey(row, i)}>
           <Text color={i === selected ? 'cyan' : undefined}>{i === selected ? '› ' : '  '}</Text>
           {columns.map((c, j) => {
             const raw = clean(c.value(row))
@@ -118,14 +120,16 @@ export function DataTable<T>({
 const RESERVED_LINES = 11
 
 export interface QueryListScreenProps<T> {
-  focused: boolean
-  fetch: () => Promise<T[]>
-  columns: Column<T>[]
-  onSelect?: (row: T) => void
-  onBack: () => void
-  emptyText?: string
+  readonly focused: boolean
+  readonly fetch: () => Promise<T[]>
+  readonly columns: Column<T>[]
+  /** The identity of a row for React's reconciliation. Defaults to the `id` field. */
+  readonly rowKey?: (row: T, index: number) => string
+  readonly onSelect?: (row: T) => void
+  readonly onBack: () => void
+  readonly emptyText?: string
   /** Extra hint appended to the help line, e.g. "f=filter". */
-  help?: string
+  readonly help?: string
   /** Custom key handler; return true if the key was consumed. */
   onKey?: (
     input: string,
@@ -137,7 +141,8 @@ export interface QueryListScreenProps<T> {
 }
 
 export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
-  const { focused, fetch, columns, onSelect, onBack, emptyText, help, onKey, banner } = props
+  const { focused, fetch, columns, onSelect, onBack, emptyText, help, onKey, banner, rowKey } =
+    props
   const { rows: termRows } = useTermSize()
   // Reserve lines for the banner (2) and both scroll markers (2) so they
   // never push the help line past the clipped content pane.
@@ -203,7 +208,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
     <Box flexDirection="column">
       {banner ? <Box marginBottom={1}>{banner}</Box> : null}
       {offset > 0 ? <Text dimColor> ↑ {offset} more</Text> : null}
-      <DataTable rows={visible} columns={columns} selected={selIdx - offset} />
+      <DataTable rows={visible} columns={columns} selected={selIdx - offset} rowKey={rowKey} />
       {offset + maxVisible < rows.length ? (
         <Text dimColor> ↓ {rows.length - offset - maxVisible} more</Text>
       ) : null}

@@ -7,7 +7,8 @@
  * as text. `String(value)` would print "[object Object]" for an object.
  */
 export function stringifyValue(value: unknown): string {
-  if (value === null || value === undefined) return ''
+  if (value === undefined) return ''
+  if (value === null) return 'null'
   if (typeof value === 'object') {
     try {
       return JSON.stringify(value) ?? String(value)
