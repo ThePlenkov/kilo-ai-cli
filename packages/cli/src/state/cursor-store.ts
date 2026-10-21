@@ -159,10 +159,10 @@ export function createCursorStore(configDir?: string): CursorStore {
   async function withLock<T>(fn: () => Promise<T>): Promise<T> {
     await fs.mkdir(dir, { recursive: true })
     const deadline = Date.now() + LOCK_TIMEOUT_MS
-    /* oxlint-disable no-await-in-loop -- the lock must be probed one attempt at a time */
     for (;;) {
       let handle: Awaited<ReturnType<typeof fs.open>> | undefined
       try {
+        // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
         handle = await fs.open(lockPath, 'wx')
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
@@ -171,18 +171,24 @@ export function createCursorStore(configDir?: string): CursorStore {
 
       if (handle) {
         // Record the holder so a crashed writer's lock can be reclaimed.
+        // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
         await handle.writeFile(String(process.pid)).catch(() => undefined)
         try {
+          // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
           return await fn()
         } finally {
+          // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
           await handle.close().catch(() => undefined)
+          // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
           await fs.rm(lockPath, { force: true }).catch(() => undefined)
         }
       }
 
       // The lock is held by someone else. A lock whose holder is gone is
       // stale and can be reclaimed right away.
+      // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
       if (await lockHolderIsGone()) {
+        // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
         await fs.rm(lockPath, { force: true }).catch(() => undefined)
         continue
       }
@@ -190,9 +196,9 @@ export function createCursorStore(configDir?: string): CursorStore {
       if (Date.now() >= deadline) {
         throw new Error('Timed out waiting for the cursor lock — another process is writing it.')
       }
+      // eslint-disable-next-line no-await-in-loop -- the lock is probed one attempt at a time
       await sleep(LOCK_RETRY_MS)
     }
-    /* oxlint-enable no-await-in-loop */
   }
 
   return {
