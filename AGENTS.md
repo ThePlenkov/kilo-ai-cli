@@ -80,3 +80,10 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
   `vX.Y.Z` tag, GitHub Release with auto-generated changelog. Automation never
   pushes to `main`; pushing a semver `v*` tag manually is the escape hatch and
   must match `packages/cli/package.json`.
+  The release job approves the CI run of the bump PR it created — a
+  bot-authored PR's workflow run waits for a maintainer, which would block
+  the required `check` on `main` — and verifies the published version against
+  the registry afterwards. Both the guard and the check probe the
+  **per-version manifest** (`registry.npmjs.org/<pkg>/<version>`), not the
+  packument: the packument is served with `max-age=300` and stays stale for
+  minutes after a publish.
