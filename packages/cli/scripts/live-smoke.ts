@@ -71,6 +71,14 @@ interface Ctx {
 }
 
 const INCLUDE_MANUAL = process.argv.includes('--include-manual')
+
+/**
+ * Entitlement errors — the account is not in a state that allows the call
+ * (expired trial, no subscription, not eligible). They say nothing about the
+ * API contract, so they are a skip, never a failure. Without this an expired
+ * trial turns the whole weekly run red and hides the real signal.
+ */
+const ENTITLEMENT = /trial has expired|requires an active subscription|not eligible|does not have (access|permission)/i
 const outIdx = process.argv.indexOf('--out')
 const OUT = outIdx > 0 ? process.argv[outIdx + 1]! : OUT_DEFAULT
 
@@ -641,18 +649,27 @@ async function main() {
       .find((l) => /ERROR|Error:|error/i.test(l) && l.length > 3)
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
-    const status: Status = postError ? 'FAIL' : ok ? 'PASS' : expected ? 'SKIP' : 'FAIL'
+    const entitlement = !ok && ENTITLEMENT.test(output)
+    // A restore failure only matters when the command actually applied a
+    // change. When the command itself failed, the restore fails the same way
+    // and nothing was mutated.
+    const status: Status = postError && ok ? 'FAIL' : ok ? 'PASS' : expected || entitlement ? 'SKIP' : 'FAIL'
     rows.push({
       cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
       cls: c.cls,
       status,
-      detail: postError
-        ? `restore failed: ${truncate(postError, 160)}`
-        : ok
-          ? (c.note ?? '')
-          : expected
-            ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
-            : truncate(errLine ?? `exit ${code}`, 160),
+      detail:
+        postError && ok
+          ? `restore failed: ${truncate(postError, 160)}`
+          : ok
+            ? (c.note ?? '')
+            : expected
+              ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
+              : entitlement
+                ? `entitlement: ${truncate(errLine ?? `exit ${code}`, 160)}`
+                : postError
+                  ? `${truncate(errLine ?? `exit ${code}`, 120)} (restore also failed: ${truncate(postError, 80)})`
+                  : truncate(errLine ?? `exit ${code}`, 160),
     })
     console.log(
       `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
