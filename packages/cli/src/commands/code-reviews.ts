@@ -153,9 +153,11 @@ async function fetchReviewWindow(
   let emptyPages = 0
   for (let page = 0; page < REVIEWS_MAX_PAGES; page++) {
     const request = { ...options, limit: options.limit ?? REVIEWS_PAGE_LIMIT, offset }
-    const result = orgId
-      ? await listOrgCodeReviewsPage(token, orgId, request)
-      : await listCodeReviewsPage(token, request)
+    const fetchPage = orgId
+      ? () => listOrgCodeReviewsPage(token, orgId, request)
+      : () => listCodeReviewsPage(token, request)
+    // oxlint-disable-next-line no-await-in-loop -- offset pagination is sequential
+    const result = await fetchPage()
     reviews.push(...result.reviews)
 
     // A bare-array response carries no `hasMore`; a full page then means

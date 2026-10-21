@@ -47,7 +47,7 @@ describe('cursor-store', () => {
     await store.set('sessions', 'b')
 
     const cursors = await store.list()
-    expect(Object.keys(cursors).sort()).toEqual(['reviews', 'sessions'])
+    expect(Object.keys(cursors).toSorted()).toEqual(['reviews', 'sessions'])
     expect(cursors.reviews?.value).toBe('a')
   })
 
