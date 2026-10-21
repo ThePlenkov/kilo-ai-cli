@@ -81,7 +81,7 @@ const pack = new ShellStep(ci, "pack", {
 // The CLI has to work when it is started from source.
 const smoke = new ShellStep(ci, "smoke", {
   command:
-    "npx tsx packages/cli/src/index.ts --help > /dev/null && npx tsx packages/cli/src/index.ts cursor list > /dev/null",
+    "./node_modules/.bin/tsx packages/cli/src/index.ts --help > /dev/null && ./node_modules/.bin/tsx packages/cli/src/index.ts cursor list > /dev/null",
   dependsOn: [build.node.id],
   runtime: { shell: "sh" },
 });
@@ -123,7 +123,7 @@ const mainGreen = new ShellStep(health, "main-green", {
 // Zero unresolved review threads across the last 20 merged PRs.
 const reviewDebt = new ShellStep(health, "review-debt", {
   command:
-    "count=$(gh api graphql -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){pullRequests(first:20,states:MERGED,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved}}}}}}' -F owner='{owner}' -F name='{repo}' --jq '([.data.repository.pullRequests.nodes[].reviewThreads.nodes[]|select(.isResolved==false)]|length) + ([.data.repository.pullRequests.nodes[].reviewThreads.pageInfo.hasNextPage|select(.)]|length)') || exit 1; [ \"$count\" = \"0\" ] || { echo \"unresolved threads or truncated thread pages: $count\"; exit 1; }",
+    "count=$(gh api graphql -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){pullRequests(first:50,states:MERGED,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{mergedAt reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved}}}}}}' -F owner='{owner}' -F name='{repo}' --jq '([.data.repository.pullRequests.nodes | sort_by(.mergedAt) | reverse | .[0:20][] | .reviewThreads.nodes[] | select(.isResolved==false)] | length) + ([.data.repository.pullRequests.nodes | sort_by(.mergedAt) | reverse | .[0:20][] | .reviewThreads.pageInfo.hasNextPage | select(.)] | length)') || exit 1; [ \"$count\" = \"0\" ] || { echo \"unresolved threads or truncated thread pages: $count\"; exit 1; }",
   runtime: { shell: "sh" },
 });
 
