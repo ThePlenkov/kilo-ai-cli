@@ -107,7 +107,7 @@ function DashboardSection({ title, value }: { title: string; value: unknown }) {
           ))}
         </Box>
         {rows.slice(0, 15).map((row, i) => (
-          <Box key={String(row.id ?? row.name ?? i)}>
+          <Box key={stringifyValue(row.id ?? row.name ?? i)}>
             {cols.map((c) => (
               <Box key={c} width={18}>
                 <Text>{clean(stringifyValue(row[c] ?? '-')).slice(0, 17)}</Text>

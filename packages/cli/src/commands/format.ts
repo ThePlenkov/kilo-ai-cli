@@ -1,6 +1,6 @@
-import { stringifyValue, yesNo } from '../util/value.ts'
+import { stringifyValue } from '../util/value.ts'
 
-export { stringifyValue, yesNo }
+export { stringifyValue, yesNo } from '../util/value.ts'
 
 /**
  * Clean terminal output formatting — no ugly console.table borders.

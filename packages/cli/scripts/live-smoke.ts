@@ -658,7 +658,7 @@ async function main() {
       .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
     // The last error line is the command's own failure (stderr comes last);
     // the first one is the most likely explanation for the reader.
-    const errLine = errLines[errLines.length - 1]
+    const errLine = errLines.at(-1)
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
     // The command's own error is the last error line: the runner appends

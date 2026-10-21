@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import { toEpochMs } from '../state/timestamp.ts'
 import { trpcMutate, trpcQuery } from './client.ts'
 import type {
   SecurityAgentAnalysis,
@@ -536,8 +537,15 @@ export function matchesDateFilters(
   if (!filters.createdAfter && !filters.createdBefore) return true
   const created = finding.createdAt ?? finding.created_at
   if (!created) return false
-  if (filters.createdAfter && created < filters.createdAfter) return false
-  if (filters.createdBefore && created > filters.createdBefore) return false
+  // The API returns Postgres-style timestamps for some rows and ISO for
+  // others; comparing them as strings would order them wrongly (the space
+  // separator sorts before the `T`). Compare them as instants.
+  const createdMs = toEpochMs(created)
+  if (createdMs === undefined) return false
+  const afterMs = filters.createdAfter ? toEpochMs(filters.createdAfter) : undefined
+  if (afterMs !== undefined && createdMs < afterMs) return false
+  const beforeMs = filters.createdBefore ? toEpochMs(filters.createdBefore) : undefined
+  if (beforeMs !== undefined && createdMs > beforeMs) return false
   return true
 }
 

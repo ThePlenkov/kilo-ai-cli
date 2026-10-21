@@ -14,7 +14,7 @@ function defaultRowKey(row: unknown, index: number): string {
   const record = row as Record<string, unknown> | undefined
   if (!record) return `row-${index}`
   const id = record.id ?? record.session_id ?? record.name
-  if (id !== undefined && id !== null) return String(id)
+  if (id !== undefined && id !== null) return stringifyValue(id)
   return `row-${index}`
 }
 

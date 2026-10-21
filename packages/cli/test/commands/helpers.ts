@@ -1,6 +1,4 @@
-import { memoryStore } from '../helpers/memory-store.ts'
-
-export { memoryStore }
+export { memoryStore } from '../helpers/memory-store.ts'
 
 /** Invoke a citty command's `run` with the given args. */
 export async function runCommand(
