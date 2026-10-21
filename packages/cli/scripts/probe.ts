@@ -15,7 +15,7 @@
 
 import { KILO_API_BASE } from '../src/api/constants.ts'
 import { buildAuthHeaders } from '../src/api/headers.ts'
-import { createTokenStore } from '../src/auth/token-store.ts'
+import { createTokenStore, tokenOf } from '../src/auth/token-store.ts'
 
 const [procedure, inputJson] = process.argv.slice(2)
 if (!procedure) {
@@ -28,7 +28,7 @@ if (!auth) {
   console.error('Not authenticated.')
   process.exit(1)
 }
-const token = auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.key : auth.token
+const token = tokenOf(auth)
 
 const url = new URL(`${KILO_API_BASE}/api/trpc/${procedure}`)
 if (inputJson) url.searchParams.set('input', inputJson)

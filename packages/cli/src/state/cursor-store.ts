@@ -11,6 +11,8 @@ import * as fs from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { toEpochMs } from './timestamp.ts'
+
 /** A single stored cursor. `value` is opaque to the store (ISO time, id, …). */
 export interface CursorEntry {
   /** Opaque cursor value — an ISO timestamp, a pagination cursor, an id. */
@@ -29,6 +31,12 @@ export interface CursorFile {
 export interface CursorStore {
   get(name: string): Promise<CursorEntry | undefined>
   set(name: string, value: string): Promise<CursorEntry>
+  /**
+   * Set the cursor only when `value` is newer than the stored one. The
+   * comparison and the write happen under the store lock, so two concurrent
+   * reads cannot roll the watermark back.
+   */
+  setIfNewer(name: string, value: string): Promise<boolean>
   remove(name: string): Promise<void>
   list(): Promise<Record<string, CursorEntry>>
   clear(): Promise<void>
@@ -200,6 +208,26 @@ export function createCursorStore(configDir?: string): CursorStore {
         file.cursors[name] = entry
         await write(file)
         return entry
+      })
+    },
+
+    async setIfNewer(name: string, value: string): Promise<boolean> {
+      return withLock(async () => {
+        const file = await read()
+        const current = file.cursors[name]
+        if (current) {
+          // The same parser the delta reads use — a bare Date.parse would
+          // reject the Postgres-style timestamps the API returns, and the
+          // comparison would be skipped entirely.
+          const currentMs = toEpochMs(current.value)
+          const nextMs = toEpochMs(value)
+          if (currentMs !== undefined && nextMs !== undefined && nextMs <= currentMs) {
+            return false
+          }
+        }
+        file.cursors[name] = { value, updatedAt: new Date().toISOString() }
+        await write(file)
+        return true
       })
     },
 

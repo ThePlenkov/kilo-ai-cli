@@ -13,6 +13,13 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 /** Usage → Coding Plans: subscriptions list. */
+/** Remaining quota → colour. */
+function quotaColor(remainingPercent: number): string {
+  if (remainingPercent < 20) return 'red'
+  if (remainingPercent < 50) return 'yellow'
+  return 'green'
+}
+
 export function PlansScreen({ ctx, focused }: ScreenProps) {
   const { columns: termColumns } = useTermSize()
   const avail = Math.max(40, termColumns - 34)
@@ -111,8 +118,7 @@ export function PlanUsageScreen({ ctx, focused }: ScreenProps) {
                 const filled = Math.round((pct / 100) * 20)
                 return `${'█'.repeat(filled)}${'░'.repeat(20 - filled)} ${pct.toFixed(0)}%`
               },
-              color: (w) =>
-                w.remainingPercent < 20 ? 'red' : w.remainingPercent < 50 ? 'yellow' : 'green',
+              color: (w) => quotaColor(w.remainingPercent),
             },
             { label: 'Resets', width: 24, value: (w) => w.resetsAt },
           ]}

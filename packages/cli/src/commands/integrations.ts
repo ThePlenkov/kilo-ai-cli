@@ -16,7 +16,7 @@ import {
   listGitLabRepositories,
   listIntegrationStatus,
 } from '../api/integrations.ts'
-import { printTable } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const integrationsStatusCommand = defineCommand({
@@ -154,7 +154,7 @@ export const integrationsDetailCommand = defineCommand({
         throw new Error(`Unknown platform: ${args.platform}`)
     }
     for (const [key, value] of Object.entries(installation)) {
-      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
     }
   },
 })

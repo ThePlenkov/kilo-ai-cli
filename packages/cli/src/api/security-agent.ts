@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import { toEpochMs } from '../state/timestamp.ts'
 import { trpcMutate, trpcQuery } from './client.ts'
 import type {
   SecurityAgentAnalysis,
@@ -515,6 +516,40 @@ export interface BulkDismissResult {
 }
 
 /**
+ * The ids of the findings that pass the date filters. A missing timestamp is
+ * excluded when a date filter is set — the safe default for a destructive
+ * operation rather than silently matching.
+ */
+function matchingFindingIds(findings: SecurityFinding[], filters: BulkFindingFilters): string[] {
+  return findings.filter((f) => matchesDateFilters(f, filters)).map((f) => f.id)
+}
+
+/**
+ * Whether a finding passes the date filters. A missing timestamp is excluded
+ * when a date filter is set — the safe default for a destructive operation
+ * rather than silently matching. The dry run uses the same rule, so the
+ * preview never shows a finding that would not be queued.
+ */
+export function matchesDateFilters(
+  finding: Pick<SecurityFinding, 'createdAt' | 'created_at'>,
+  filters: { createdAfter?: string; createdBefore?: string },
+): boolean {
+  if (!filters.createdAfter && !filters.createdBefore) return true
+  const created = finding.createdAt ?? finding.created_at
+  if (!created) return false
+  // The API returns Postgres-style timestamps for some rows and ISO for
+  // others; comparing them as strings would order them wrongly (the space
+  // separator sorts before the `T`). Compare them as instants.
+  const createdMs = toEpochMs(created)
+  if (createdMs === undefined) return false
+  const afterMs = filters.createdAfter ? toEpochMs(filters.createdAfter) : undefined
+  if (afterMs !== undefined && createdMs < afterMs) return false
+  const beforeMs = filters.createdBefore ? toEpochMs(filters.createdBefore) : undefined
+  if (beforeMs !== undefined && createdMs > beforeMs) return false
+  return true
+}
+
+/**
  * Dismiss findings matching the given filters.
  * Collects matching IDs first (read-only pagination — dismissing shifts
  * result pages), then dismisses each individually.
@@ -533,10 +568,11 @@ export async function dismissFindingsBulk(
   const errors: string[] = []
   const ids: string[] = []
   let totalMatched = 0
-  let offset = 0
   const limit = 100
 
-  for (;;) {
+  // Collect the matching ids first, then dismiss them one by one.
+  for (let offset = 0; ; offset += limit) {
+    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
     const result = await listFindings(token, {
       repoFullName: filters.repoFullName,
       severity: filters.severity,
@@ -547,21 +583,8 @@ export async function dismissFindingsBulk(
       offset,
     })
     totalMatched = result.totalCount ?? result.total_count ?? totalMatched
-
-    for (const f of result.findings) {
-      if (filters.createdAfter || filters.createdBefore) {
-        const created = f.createdAt ?? f.created_at
-        // Missing timestamp: exclude when date filters are set (safe default
-        // for a destructive op rather than silently matching)
-        if (!created) continue
-        if (filters.createdAfter && created < filters.createdAfter) continue
-        if (filters.createdBefore && created > filters.createdBefore) continue
-      }
-      ids.push(f.id)
-    }
-
+    ids.push(...matchingFindingIds(result.findings, filters))
     if (result.findings.length < limit) break
-    offset += limit
   }
 
   let queued = 0

@@ -1,7 +1,6 @@
 import { Box, Text, useInput } from 'ink'
 import SelectInput from 'ink-select-input'
 import React from 'react'
-
 import {
   getCreditTransactions,
   getOrganizationInvoices,
@@ -13,6 +12,7 @@ import {
   listOrganizations,
 } from '../../api/organizations.ts'
 import type { Organization } from '../../api/types.ts'
+import { yesNo } from '../../util/value.ts'
 import { QueryListScreen, QueryRecordScreen } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
@@ -189,7 +189,7 @@ export function OrgModelsScreen({ ctx, focused }: ScreenProps) {
         {
           label: 'Free',
           width: 6,
-          value: (m: { isFree?: boolean }) => (m.isFree == null ? '-' : m.isFree ? 'yes' : 'no'),
+          value: (m: { isFree?: boolean }) => yesNo(m.isFree),
           color: (m: { isFree?: boolean }) => (m.isFree ? 'green' : 'gray'),
         },
         {

@@ -19,7 +19,7 @@ import {
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
 import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
-import { printTable } from './format.ts'
+import { printTable, sanitize, sanitizeLines, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 /** Cursor name used by `sessions unified --new`. */
@@ -159,16 +159,16 @@ export const sessionsUnifiedCommand = defineCommand({
       let complete = true
       if (since) {
         let cursor = nextCursor
-        for (let page = 0; cursor; page++) {
-          if (page >= SESSIONS_MAX_PAGES) {
-            complete = false
-            break
-          }
-          // oxlint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+        for (let page = 0; page < SESSIONS_MAX_PAGES && cursor; page++) {
+          // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
           const more = await listUnifiedSessions(token, { ...request, cursor })
           sessions = sessions.concat(more.cliSessions)
           cursor = more.nextCursor
         }
+        // A cursor left over means the page budget ran out before the window
+        // was read completely. The API reports the end of the pagination as a
+        // missing cursor — `undefined` or `null`, not a fixed null.
+        complete = !cursor
         nextCursor = cursor
       }
       if (!complete) {
@@ -323,7 +323,7 @@ export const sessionsDiffCommand = defineCommand({
     const { token } = await getToken()
     const diff = await getSessionDiff(token, args.id)
     if (diff.kind === 'value') {
-      console.log(String(diff.value ?? ''))
+      console.log(sanitizeLines(stringifyValue(diff.value ?? '')))
       return
     }
     const files = diff.files ?? []
@@ -392,9 +392,7 @@ export const sessionsWorktreesCommand = defineCommand({
       console.log(`\n${id}`)
       const record = detail as Record<string, unknown>
       for (const [key, value] of Object.entries(record)) {
-        console.log(
-          `  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`,
-        )
+        console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
       }
     }
   },

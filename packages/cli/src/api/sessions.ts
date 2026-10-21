@@ -40,6 +40,7 @@ const UnifiedSessionSchema: z.ZodType<UnifiedSession> = z
 const UnifiedSessionsSchema: z.ZodType<UnifiedSessionsResult> = z
   .object({
     cliSessions: z.array(UnifiedSessionSchema),
+    // The API omits the cursor on the last page — it is not always null.
     nextCursor: z.string().nullish(),
   })
   .passthrough() as z.ZodType<UnifiedSessionsResult>

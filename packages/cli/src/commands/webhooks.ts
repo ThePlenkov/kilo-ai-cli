@@ -13,8 +13,8 @@ import {
   listWebhookTriggers,
   updateWebhookTrigger,
 } from '../api/webhooks.ts'
-import { printTable } from './format.ts'
-import { getToken } from './helpers.ts'
+import { printTable, sanitizeLines, stringifyValue } from './format.ts'
+import { getToken, triState } from './helpers.ts'
 
 export const webhooksListCommand = defineCommand({
   meta: { name: 'list', description: 'List webhook triggers' },
@@ -89,7 +89,7 @@ export const webhooksGetCommand = defineCommand({
     for (const key of WEBHOOK_SAFE_FIELDS) {
       const value = trigger[key]
       if (value === undefined) continue
-      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      console.log(`  ${key}: ${sanitizeLines(stringifyValue(value))}`)
     }
   },
 })
@@ -153,7 +153,7 @@ export const webhooksUpdateCommand = defineCommand({
       promptTemplate: args.prompt,
       model: args.model,
       organizationId: args.org,
-      enabled: args.enable ? true : args.disable ? false : undefined,
+      enabled: triState(args.enable, args.disable),
     })
     console.log(`Updated webhook trigger ${args.id}`)
   },

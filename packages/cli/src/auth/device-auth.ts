@@ -74,7 +74,9 @@ export async function authenticateWithDeviceAuth(baseUrl?: string): Promise<Devi
 
   let poll: DeviceAuthPollResponse = { status: 'pending' }
   while (poll.status === 'pending') {
+    // eslint-disable-next-line no-await-in-loop -- the device flow is polled until it leaves the pending state
     await sleep(POLL_INTERVAL_MS)
+    // eslint-disable-next-line no-await-in-loop -- the device flow is polled until it leaves the pending state
     poll = await pollDeviceAuth(initiation.code, baseUrl)
   }
 

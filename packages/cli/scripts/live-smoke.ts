@@ -126,6 +126,7 @@ async function allFindings(ctx: Ctx) {
   const page = 100
   const out: Awaited<ReturnType<typeof listFindings>>['findings'] = []
   for (let offset = 0; ; offset += page) {
+    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
     const r = await listFindings(ctx.token, { limit: page, offset })
     out.push(...r.findings)
     if (r.findings.length < page) return out
@@ -160,6 +161,7 @@ async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
     const cap = f.remediationCapability ?? f.remediation_capability
     const id = cap?.cancelAttemptId
     if (cap?.canCancel && id && id !== attemptId && !preExistingAttempts.has(id)) {
+      // eslint-disable-next-line no-await-in-loop -- the attempts are cancelled one by one
       await cancelRemediation(ctx.token, id)
     }
   }
@@ -608,6 +610,7 @@ async function main() {
     let extra: string[] = []
     if (c.args) {
       try {
+        // eslint-disable-next-line no-await-in-loop -- the commands run one after another on purpose
         const resolved = await c.args(ctx)
         if (!resolved) {
           rows.push({
@@ -641,6 +644,7 @@ async function main() {
     } finally {
       if (c.post) {
         try {
+          // eslint-disable-next-line no-await-in-loop -- the restore hook must run before the next command
           await c.post(ctx, output)
         } catch (e) {
           // Restore failure leaves real state mutated — surface it as FAIL.
@@ -648,15 +652,19 @@ async function main() {
         }
       }
     }
-    const errLine = output
+    const errLines = output
       .split('\n')
       .map((l) => l.trim())
-      .find((l) => /ERROR|Error:|error/i.test(l) && l.length > 3)
+      .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
+    // The last error line is the command's own failure (stderr comes last);
+    // the first one is the most likely explanation for the reader.
+    const errLine = errLines.at(-1)
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
-    // Only the error line decides: a command that fails for another reason
-    // and merely mentions an entitlement word somewhere in its output is
-    // still a failure.
+    // The command's own error is the last error line: the runner appends
+    // stderr after stdout, and the CLI writes its failure there. A remote
+    // string that merely mentions an entitlement word earlier in the output
+    // must not turn a real failure into a skip.
     const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
     // A restore failure matters when the command applied a change, or when it
     // failed for a different reason than the restore — that means the state

@@ -109,6 +109,38 @@ describe('cursor-store', () => {
     expect(fs.existsSync(`${CURSORS_PATH}.lock`)).toBe(false)
   })
 
+  it('setIfNewer moves the cursor forward', async () => {
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', '2026-10-20T10:00:00.000Z')
+
+    expect(await store.setIfNewer('reviews', '2026-10-20T11:00:00.000Z')).toBe(true)
+    expect((await store.get('reviews'))?.value).toBe('2026-10-20T11:00:00.000Z')
+  })
+
+  it('setIfNewer refuses to move the cursor backwards', async () => {
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', '2026-10-20T10:00:00.000Z')
+
+    expect(await store.setIfNewer('reviews', '2026-10-20T09:00:00.000Z')).toBe(false)
+    expect((await store.get('reviews'))?.value).toBe('2026-10-20T10:00:00.000Z')
+  })
+
+  it('setIfNewer compares Postgres-style timestamps too', async () => {
+    // The API returns those; a bare Date.parse would reject them and the
+    // comparison would be skipped, so the cursor would move backwards.
+    const store = createCursorStore(CONFIG_DIR)
+    await store.set('reviews', '2026-10-20 12:00:00.000000+00')
+
+    expect(await store.setIfNewer('reviews', '2026-10-20 11:00:00.000000+00')).toBe(false)
+    expect((await store.get('reviews'))?.value).toBe('2026-10-20 12:00:00.000000+00')
+  })
+
+  it('setIfNewer writes when there is no cursor yet', async () => {
+    const store = createCursorStore(CONFIG_DIR)
+    expect(await store.setIfNewer('reviews', '2026-10-20T10:00:00.000Z')).toBe(true)
+    expect((await store.get('reviews'))?.value).toBe('2026-10-20T10:00:00.000Z')
+  })
+
   it('leaves no lock file behind', async () => {
     const store = createCursorStore(CONFIG_DIR)
     await store.set('reviews', 'a')

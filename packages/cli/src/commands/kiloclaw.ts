@@ -18,7 +18,7 @@ import {
   removeMyPin,
   startKiloCliRun,
 } from '../api/kiloclaw.ts'
-import { printTable, sanitize, sanitizeLines } from './format.ts'
+import { printTable, sanitize, sanitizeLines, yesNo } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const kiloclawInstancesCommand = defineCommand({
@@ -54,16 +54,16 @@ export const kiloclawInstancesCommand = defineCommand({
 })
 
 /** Render an optional boolean flag; absent fields stay "unknown", not "no". */
-const flag = (v: boolean | undefined) => (v == null ? 'unknown' : v ? 'yes' : 'no')
+const flag = (v: boolean | undefined) => yesNo(v, 'unknown')
 
 export const kiloclawBillingCommand = defineCommand({
   meta: { name: 'billing', description: 'Show KiloClaw billing status' },
   async run() {
     const { token } = await getToken()
     const status = await getBillingStatus(token)
-    console.log(
-      `Access: ${status.hasAccess ? 'yes' : 'no'}${status.accessReason ? ` (${sanitize(status.accessReason)})` : ''}`,
-    )
+    const access = status.hasAccess ? 'yes' : 'no'
+    const reason = status.accessReason ? ` (${sanitize(status.accessReason)})` : ''
+    console.log(`Access: ${access}${reason}`)
     if (status.creditBalanceMicrodollars != null) {
       console.log(`Credit balance: $${(status.creditBalanceMicrodollars / 1e6).toFixed(2)}`)
     }
@@ -180,9 +180,8 @@ export const kiloclawChangelogCommand = defineCommand({
     const { token } = await getToken()
     const entries = await getChangelog(token)
     for (const entry of entries) {
-      console.log(
-        `\n## ${sanitize(entry.date)} [${sanitize(entry.category)}]${entry.deployHint ? ` (${sanitize(entry.deployHint)})` : ''}`,
-      )
+      const hint = entry.deployHint ? ` (${sanitize(entry.deployHint)})` : ''
+      console.log(`\n## ${sanitize(entry.date)} [${sanitize(entry.category)}]${hint}`)
       console.log(`  ${sanitizeLines(entry.description)}`)
     }
   },

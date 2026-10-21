@@ -93,7 +93,7 @@ export async function setNotificationPreferences(
 /** user.getAutocompleteMetrics — accept-rate stats for the account. */
 export async function getAutocompleteMetrics(
   token: string,
-  viewType: 'personal' | 'all' | string = 'personal',
+  viewType: 'personal' | 'all' = 'personal',
   period: string = '30d',
 ): Promise<Record<string, unknown>> {
   return trpcQuery('user.getAutocompleteMetrics', token, z.record(z.string(), z.unknown()), {

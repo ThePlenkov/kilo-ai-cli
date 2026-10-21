@@ -2,8 +2,21 @@
 
 import { Box, Text, useInput } from 'ink'
 import React, { useState } from 'react'
-
+import { stringifyValue } from '../util/value.ts'
 import { useQuery, useTermSize } from './hooks.ts'
+
+/**
+ * A stable React key for a table row. The identifier field is used when the
+ * row has one — every table this CLI prints keys on `id` — so the key
+ * survives a refresh or a re-sort. Rows without one fall back to the index.
+ */
+function defaultRowKey(row: unknown, index: number): string {
+  const record = row as Record<string, unknown> | undefined
+  if (!record) return `row-${index}`
+  const id = record.id ?? record.session_id ?? record.name
+  if (id !== undefined && id !== null) return stringifyValue(id)
+  return `row-${index}`
+}
 
 export function truncate(s: string, width: number): string {
   if (width <= 0) return ''
@@ -45,10 +58,12 @@ export function DataTable<T>({
   rows,
   columns,
   selected,
+  rowKey: keyOf,
 }: {
   rows: T[]
   columns: Column<T>[]
   selected?: number
+  rowKey?: (row: T, index: number) => string
 }) {
   const { columns: termColumns } = useTermSize()
   const avail = Math.max(20, termColumns - PANE_OVERHEAD)
@@ -78,7 +93,7 @@ export function DataTable<T>({
         <Text dimColor>{widths.map((w) => '─'.repeat(w)).join('  ')}</Text>
       </Box>
       {rows.map((row, i) => (
-        <Box key={i}>
+        <Box key={keyOf ? keyOf(row, i) : defaultRowKey(row, i)}>
           <Text color={i === selected ? 'cyan' : undefined}>{i === selected ? '› ' : '  '}</Text>
           {columns.map((c, j) => {
             const raw = clean(c.value(row))
@@ -105,14 +120,16 @@ export function DataTable<T>({
 const RESERVED_LINES = 11
 
 export interface QueryListScreenProps<T> {
-  focused: boolean
-  fetch: () => Promise<T[]>
-  columns: Column<T>[]
-  onSelect?: (row: T) => void
-  onBack: () => void
-  emptyText?: string
+  readonly focused: boolean
+  readonly fetch: () => Promise<T[]>
+  readonly columns: Column<T>[]
+  /** The identity of a row for React's reconciliation. Defaults to the `id` field. */
+  readonly rowKey?: (row: T, index: number) => string
+  readonly onSelect?: (row: T) => void
+  readonly onBack: () => void
+  readonly emptyText?: string
   /** Extra hint appended to the help line, e.g. "f=filter". */
-  help?: string
+  readonly help?: string
   /** Custom key handler; return true if the key was consumed. */
   onKey?: (
     input: string,
@@ -120,11 +137,12 @@ export interface QueryListScreenProps<T> {
     selected: T | undefined,
   ) => boolean
   /** Optional summary line rendered above the table. */
-  banner?: (data: T[]) => React.ReactNode
+  banner?: React.ReactNode
 }
 
 export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
-  const { focused, fetch, columns, onSelect, onBack, emptyText, help, onKey, banner } = props
+  const { focused, fetch, columns, onSelect, onBack, emptyText, help, onKey, banner, rowKey } =
+    props
   const { rows: termRows } = useTermSize()
   // Reserve lines for the banner (2) and both scroll markers (2) so they
   // never push the help line past the clipped content pane.
@@ -178,7 +196,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   if (rows.length === 0) {
     return (
       <Box flexDirection="column">
-        {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
+        {banner ? <Box marginBottom={1}>{banner}</Box> : null}
         <Text>{emptyText ?? 'Nothing found.'}</Text>
         <Text dimColor>r=refresh Esc=back</Text>
       </Box>
@@ -188,9 +206,9 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   const visible = rows.slice(offset, offset + maxVisible)
   return (
     <Box flexDirection="column">
-      {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
+      {banner ? <Box marginBottom={1}>{banner}</Box> : null}
       {offset > 0 ? <Text dimColor> ↑ {offset} more</Text> : null}
-      <DataTable rows={visible} columns={columns} selected={selIdx - offset} />
+      <DataTable rows={visible} columns={columns} selected={selIdx - offset} rowKey={rowKey} />
       {offset + maxVisible < rows.length ? (
         <Text dimColor> ↓ {rows.length - offset - maxVisible} more</Text>
       ) : null}
@@ -219,7 +237,7 @@ export function RecordView({
     <Box flexDirection="column">
       {Object.entries(data).map(([k, v]) => {
         if (v === undefined || v === null) return null
-        const text = clean(typeof v === 'object' ? JSON.stringify(v) : String(v))
+        const text = clean(stringifyValue(v))
         return (
           <Box key={k}>
             <Box width={width}>
@@ -401,7 +419,7 @@ export function Sidebar({
       {window.map((e, i) => {
         if (e.kind === 'group') {
           return (
-            <Text key={`g${i}`} bold dimColor>
+            <Text key={e.title || `g${i}`} bold dimColor>
               {e.title}
             </Text>
           )

@@ -10,7 +10,8 @@ const mockStore = {
   clear: vi.fn(),
 }
 
-vi.mock('../../src/auth/token-store.ts', () => ({
+vi.mock('../../src/auth/token-store.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/auth/token-store.ts')>()),
   createTokenStore: () => mockStore,
 }))
 
@@ -113,5 +114,43 @@ describe('statusCommand', () => {
     expect(mockFetchProfile).toHaveBeenCalledWith('access-token')
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('user@example.com'))
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('My Org'))
+  })
+
+  it('uses the api key of an api-token auth record', async () => {
+    mockStore.get.mockResolvedValue({
+      type: 'api',
+      key: 'api-key',
+      refresh: 'refresh-token',
+      expires: 999,
+    })
+    mockFetchProfile.mockResolvedValue({
+      email: 'user@example.com',
+      name: 'User Name',
+      organizations: [],
+      selectedOrganizationId: null,
+    })
+
+    await statusCommand.run!({ rawArgs: [], args: { _: [] }, cmd: statusCommand })
+
+    expect(mockFetchProfile).toHaveBeenCalledWith('api-key')
+  })
+
+  it('uses the token of a legacy auth record', async () => {
+    mockStore.get.mockResolvedValue({
+      type: 'token',
+      token: 'legacy-token',
+      refresh: 'refresh-token',
+      expires: 999,
+    })
+    mockFetchProfile.mockResolvedValue({
+      email: 'user@example.com',
+      name: 'User Name',
+      organizations: [],
+      selectedOrganizationId: null,
+    })
+
+    await statusCommand.run!({ rawArgs: [], args: { _: [] }, cmd: statusCommand })
+
+    expect(mockFetchProfile).toHaveBeenCalledWith('legacy-token')
   })
 })

@@ -24,6 +24,7 @@ import {
   getSecurityStats,
   listActiveCommands,
   listFindings,
+  matchesDateFilters,
   retryRemediation,
   setSecurityEnabled,
   startAnalysis,
@@ -194,7 +195,7 @@ export const securityReposCommand = defineCommand({
       console.error(`Invalid sort: ${sortField}. Valid: ${validSorts.join(', ')}`)
       process.exit(1)
     }
-    repos = [...repos].sort((a, b) => {
+    repos = repos.toSorted((a, b) => {
       switch (sortField) {
         case 'name':
           return (a.fullName ?? a.full_name ?? a.name ?? '').localeCompare(
@@ -236,7 +237,12 @@ export const securityReposCommand = defineCommand({
 /** Column registry for `security findings --columns`. */
 const FINDINGS_COLUMNS: Record<
   string,
-  { label: string; width: number; get: (f: SecurityFinding) => string; format?: Column['format'] }
+  {
+    label: string
+    width: number
+    get: (f: SecurityFinding) => string
+    format?: NonNullable<Column['format']>
+  }
 > = {
   id: { label: 'ID', width: 36, get: (f) => String(f.id ?? '-') },
   severity: { label: 'Severity', width: 8, get: (f) => f.severity ?? '-', format: colorSeverity },
@@ -371,7 +377,7 @@ export const securityFindingsListCommand = defineCommand({
       // the whole window has been seen.
       let complete = findings.length < pageLimit
       for (let page = 0; !complete && page < FINDINGS_MAX_PAGES; page++) {
-        // oxlint-disable-next-line no-await-in-loop -- offset pagination is sequential
+        // eslint-disable-next-line no-await-in-loop -- offset pagination is sequential
         const more = await listFindings(token, {
           ...input,
           limit: pageLimit,
@@ -578,7 +584,8 @@ export const securityFindingsAnalyzeCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     const result = await startAnalysis(token, args.id)
-    console.log(`Analysis queued${result.commandId ? ` (command ${result.commandId})` : ''}.`)
+    const command = result.commandId ? ` (command ${result.commandId})` : ''
+    console.log(`Analysis queued${command}.`)
   },
 })
 
@@ -759,15 +766,9 @@ export const securityFindingsCloseCommand = defineCommand({
         overdue: filters.overdue,
         limit: 100,
       })
-      let findings = result.findings
-      if (filters.createdAfter || filters.createdBefore) {
-        findings = findings.filter((f) => {
-          const created = f.createdAt ?? f.created_at ?? ''
-          if (filters.createdAfter && created < filters.createdAfter) return false
-          if (filters.createdBefore && created > filters.createdBefore) return false
-          return true
-        })
-      }
+      // The same filter the dismissal uses — the preview must not show a
+      // finding that would not be queued.
+      const findings = result.findings.filter((f) => matchesDateFilters(f, filters))
       const total = result.totalCount ?? result.total_count ?? findings.length
       console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
       if (filterDesc) console.log(`  filters: ${filterDesc}`)

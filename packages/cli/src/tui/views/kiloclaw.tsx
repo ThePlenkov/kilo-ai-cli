@@ -1,6 +1,5 @@
 import { Box, Text, useInput } from 'ink'
 import React, { useRef, useState } from 'react'
-
 import {
   getBillingHistory,
   getChangelog,
@@ -15,7 +14,14 @@ import {
   readFile,
 } from '../../api/kiloclaw.ts'
 import type { KiloclawFileTreeNode } from '../../api/types.ts'
-import { QueryListScreen, QueryRecordScreen, RecordView, TextScreen } from '../components.tsx'
+import { yesNo } from '../../util/value.ts'
+import {
+  clean,
+  QueryListScreen,
+  QueryRecordScreen,
+  RecordView,
+  TextScreen,
+} from '../components.tsx'
 import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
@@ -75,6 +81,18 @@ export function KiloclawAgentsScreen({ ctx, focused }: ScreenProps) {
 }
 
 /** KiloClaw → Subscription / billing summary. */
+/** Access line: "yes", or "no" with the reason in parentheses. */
+function accessText(data: { hasAccess?: boolean; accessReason?: string | null }): string {
+  if (data.hasAccess) return 'yes'
+  const reason = data.accessReason ? ` (${data.accessReason})` : ''
+  return `no${reason}`
+}
+
+/** The optional deploy hint of a changelog entry. */
+function deployHint(hint?: string | null): string {
+  return hint ? ` (${hint})` : ''
+}
+
 export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
   const { data, error, loading, reload } = useQuery(async () => {
     const [billing, referral] = await Promise.all([
@@ -103,20 +121,13 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
     <Box flexDirection="column">
       <RecordView
         data={{
-          access: data.hasAccess
-            ? 'yes'
-            : `no${data.accessReason ? ` (${data.accessReason})` : ''}`,
+          access: accessText(data),
           creditBalance:
             data.creditBalanceMicrodollars != null
               ? `$${(data.creditBalanceMicrodollars / 1e6).toFixed(2)}`
               : '-',
-          currentSubscription:
-            data.hasCurrentPersonalSubscription == null
-              ? 'unknown'
-              : data.hasCurrentPersonalSubscription
-                ? 'yes'
-                : 'no',
-          trialEligible: data.trialEligible == null ? 'unknown' : data.trialEligible ? 'yes' : 'no',
+          currentSubscription: yesNo(data.hasCurrentPersonalSubscription, 'unknown'),
+          trialEligible: yesNo(data.trialEligible, 'unknown'),
           kiloPass:
             data.hasActiveKiloPass == null ? 'unknown' : data.hasActiveKiloPass ? 'active' : 'none',
           referralRewards: data.referralTotal,
@@ -160,7 +171,7 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
         if (mine === seq.current) setTruncated(more)
         return entries
       }}
-      banner={() => (
+      banner={
         <Box flexDirection="column">
           <Text dimColor>instance: {paramId ?? 'first subscription'}</Text>
           {truncated ? (
@@ -169,7 +180,7 @@ export function KiloclawHistoryScreen({ ctx, focused }: ScreenProps) {
             </Text>
           ) : null}
         </Box>
-      )}
+      }
       columns={[
         {
           label: 'Entry',
@@ -228,10 +239,7 @@ export function KiloclawChangelogScreen({ ctx, focused }: ScreenProps) {
       focused={focused}
       fetch={async () =>
         (await getChangelog(ctx.token))
-          .map(
-            (e) =>
-              `${e.date} [${e.category}]${e.deployHint ? ` (${e.deployHint})` : ''}\n  ${e.description}`,
-          )
+          .map((e) => `${e.date} [${e.category}]${deployHint(e.deployHint)}\n  ${e.description}`)
           .join('\n\n')
       }
       onBack={ctx.goBack}
@@ -272,7 +280,7 @@ export function KiloclawFilesScreen({ ctx, focused }: ScreenProps) {
         },
         { label: 'Type', width: 10, value: (n) => n.type },
       ]}
-      banner={() => <Text dimColor>path: {path ?? '/'}</Text>}
+      banner={<Text dimColor>path: {clean(path ?? '/')}</Text>}
       onSelect={(n) =>
         n.type === 'directory'
           ? ctx.navigate('kiloclaw-files', { path: n.path })

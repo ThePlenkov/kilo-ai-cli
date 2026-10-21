@@ -63,11 +63,13 @@ async function readBody(response: Response, procedure: string): Promise<string> 
     const chunks: Uint8Array[] = []
     let total = 0
     for (;;) {
+      // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
       const { done, value } = await reader.read()
       if (done) break
       if (value) {
         total += value.byteLength
         if (total > MAX_BODY_BYTES) {
+          // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
           await reader.cancel()
           throw new CloudTrpcError(
             'protocol',
