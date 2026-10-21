@@ -608,6 +608,7 @@ async function main() {
     let extra: string[] = []
     if (c.args) {
       try {
+        // eslint-disable-next-line no-await-in-loop -- the commands run one after another on purpose
         const resolved = await c.args(ctx)
         if (!resolved) {
           rows.push({
@@ -641,6 +642,7 @@ async function main() {
     } finally {
       if (c.post) {
         try {
+          // eslint-disable-next-line no-await-in-loop -- the restore hook must run before the next command
           await c.post(ctx, output)
         } catch (e) {
           // Restore failure leaves real state mutated — surface it as FAIL.
