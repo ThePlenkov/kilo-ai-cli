@@ -62,7 +62,9 @@ const lintSarif = new ShellStep(ci, "lint-sarif", {
   // .oxlintrc.json. A run from the repository root would apply the root
   // rules to the vendored .nx-devkit submodule and report findings that
   // belong to another repository.
-  command: "npx oxlint --format=sarif",
+  // The local binary, not npx: the version comes from the lockfile and
+  // nothing is fetched on the fly.
+  command: "../../node_modules/.bin/oxlint --format=sarif",
   dependsOn: [plugins.node.id],
   runtime: { shell: "sh", workingDir: "packages/cli" },
   outputs: { "eslint.sarif": { type: "artifact", fromStdout: true } },
