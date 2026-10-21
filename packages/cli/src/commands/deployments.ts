@@ -11,7 +11,7 @@ import {
   getDeployment,
   listDeployments,
 } from '../api/deployments.ts'
-import { printTable, sanitize, stringifyValue } from './format.ts'
+import { printTable, sanitize, sanitizeLines, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const deploymentsListCommand = defineCommand({
@@ -79,7 +79,7 @@ export const deploymentsEventsCommand = defineCommand({
       const kind = event.type ?? event.status ?? ''
       const message = event.message ?? ''
       console.log(
-        `${sanitize(stringifyValue(created))} ${sanitize(stringifyValue(kind))} ${sanitize(stringifyValue(message))}`,
+        `${sanitize(stringifyValue(created))} ${sanitize(stringifyValue(kind))} ${sanitizeLines(stringifyValue(message))}`,
       )
     }
   },

@@ -19,7 +19,7 @@ import {
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
 import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
-import { printTable, sanitize, stringifyValue } from './format.ts'
+import { printTable, sanitize, sanitizeLines, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 /** Cursor name used by `sessions unified --new`. */
@@ -323,7 +323,7 @@ export const sessionsDiffCommand = defineCommand({
     const { token } = await getToken()
     const diff = await getSessionDiff(token, args.id)
     if (diff.kind === 'value') {
-      console.log(sanitize(stringifyValue(diff.value ?? '')))
+      console.log(sanitizeLines(stringifyValue(diff.value ?? '')))
       return
     }
     const files = diff.files ?? []
@@ -392,7 +392,7 @@ export const sessionsWorktreesCommand = defineCommand({
       console.log(`\n${id}`)
       const record = detail as Record<string, unknown>
       for (const [key, value] of Object.entries(record)) {
-        console.log(`  ${key}: ${stringifyValue(value)}`)
+        console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
       }
     }
   },

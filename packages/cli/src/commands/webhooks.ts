@@ -13,7 +13,7 @@ import {
   listWebhookTriggers,
   updateWebhookTrigger,
 } from '../api/webhooks.ts'
-import { printTable, sanitize, stringifyValue } from './format.ts'
+import { printTable, sanitizeLines, stringifyValue } from './format.ts'
 import { getToken, triState } from './helpers.ts'
 
 export const webhooksListCommand = defineCommand({
@@ -89,7 +89,7 @@ export const webhooksGetCommand = defineCommand({
     for (const key of WEBHOOK_SAFE_FIELDS) {
       const value = trigger[key]
       if (value === undefined) continue
-      console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
+      console.log(`  ${key}: ${sanitizeLines(stringifyValue(value))}`)
     }
   },
 })

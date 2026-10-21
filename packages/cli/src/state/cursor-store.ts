@@ -11,6 +11,8 @@ import * as fs from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { toEpochMs } from './timestamp.ts'
+
 /** A single stored cursor. `value` is opaque to the store (ISO time, id, …). */
 export interface CursorEntry {
   /** Opaque cursor value — an ISO timestamp, a pagination cursor, an id. */
@@ -214,9 +216,12 @@ export function createCursorStore(configDir?: string): CursorStore {
         const file = await read()
         const current = file.cursors[name]
         if (current) {
-          const currentMs = Date.parse(current.value)
-          const nextMs = Date.parse(value)
-          if (Number.isFinite(currentMs) && Number.isFinite(nextMs) && nextMs <= currentMs) {
+          // The same parser the delta reads use — a bare Date.parse would
+          // reject the Postgres-style timestamps the API returns, and the
+          // comparison would be skipped entirely.
+          const currentMs = toEpochMs(current.value)
+          const nextMs = toEpochMs(value)
+          if (currentMs !== undefined && nextMs !== undefined && nextMs <= currentMs) {
             return false
           }
         }

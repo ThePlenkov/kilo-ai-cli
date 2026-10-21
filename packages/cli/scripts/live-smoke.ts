@@ -656,14 +656,16 @@ async function main() {
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
-    const errLine = errLines[0]
+    // The last error line is the command's own failure (stderr comes last);
+    // the first one is the most likely explanation for the reader.
+    const errLine = errLines[errLines.length - 1]
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
-    // Only the error lines decide: a command that fails for another reason
-    // and merely mentions an entitlement word somewhere in its output is
-    // still a failure. Every error line is checked — the entitlement error
-    // is not necessarily the first one.
-    const entitlement = !ok && errLines.some((l) => ENTITLEMENT.test(l))
+    // The command's own error is the last error line: the runner appends
+    // stderr after stdout, and the CLI writes its failure there. A remote
+    // string that merely mentions an entitlement word earlier in the output
+    // must not turn a real failure into a skip.
+    const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
     // A restore failure matters when the command applied a change, or when it
     // failed for a different reason than the restore — that means the state
     // may be half-mutated. When both failed on the same entitlement error,

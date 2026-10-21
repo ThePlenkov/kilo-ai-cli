@@ -108,7 +108,9 @@ describe('TUI screen registry', () => {
       // eslint-disable-next-line no-await-in-loop -- each screen is mounted in turn
       await new Promise((resolve) => setTimeout(resolve, 20))
       instance.unmount()
-      expect(stdout.chunks.join('')).toBeTypeOf('string')
+      // ink must have written something — a screen that renders nothing (or
+      // an error box) would pass a type assertion on the joined output.
+      expect(stdout.chunks.length).toBeGreaterThan(0)
     }
   })
 })

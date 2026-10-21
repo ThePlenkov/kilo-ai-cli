@@ -515,24 +515,11 @@ export interface BulkDismissResult {
 }
 
 /**
- * Dismiss findings matching the given filters.
- * Collects matching IDs first (read-only pagination — dismissing shifts
- * result pages), then dismisses each individually.
- *
- * Each dismissal is queued server-side, so `queued` counts accepted requests,
- * not applied dismissals. With `probeQueue`, the first queued command is polled
- * so a dead queue is reported instead of silently reported as success — the
- * probe speaks for itself only, never for the commands behind it.
- */
-/**
  * The ids of the findings that pass the date filters. A missing timestamp is
  * excluded when a date filter is set — the safe default for a destructive
  * operation rather than silently matching.
  */
-export function matchingFindingIds(
-  findings: SecurityFinding[],
-  filters: BulkFindingFilters,
-): string[] {
+function matchingFindingIds(findings: SecurityFinding[], filters: BulkFindingFilters): string[] {
   return findings.filter((f) => matchesDateFilters(f, filters)).map((f) => f.id)
 }
 
@@ -554,6 +541,16 @@ export function matchesDateFilters(
   return true
 }
 
+/**
+ * Dismiss findings matching the given filters.
+ * Collects matching IDs first (read-only pagination — dismissing shifts
+ * result pages), then dismisses each individually.
+ *
+ * Each dismissal is queued server-side, so `queued` counts accepted requests,
+ * not applied dismissals. With `probeQueue`, the first queued command is polled
+ * so a dead queue is reported instead of silently reported as success — the
+ * probe speaks for itself only, never for the commands behind it.
+ */
 export async function dismissFindingsBulk(
   token: string,
   filters: BulkFindingFilters,
