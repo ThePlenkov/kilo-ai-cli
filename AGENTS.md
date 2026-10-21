@@ -4,7 +4,7 @@ CLI for interacting with the kilo.ai cloud tRPC API.
 
 ## Project Layout
 
-```
+```text
 packages/cli/
 ├── src/
 │   ├── index.ts             # CLI entry point
@@ -36,12 +36,38 @@ packages/cli/
 ## Commands
 
 ```bash
+npm run ci                     # The whole local gate (sverka) — run this before a push
 npx nx build kilo-ai-cli       # Build with tsdown
 npx nx test kilo-ai-cli        # Run vitest
 npx nx typecheck kilo-ai-cli   # tsc --noEmit
 npx nx lint kilo-ai-cli        # oxlint
 npx nx format kilo-ai-cli      # biome check --write
 ```
+
+## Local CI (sverka)
+
+`sverka.config.ts` is the single definition of the check set. The pre-push
+hook runs it, so nothing reaches the remote without the full gate:
+
+```bash
+npm run ci          # the check set: typecheck, lint, format, docs, test, build, pack, smoke, audit
+npm run ci:health   # repository hygiene: main green, review debt, stale branches, dependabot alerts
+```
+
+Both are also reachable through the sverka CLI:
+
+```bash
+npx sverka run --entry ci/local
+npx sverka run --entry repo-health/check
+npx sverka view      # the last run's report
+```
+
+The GitHub workflow is still the hand-written `.github/workflows/ci.yml`:
+sverka's GitHub template emits only checkout + setup-node + `npm ci
+--ignore-scripts`, and this repository additionally needs bun and a built
+`.nx-devkit` submodule, which the template cannot express yet. Migrating it
+means either sverka gaining a way to inject CI steps, or the submodule
+build moving into the install.
 
 ## TDD Workflow
 

@@ -602,7 +602,7 @@ Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected scre
 
 ---
 
-## Environment Variables
+## Environment Variable Overrides
 
 ```bash
 # Override the API base URL (e.g. for self-hosted or staging)
@@ -617,7 +617,7 @@ export KILO_CLI_VERSION=1.0.0
 
 ---
 
-## Credential Storage
+## Credential File Locations
 
 | OS | Path |
 |----|------|
@@ -649,6 +649,20 @@ Errors are printed to `stderr`. The CLI exits non-zero on any failure.
 - Node.js `>= 24.21.0`
 - [Bun](https://bun.sh) (for building the `.nx-devkit` submodule)
 - [Nx](https://nx.dev) (installed via `npm install`)
+
+### Local CI
+
+The check set is defined once, in `sverka.config.ts`, and runs locally
+before every push — the pre-push hook does it for you:
+
+```bash
+npm run ci          # typecheck, lint, format, docs, test, build, pack, smoke, audit
+npm run ci:health   # main green, review debt, stale branches, dependabot alerts
+```
+
+`npm run ci` takes about twenty seconds and is the same set the CI runs, so
+a green local run means a green pipeline. The report of the last run is
+openable with `npx sverka view`.
 
 ### Build
 
@@ -791,13 +805,12 @@ Contributions are welcome via pull requests to the [`ThePlenkov/kilo-ai-cli`](ht
 1. Fork the repository.
 2. Create a feature branch: `git checkout -b feat/my-feature`.
 3. Make your changes following the existing conventions.
-4. Run the full verification suite:
+4. Run the full verification suite — the same gate the pre-push hook runs:
+
    ```bash
-   npx nx typecheck kilo-ai-cli
-   npx nx lint kilo-ai-cli
-   npx nx test kilo-ai-cli
-   npx nx build kilo-ai-cli
+   npm run ci
    ```
+
 5. Open a pull request against `main`.
 
 ### Conventions

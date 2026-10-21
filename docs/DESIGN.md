@@ -14,7 +14,7 @@ the cloud tRPC router structure (Kilo-Org/cloud).
 
 ## Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │                   kilo-ai-cli                     │
 │                                                   │
@@ -60,7 +60,8 @@ the cloud tRPC router structure (Kilo-Org/cloud).
 ### Token usage
 
 All API requests include:
-```
+
+```text
 Authorization: Bearer <token>
 User-Agent: kilo-ai-cli/<version>
 X-KILOCODE-EDITORNAME: kilo-ai-cli <version>
@@ -199,7 +200,7 @@ filtered server-side; the other two filter client-side.
 
 ## CLI Commands
 
-```
+```text
 kilo-ai-cli auth login          # Device auth flow
 kilo-ai-cli auth logout         # Clear stored token
 kilo-ai-cli auth status         # Show auth status
@@ -244,7 +245,7 @@ kilo-ai-cli account balance     # Balance and context budget
 
 ## Project Structure
 
-```
+```text
 kilo-ai-cli/
 ├── .nx-devkit/              # git submodule (nx-devkit/nx.ts)
 ├── docs/
