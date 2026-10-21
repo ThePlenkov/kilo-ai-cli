@@ -16,14 +16,16 @@ export function stringifyValue(value: unknown): string {
       const json = JSON.stringify(value)
       // A value JSON cannot represent (undefined, a function) falls back to
       // its tag — `String(value)` would print "[object Object]".
-      return json === undefined ? Object.prototype.toString.call(value) : json
+      return json ?? Object.prototype.toString.call(value)
     } catch {
       // Circular structures cannot be serialized either — fall back to the tag.
       return Object.prototype.toString.call(value)
     }
   }
-  // Symbols, bigints and functions.
-  return String(value)
+  // Symbols, bigints and functions — none of them is an object, so the
+  // default stringification is the right one.
+  if (typeof value === 'symbol' || typeof value === 'bigint') return String(value)
+  return Object.prototype.toString.call(value)
 }
 
 /**

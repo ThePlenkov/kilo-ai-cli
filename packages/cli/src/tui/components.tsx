@@ -60,10 +60,10 @@ export function DataTable<T>({
   selected,
   rowKey: keyOf,
 }: {
-  rows: T[]
-  columns: Column<T>[]
-  selected?: number
-  rowKey?: (row: T, index: number) => string
+  readonly rows: T[]
+  readonly columns: Column<T>[]
+  readonly selected?: number
+  readonly rowKey?: (row: T, index: number) => string
 }) {
   const { columns: termColumns } = useTermSize()
   const avail = Math.max(20, termColumns - PANE_OVERHEAD)
@@ -230,8 +230,8 @@ export function RecordView({
   data,
   width = 22,
 }: {
-  data: Record<string, unknown>
-  width?: number
+  readonly data: Record<string, unknown>
+  readonly width?: number
 }) {
   return (
     <Box flexDirection="column">
@@ -257,10 +257,10 @@ export function QueryRecordScreen({
   onBack,
   emptyText,
 }: {
-  focused: boolean
-  fetch: () => Promise<Record<string, unknown>>
-  onBack: () => void
-  emptyText?: string
+  readonly focused: boolean
+  readonly fetch: () => Promise<Record<string, unknown>>
+  readonly onBack: () => void
+  readonly emptyText?: string
 }) {
   const { data, error, loading, reload } = useQuery(fetch, [])
   useInput(
@@ -354,21 +354,8 @@ type SidebarEntry =
   | { kind: 'group'; title: string }
   | { kind: 'item'; item: SidebarItem; flat: number }
 
-export function Sidebar({
-  groups,
-  selected,
-  focused,
-  width = 26,
-  height,
-}: {
-  groups: { title: string; items: SidebarItem[] }[]
-  /** Flat index across all groups. */
-  selected: number
-  focused: boolean
-  width?: number
-  /** Max content lines (excl. border). Window scrolls to keep `selected` visible. */
-  height?: number
-}) {
+/** The sidebar entries in display order, with the flat index of every item. */
+function flattenSidebar(groups: { title: string; items: SidebarItem[] }[]): SidebarEntry[] {
   const entries: SidebarEntry[] = []
   let flat = -1
   for (const g of groups) {
@@ -378,6 +365,25 @@ export function Sidebar({
       entries.push({ kind: 'item', item, flat })
     }
   }
+  return entries
+}
+
+export function Sidebar({
+  groups,
+  selected,
+  focused,
+  width = 26,
+  height,
+}: {
+  readonly groups: { title: string; items: SidebarItem[] }[]
+  /** Flat index across all groups. */
+  readonly selected: number
+  readonly focused: boolean
+  readonly width?: number
+  /** Max content lines (excl. border). Window scrolls to keep `selected` visible. */
+  height?: number
+}) {
+  const entries = flattenSidebar(groups)
 
   const selEntry = Math.max(
     0,
