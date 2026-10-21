@@ -40,7 +40,7 @@ jobs:
         run: npm pack --dry-run --workspace kilo-ai-cli
       - name: Smoke (the CLI from source)
         run: |
-          npx tsx packages/cli/src/index.ts --help > /dev/null
-          npx tsx packages/cli/src/index.ts cursor list > /dev/null
+          ./node_modules/.bin/tsx packages/cli/src/index.ts --help > /dev/null
+          ./node_modules/.bin/tsx packages/cli/src/index.ts cursor list > /dev/null
       - name: Dependency audit
         run: npm audit --audit-level=high

@@ -115,7 +115,7 @@ const health = new Pipeline(proj, "repo-health");
 const mainGreen = new ShellStep(health, "main-green", {
   command:
     'json=$(gh api --paginate --slurp "repos/{owner}/{repo}/commits/main/check-runs?per_page=100") || { echo "could not read the check runs of main"; exit 1; }; ' +
-    'out=$(printf \'%s\' "$json" | jq -r \'map(.check_runs) | add | group_by(.name) | map(sort_by(.started_at) | last)[] | select(.app.slug=="github-actions") | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\\(.name) (\\(.conclusion // .status))"\') || exit 1; ' +
+    String.raw`out=$(printf '%s' "$json" | jq -r 'map(.check_runs) | add | group_by(.name) | map(sort_by(.started_at) | last)[] | select(.app.slug=="github-actions") | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\(.name) (\(.conclusion // .status))"') || exit 1; ` +
     '[ -z "$out" ] || { echo "non-green checks on main:"; echo "$out"; exit 1; }',
   runtime: { shell: "sh" },
 });
@@ -138,7 +138,7 @@ const staleBranches = new ShellStep(health, "stale-branches", {
 // Zero open dependabot alerts.
 const dependabotAlerts = new ShellStep(health, "dependabot-alerts", {
   command:
-    'out=$(gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open" --jq ".[].number" 2>&1) || { echo "$out" | grep -qi "not accessible\\|403" && { echo "::error::this identity cannot read dependabot alerts — the check needs a token with the vulnerability-alerts scope (set REPO_HEALTH_TOKEN)"; exit 1; }; echo "$out"; exit 1; }; [ -z "$out" ] || { echo "open dependabot alerts:"; echo "$out"; exit 1; }',
+    String.raw`out=$(gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open" --jq ".[].number" 2>&1) || { echo "$out" | grep -qi "not accessible\|403" && { echo "::error::this identity cannot read dependabot alerts — the check needs a token with the vulnerability-alerts scope (set REPO_HEALTH_TOKEN)"; exit 1; }; echo "$out"; exit 1; }; [ -z "$out" ] || { echo "open dependabot alerts:"; echo "$out"; exit 1; }`,
   runtime: { shell: "sh" },
 });
 
