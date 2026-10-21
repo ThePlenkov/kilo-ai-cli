@@ -1,4 +1,8 @@
 # The local CI: the full check set before anything leaves the machine.
 # The same definition is compiled into the GitHub workflow
 # (sverka.config.ts), so the local gate and CI check the same things.
-npx sverka run --entry ci/local
+#
+# The CLI is run through npx on purpose: the published `sverka` package
+# depends on `@sverka/hub`, which is not on the registry, so `npm ci` cannot
+# install it. npx tolerates the missing package and the CLI works.
+npx --yes sverka@0.2.33 run --entry ci/local

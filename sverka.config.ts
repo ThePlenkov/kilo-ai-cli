@@ -10,9 +10,15 @@ import {
 
 const proj = new Project("kilo-ai-cli");
 
-// The local gate. `sverka run --entry ci/local` runs the whole check set
-// before a push (the pre-push hook does it automatically), and the same
-// definition is what the GitHub workflow is compiled from.
+// The local gate. `npm run ci` runs the whole check set before a push (the
+// pre-push hook does it automatically), and the same definition is what the
+// GitHub workflow is compiled from.
+//
+// The CLI is invoked through `npx --yes sverka@0.2.33`: the published
+// `sverka` package depends on `@sverka/hub`, which is not published to the
+// registry, so `npm ci` cannot install it — npx tolerates the missing
+// package and the CLI works. Only `@sverka/workflow` (the constructs this
+// config is written against) is a real dependency.
 //
 // The CI workflow is still the hand-written one: sverka's GitHub template
 // emits checkout + setup-node + `npm ci --ignore-scripts`, and this
