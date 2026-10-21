@@ -648,16 +648,18 @@ async function main() {
         }
       }
     }
-    const errLine = output
+    const errLines = output
       .split('\n')
       .map((l) => l.trim())
-      .find((l) => /ERROR|Error:|error/i.test(l) && l.length > 3)
+      .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
+    const errLine = errLines[0]
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
-    // Only the error line decides: a command that fails for another reason
+    // Only the error lines decide: a command that fails for another reason
     // and merely mentions an entitlement word somewhere in its output is
-    // still a failure.
-    const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
+    // still a failure. Every error line is checked — the entitlement error
+    // is not necessarily the first one.
+    const entitlement = !ok && errLines.some((l) => ENTITLEMENT.test(l))
     // A restore failure matters when the command applied a change, or when it
     // failed for a different reason than the restore — that means the state
     // may be half-mutated. When both failed on the same entitlement error,
