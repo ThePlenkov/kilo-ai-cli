@@ -151,6 +151,7 @@ export function createCursorStore(configDir?: string): CursorStore {
   async function withLock<T>(fn: () => Promise<T>): Promise<T> {
     await fs.mkdir(dir, { recursive: true })
     const deadline = Date.now() + LOCK_TIMEOUT_MS
+    /* oxlint-disable no-await-in-loop -- the lock must be probed one attempt at a time */
     for (;;) {
       let handle: Awaited<ReturnType<typeof fs.open>> | undefined
       try {
@@ -183,6 +184,7 @@ export function createCursorStore(configDir?: string): CursorStore {
       }
       await sleep(LOCK_RETRY_MS)
     }
+    /* oxlint-enable no-await-in-loop */
   }
 
   return {

@@ -164,6 +164,7 @@ export const sessionsUnifiedCommand = defineCommand({
             complete = false
             break
           }
+          // oxlint-disable-next-line no-await-in-loop -- cursor pagination is sequential
           const more = await listUnifiedSessions(token, { ...request, cursor })
           sessions = sessions.concat(more.cliSessions)
           cursor = more.nextCursor

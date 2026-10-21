@@ -371,6 +371,7 @@ export const securityFindingsListCommand = defineCommand({
       // the whole window has been seen.
       let complete = findings.length < pageLimit
       for (let page = 0; !complete && page < FINDINGS_MAX_PAGES; page++) {
+        // oxlint-disable-next-line no-await-in-loop -- offset pagination is sequential
         const more = await listFindings(token, {
           ...input,
           limit: pageLimit,
