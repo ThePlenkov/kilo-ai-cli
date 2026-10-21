@@ -126,6 +126,7 @@ async function allFindings(ctx: Ctx) {
   const page = 100
   const out: Awaited<ReturnType<typeof listFindings>>['findings'] = []
   for (let offset = 0; ; offset += page) {
+    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
     const r = await listFindings(ctx.token, { limit: page, offset })
     out.push(...r.findings)
     if (r.findings.length < page) return out
@@ -160,6 +161,7 @@ async function cancelStartedAttempts(ctx: Ctx, output: string): Promise<void> {
     const cap = f.remediationCapability ?? f.remediation_capability
     const id = cap?.cancelAttemptId
     if (cap?.canCancel && id && id !== attemptId && !preExistingAttempts.has(id)) {
+      // eslint-disable-next-line no-await-in-loop -- the attempts are cancelled one by one
       await cancelRemediation(ctx.token, id)
     }
   }
