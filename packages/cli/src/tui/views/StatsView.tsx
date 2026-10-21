@@ -4,9 +4,9 @@ import React, { useEffect, useState } from 'react'
 import { getSecurityStats } from '../../api/security-agent.ts'
 
 export interface StatsViewProps {
-  token: string
-  onBack: () => void
-  focused: boolean
+  readonly token: string
+  readonly onBack: () => void
+  readonly focused: boolean
 }
 
 export function StatsView({ token, onBack, focused }: StatsViewProps) {

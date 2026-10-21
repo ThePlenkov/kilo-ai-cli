@@ -18,9 +18,9 @@ export interface ScreenCtx {
 }
 
 export interface ScreenProps {
-  ctx: ScreenCtx
+  readonly ctx: ScreenCtx
   /** Whether the content pane (not the sidebar) currently owns keyboard input. */
-  focused: boolean
+  readonly focused: boolean
 }
 
 export interface ScreenDef {

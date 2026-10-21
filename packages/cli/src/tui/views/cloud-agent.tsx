@@ -36,7 +36,7 @@ export function CloudAgentReposScreen({
           color: (r) => (r.private ? 'yellow' : 'gray'),
         },
       ]}
-      banner={() => <Text dimColor>provider: {provider}</Text>}
+      banner={<Text dimColor>provider: {provider}</Text>}
       onBack={ctx.goBack}
       emptyText={`No ${provider} repositories — is the ${provider} integration connected?`}
     />

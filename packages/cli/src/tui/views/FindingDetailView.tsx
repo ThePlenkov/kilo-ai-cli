@@ -24,10 +24,16 @@ interface Notice {
 }
 
 export interface FindingDetailViewProps {
-  token: string
-  findingId: string
-  onBack: () => void
-  focused: boolean
+  readonly token: string
+  readonly findingId: string
+  readonly onBack: () => void
+  readonly focused: boolean
+}
+
+/** Status → colour for a finding. */
+const FINDING_STATUS_COLORS: Record<string, string> = {
+  open: 'red',
+  fixed: 'green',
 }
 
 const ACTION_KEYS: Record<string, 'dismiss' | 'remediate' | undefined> = {
@@ -203,8 +209,7 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
   const remediationCap = finding.remediationCapability ?? finding.remediation_capability
   const created = finding.createdAt ?? finding.created_at
   const updated = finding.updatedAt ?? finding.updated_at
-  const statusColor =
-    finding.status === 'open' ? 'red' : finding.status === 'fixed' ? 'green' : 'gray'
+  const statusColor = FINDING_STATUS_COLORS[finding.status] ?? 'gray'
 
   return (
     <Box flexDirection="column">

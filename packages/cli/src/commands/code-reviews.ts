@@ -30,7 +30,7 @@ import {
 } from '../api/review-memory.ts'
 import type { CodeReview, ReviewAgentConfig } from '../api/types.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
-import { printTable, sanitize } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 const PLATFORMS = ['github', 'gitlab'] as const
@@ -156,7 +156,7 @@ async function fetchReviewWindow(
     const fetchPage = orgId
       ? () => listOrgCodeReviewsPage(token, orgId, request)
       : () => listCodeReviewsPage(token, request)
-    // oxlint-disable-next-line no-await-in-loop -- offset pagination is sequential
+    // eslint-disable-next-line no-await-in-loop -- offset pagination is sequential
     const result = await fetchPage()
     reviews.push(...result.reviews)
 
@@ -401,12 +401,12 @@ export const reviewsSetModelCommand = defineCommand({
     } else {
       await savePersonalReviewConfig(token, input)
     }
-    console.log(
-      `Review agent model set to ${args.model} for ${platform} (${orgId ? `org ${orgId}` : 'personal'})`,
-    )
+    const scope = orgId ? `org ${orgId}` : 'personal'
+    console.log(`Review agent model set to ${args.model} for ${platform} (${scope})`)
     if (!config.isEnabled || config.actionRequired) {
+      const orgFlag = orgId ? ` --org ${orgId}` : ''
       console.log(
-        `Note: agent is disabled. Re-enable with: reviews toggle ${platform} --enabled${orgId ? ` --org ${orgId}` : ''}`,
+        `Note: agent is disabled. Re-enable with: reviews toggle ${platform} --enabled${orgFlag}`,
       )
     }
   },
@@ -454,7 +454,7 @@ export const reviewsMemorySummaryCommand = defineCommand({
       args.org,
     )
     for (const [key, value] of Object.entries(summary)) {
-      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      console.log(`  ${key}: ${stringifyValue(value)}`)
     }
   },
 })

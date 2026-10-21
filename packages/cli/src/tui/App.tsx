@@ -7,8 +7,8 @@ import { SCREENS } from './screens.tsx'
 import type { Route, ScreenCtx } from './types.ts'
 
 export interface AppProps {
-  token: string
-  organizationId?: string
+  readonly token: string
+  readonly organizationId?: string
 }
 
 interface NavEntry {

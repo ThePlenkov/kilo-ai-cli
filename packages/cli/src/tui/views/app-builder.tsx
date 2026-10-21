@@ -9,6 +9,12 @@ import { useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
 /** Cloud → App Builder: eligibility banner + scrollable projects table. */
+/** Deployment status → colour. */
+const DEPLOYMENT_STATUS_COLORS: Record<string, string> = {
+  deployed: 'green',
+  failed: 'red',
+}
+
 export function AppBuilderScreen({ ctx, focused }: ScreenProps) {
   const { columns: termColumns } = useTermSize()
   const [eligibility, setEligibility] = useState<AppBuilderEligibility | null>(null)
@@ -27,7 +33,7 @@ export function AppBuilderScreen({ ctx, focused }: ScreenProps) {
       label: 'Status',
       width: 12,
       value: (p) => p.status,
-      color: (p) => (p.status === 'deployed' ? 'green' : p.status === 'failed' ? 'red' : 'yellow'),
+      color: (p) => DEPLOYMENT_STATUS_COLORS[p.status] ?? 'yellow',
     },
   ]
   if (!narrow) columns.push({ label: 'URL', width: 40, value: (p) => p.url ?? '-' })
@@ -45,7 +51,7 @@ export function AppBuilderScreen({ ctx, focused }: ScreenProps) {
         return projects
       }}
       columns={columns}
-      banner={() =>
+      banner={
         eligibility ? (
           <Text color={eligibility.isEligible ? 'green' : 'yellow'}>
             {eligibility.isEligible

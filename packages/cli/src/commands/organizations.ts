@@ -4,7 +4,6 @@
 
 import { defineCommand } from 'citty'
 import { listOrganizations } from '../api/organizations.ts'
-import { fetchProfile } from '../api/profile.ts'
 import type { KiloAuth } from '../api/types.ts'
 import { createTokenStore } from '../auth/token-store.ts'
 import { printTable } from './format.ts'
@@ -14,8 +13,10 @@ export const orgListCommand = defineCommand({
   meta: { name: 'list', description: 'List your organizations' },
   async run() {
     const { token, organizationId } = await getToken()
-    const profile = await fetchProfile(token)
-    const orgs = profile.organizations ?? []
+    // The profile payload does not carry the organization list (the field is
+    // omitted for accounts without a personal org), so the dedicated
+    // `organizations.list` procedure is the source of truth.
+    const orgs = await listOrganizations(token)
     if (orgs.length === 0) {
       console.log('No organizations found.')
       return

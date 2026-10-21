@@ -47,7 +47,7 @@ const REPO_C = 'ThePlenkov/markdown-confluence'
 
 /** Build a finding with the boilerplate fields defaulted — keeps each
  *  fixture entry to the fields that actually differ. */
-const f = (
+const finding = (
   p: Pick<FixtureFinding, 'id' | 'severity' | 'title' | 'packageName' | 'description'> &
     Partial<FixtureFinding>,
 ): FixtureFinding => ({
@@ -62,7 +62,7 @@ const f = (
 })
 
 const FINDINGS: FixtureFinding[] = [
-  f({
+  finding({
     id: 'fnd_01lodash',
     severity: 'critical',
     title: 'Command injection in lodash template',
@@ -78,7 +78,7 @@ const FINDINGS: FixtureFinding[] = [
     description:
       'lodash versions prior to 4.17.21 are vulnerable to command injection via the template function.',
   }),
-  f({
+  finding({
     id: 'fnd_02axios',
     severity: 'high',
     title: 'SSRF in axios via absolute URL in baseURL',
@@ -93,7 +93,7 @@ const FINDINGS: FixtureFinding[] = [
     description:
       'axios allows absolute URLs to bypass baseURL restrictions, enabling server-side request forgery.',
   }),
-  f({
+  finding({
     id: 'fnd_03braces',
     severity: 'high',
     title: 'Uncontrolled resource consumption in braces',
@@ -107,7 +107,7 @@ const FINDINGS: FixtureFinding[] = [
     description:
       'braces fails to limit the number of characters it can handle, leading to memory exhaustion.',
   }),
-  f({
+  finding({
     id: 'fnd_04ws',
     severity: 'high',
     title: 'DoS in ws when handling many headers',
@@ -121,7 +121,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-12T09:44:01Z',
     description: 'ws does not limit the number of headers in a request, allowing CPU exhaustion.',
   }),
-  f({
+  finding({
     id: 'fnd_05crossspawn',
     severity: 'high',
     title: 'ReDoS in cross-spawn',
@@ -135,7 +135,7 @@ const FINDINGS: FixtureFinding[] = [
     slaDueAt: '2026-10-02T09:44:01Z',
     description: 'cross-spawn is vulnerable to regular expression denial of service.',
   }),
-  f({
+  finding({
     id: 'fnd_06express',
     severity: 'medium',
     title: 'Open redirect in express res.location()',
@@ -148,7 +148,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-13T11:20:33Z',
     description: 'express improperly handles URLs in res.location(), enabling open redirects.',
   }),
-  f({
+  finding({
     id: 'fnd_07wordwrap',
     severity: 'medium',
     title: 'ReDoS in word-wrap',
@@ -162,7 +162,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-13T11:20:33Z',
     description: 'word-wrap is vulnerable to regular expression denial of service.',
   }),
-  f({
+  finding({
     id: 'fnd_08nanoid',
     severity: 'medium',
     title: 'Predictable results in nanoid non-secure API',
@@ -175,7 +175,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-14T16:05:00Z',
     description: 'nanoid produces predictable output when given non-integer values.',
   }),
-  f({
+  finding({
     id: 'fnd_09ip',
     repoFullName: REPO_B,
     severity: 'high',
@@ -189,7 +189,7 @@ const FINDINGS: FixtureFinding[] = [
     slaDueAt: '2026-09-23T07:30:15Z',
     description: 'ip misclassifies certain octal IP addresses as public, enabling SSRF.',
   }),
-  f({
+  finding({
     id: 'fnd_10json5',
     repoFullName: REPO_B,
     severity: 'high',
@@ -203,7 +203,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-09T07:30:15Z',
     description: 'JSON5 allows prototype pollution via the __proto__ key in parsed objects.',
   }),
-  f({
+  finding({
     id: 'fnd_11tar',
     repoFullName: REPO_B,
     severity: 'high',
@@ -218,7 +218,7 @@ const FINDINGS: FixtureFinding[] = [
     description:
       'tar can create a symlink outside the extraction dir via a race in node_modules handling.',
   }),
-  f({
+  finding({
     id: 'fnd_12semver',
     repoFullName: REPO_B,
     severity: 'medium',
@@ -231,7 +231,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-10T18:55:41Z',
     description: 'semver is vulnerable to regular expression denial of service via crafted ranges.',
   }),
-  f({
+  finding({
     id: 'fnd_13pathtoregexp',
     repoFullName: REPO_B,
     severity: 'medium',
@@ -246,7 +246,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-08T12:10:02Z',
     description: 'path-to-regexp is vulnerable to regular expression denial of service.',
   }),
-  f({
+  finding({
     id: 'fnd_14toughcookie',
     repoFullName: REPO_C,
     severity: 'medium',
@@ -260,7 +260,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-07T10:41:26Z',
     description: 'tough-cookie is vulnerable to prototype pollution via the CookieJar.',
   }),
-  f({
+  finding({
     id: 'fnd_15undici',
     repoFullName: REPO_C,
     severity: 'medium',
@@ -275,7 +275,7 @@ const FINDINGS: FixtureFinding[] = [
     slaDueAt: '2026-10-07T10:41:26Z',
     description: 'undici may leak proxy-authorization headers on cross-origin redirects.',
   }),
-  f({
+  finding({
     id: 'fnd_16follow',
     repoFullName: REPO_C,
     severity: 'low',
@@ -289,7 +289,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-06T15:17:55Z',
     description: 'follow-redirects can leak authorization headers to third-party domains.',
   }),
-  f({
+  finding({
     id: 'fnd_17minimatch',
     severity: 'low',
     title: 'ReDoS in minimatch brace expansion',
@@ -301,7 +301,7 @@ const FINDINGS: FixtureFinding[] = [
     createdAt: '2026-09-15T09:02:18Z',
     description: 'minimatch is vulnerable to regular expression denial of service.',
   }),
-  f({
+  finding({
     id: 'fnd_18vite',
     repoFullName: REPO_B,
     severity: 'info',

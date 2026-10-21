@@ -6,7 +6,7 @@ import { defineCommand } from 'citty'
 
 import { fetchProfile } from '../api/profile.ts'
 import { authenticateWithDeviceAuth } from '../auth/device-auth.ts'
-import { createTokenStore } from '../auth/token-store.ts'
+import { createTokenStore, tokenOf } from '../auth/token-store.ts'
 
 export const loginCommand = defineCommand({
   meta: { name: 'login', description: 'Authenticate with kilo.ai via browser' },
@@ -37,7 +37,7 @@ export const statusCommand = defineCommand({
       return
     }
 
-    const token = auth.type === 'api' ? auth.key : auth.type === 'oauth' ? auth.access : auth.token
+    const token = tokenOf(auth)
     const profile = await fetchProfile(token)
     console.log(`Authenticated as ${profile.email}`)
     if (profile.name) {

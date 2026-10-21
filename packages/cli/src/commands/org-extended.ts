@@ -16,7 +16,7 @@ import {
   listOrganizations,
   updateOrganization,
 } from '../api/organizations.ts'
-import { printTable } from './format.ts'
+import { printTable, yesNo } from './format.ts'
 import { getToken } from './helpers.ts'
 
 /**
@@ -205,7 +205,7 @@ export const orgModelsCommand = defineCommand({
         id: m.id,
         name: m.name,
         description: m.description ?? '-',
-        free: m.isFree == null ? '-' : m.isFree ? 'yes' : 'no',
+        free: yesNo(m.isFree),
         context: m.contextLength ?? '-',
       })),
       [

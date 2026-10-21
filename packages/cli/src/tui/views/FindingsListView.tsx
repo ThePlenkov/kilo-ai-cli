@@ -11,13 +11,19 @@ import type {
 import { useTermSize } from '../hooks.ts'
 import type { FindingsFilter } from '../types.ts'
 
+/** Status → colour for a finding. */
+const FINDING_STATUS_COLORS: Record<string, string> = {
+  open: 'red',
+  fixed: 'green',
+}
+
 export interface FindingsListViewProps {
-  token: string
-  filter: FindingsFilter
-  onFilterChange: (f: FindingsFilter) => void
-  onSelectFinding: (id: string) => void
-  onBack: () => void
-  focused: boolean
+  readonly token: string
+  readonly filter: FindingsFilter
+  readonly onFilterChange: (f: FindingsFilter) => void
+  readonly onSelectFinding: (id: string) => void
+  readonly onBack: () => void
+  readonly focused: boolean
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -46,10 +52,10 @@ const RESERVED_LINES = 10
 /* ------------------------------------------------------------------ */
 
 interface CellProps {
-  text: string
-  color?: string
-  bold?: boolean
-  dim?: boolean
+  readonly text: string
+  readonly color?: string
+  readonly bold?: boolean
+  readonly dim?: boolean
 }
 
 interface TuiColumnDef {
@@ -87,7 +93,7 @@ const TUI_COLUMNS: Record<string, TuiColumnDef> = {
     width: 10,
     render: (f) => ({
       text: f.status,
-      color: f.status === 'open' ? 'red' : f.status === 'fixed' ? 'green' : 'gray',
+      color: FINDING_STATUS_COLORS[f.status] ?? 'gray',
     }),
     sortValue: (f) => f.status,
   },
@@ -305,7 +311,7 @@ export function FindingsListView({
         <Box flexDirection="column">
           <Text color="red">Failed to load repositories: {reposError}</Text>
           <Text dimColor>Esc to go back</Text>
-          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+          <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
         </Box>
       )
     }
@@ -313,7 +319,7 @@ export function FindingsListView({
       return (
         <Box flexDirection="column">
           <Text color="yellow">Loading repositories…</Text>
-          <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+          <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
         </Box>
       )
     }
@@ -340,7 +346,7 @@ export function FindingsListView({
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -368,7 +374,7 @@ export function FindingsListView({
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -395,7 +401,7 @@ export function FindingsListView({
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -420,7 +426,7 @@ export function FindingsListView({
           }}
         />
         <Text dimColor>Esc to cancel</Text>
-        <FilterCancelHandler onBack={() => setFilterMode('none')} focused={focused} />
+        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
       </Box>
     )
   }
@@ -586,7 +592,7 @@ function sortFindings(
 ): SecurityFinding[] {
   const col = TUI_COLUMNS[field]
   if (!col) return findings
-  return [...findings].sort((a, b) => {
+  return findings.toSorted((a, b) => {
     const av = col.sortValue(a)
     const bv = col.sortValue(b)
     const cmp =
@@ -690,17 +696,6 @@ function ColumnPicker({
 
 /** Handler that listens for Esc to go back. */
 function BackHandler({ onBack, focused }: { onBack: () => void; focused: boolean }) {
-  useInput(
-    (_input, key) => {
-      if (key.escape) onBack()
-    },
-    { isActive: focused },
-  )
-  return null
-}
-
-/** Handler for filter cancel. */
-function FilterCancelHandler({ onBack, focused }: { onBack: () => void; focused: boolean }) {
   useInput(
     (_input, key) => {
       if (key.escape) onBack()

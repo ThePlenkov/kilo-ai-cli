@@ -111,55 +111,77 @@ export async function applyDeltaAsync<T>(
   const store = options.store ?? createCursorStore()
   const cursorName = options.cursor
 
-  const explicitSince = options.since !== undefined
-  let since: string | undefined
-  let fromCursor = false
+  const bound = await resolveBound(store, cursorName, options)
+  const sinceEpoch = bound.since ? toEpochMs(bound.since) : undefined
 
-  if (explicitSince) {
+  const { kept, newest } = splitByBound(items, timestampOf, sinceEpoch)
+
+  const truncated = options.complete === false
+  const shouldAdvance = (options.advance ?? true) && !truncated
+  const advancedTo =
+    shouldAdvance && cursorName && newest
+      ? await advanceCursor(store, cursorName, newest)
+      : undefined
+
+  return { items: kept, since: bound.since, advancedTo, fromCursor: bound.fromCursor, truncated }
+}
+
+/** The effective lower bound: the explicit `since`, else the stored cursor. */
+async function resolveBound(
+  store: CursorStore,
+  cursorName: string | undefined,
+  options: DeltaOptions,
+): Promise<{ since: string | undefined; fromCursor: boolean }> {
+  if (options.since !== undefined) {
     const parsed = toIsoTimestamp(options.since)
     if (!parsed) throw new Error(`Invalid --since timestamp: ${options.since}`)
-    since = parsed
-  } else if (cursorName) {
-    const entry = await store.get(cursorName)
-    if (entry) {
-      since = toIsoTimestamp(entry.value)
-      fromCursor = since !== undefined
-    }
+    return { since: parsed, fromCursor: false }
   }
+  if (!cursorName) return { since: undefined, fromCursor: false }
+  const entry = await store.get(cursorName)
+  if (!entry) return { since: undefined, fromCursor: false }
+  const since = toIsoTimestamp(entry.value)
+  return { since, fromCursor: since !== undefined }
+}
 
-  const sinceEpoch = since ? toEpochMs(since) : undefined
-
+/**
+ * Split the fetched items into the ones newer than the bound and the newest
+ * timestamp seen. An item without a parseable timestamp is kept only when
+ * there is no bound — with one, its age is unknown and it may well be old.
+ */
+function splitByBound<T>(
+  items: T[],
+  timestampOf: (item: T) => string | number | null | undefined,
+  sinceEpoch: number | undefined,
+): { kept: T[]; newest: string | undefined } {
+  const kept: T[] = []
   let newest: string | undefined
-  const filtered: T[] = []
+  let newestEpoch = -Infinity
   for (const item of items) {
     const epoch = toEpochMs(timestampOf(item))
     if (epoch === undefined) {
-      // Without a bound the item cannot be older than anything, so keep it.
-      // With a bound its age is unknown — it may well be old, so drop it.
-      if (sinceEpoch === undefined) filtered.push(item)
+      if (sinceEpoch === undefined) kept.push(item)
       continue
     }
-    if (newest === undefined || epoch > (toEpochMs(newest) ?? 0)) {
+    if (epoch > newestEpoch) {
+      newestEpoch = epoch
       newest = new Date(epoch).toISOString()
     }
-    if (sinceEpoch === undefined || epoch > sinceEpoch) {
-      filtered.push(item)
-    }
+    if (sinceEpoch === undefined || epoch > sinceEpoch) kept.push(item)
   }
+  return { kept, newest }
+}
 
-  const truncated = options.complete === false
-  let advancedTo: string | undefined
-  const shouldAdvance = (options.advance ?? true) && !truncated
-  if (shouldAdvance && cursorName && newest) {
-    const current = await store.get(cursorName)
-    const currentEpoch = current ? toEpochMs(current.value) : undefined
-    const newestEpoch = toEpochMs(newest) ?? 0
-    // Only move the cursor forward, and only report a move that happened.
-    if (currentEpoch === undefined || newestEpoch > currentEpoch) {
-      await store.set(cursorName, newest)
-      advancedTo = newest
-    }
-  }
-
-  return { items: filtered, since, advancedTo, fromCursor, truncated }
+/** Move the cursor forward to `newest`; never backwards, and never silently. */
+async function advanceCursor(
+  store: CursorStore,
+  cursorName: string,
+  newest: string,
+): Promise<string | undefined> {
+  const current = await store.get(cursorName)
+  const currentEpoch = current ? toEpochMs(current.value) : undefined
+  const newestEpoch = toEpochMs(newest) ?? 0
+  if (currentEpoch !== undefined && newestEpoch <= currentEpoch) return undefined
+  await store.set(cursorName, newest)
+  return newest
 }

@@ -12,7 +12,7 @@ import {
   listBriefings,
   markBriefingRead,
 } from '../api/briefing.ts'
-import { printTable, sanitize } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const briefingListCommand = defineCommand({
@@ -101,7 +101,7 @@ export const briefingPrefsCommand = defineCommand({
     const { token } = await getToken()
     const prefs = await getBriefingPreferences(token, args.timezone, args.language)
     for (const [key, value] of Object.entries(prefs)) {
-      console.log(`  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      console.log(`  ${key}: ${stringifyValue(value)}`)
     }
   },
 })

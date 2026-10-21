@@ -1,10 +1,14 @@
+import { stringifyValue, yesNo } from '../util/value.ts'
+
+export { stringifyValue, yesNo }
+
 /**
  * Clean terminal output formatting — no ugly console.table borders.
  */
 
 // Control characters built from char codes — no literals in regexes (Sonar S6324).
-const ESC = String.fromCharCode(27)
-const BEL = String.fromCharCode(7)
+const ESC = String.fromCodePoint(27)
+const BEL = String.fromCodePoint(7)
 // Strip every ANSI sequence (CSI incl. SGR, OSC incl. hyperlinks, stray ESC)
 // and residual C0/C1/DEL characters — remote text must not carry escapes at all
 // (SGR conceal mode `ESC[8m` is a real terminal-injection vector). Callers that
@@ -14,7 +18,7 @@ const ANSI_ALL = new RegExp(
   'g',
 )
 const CTRL = new RegExp(
-  `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
+  `[${String.fromCodePoint(0)}-${String.fromCodePoint(31)}${String.fromCodePoint(127)}-${String.fromCodePoint(159)}]`,
   'g',
 )
 
@@ -71,7 +75,7 @@ export function printTable(rows: Record<string, unknown>[], columns: Column[]): 
   for (const row of rows) {
     const line = columns
       .map((c) => {
-        const raw = sanitize(String(row[c.key] ?? '-'))
+        const raw = sanitize(stringifyValue(row[c.key] ?? '-'))
         const shown = raw.length > c.width ? raw.slice(0, c.width - 1) + '…' : raw
         const styled = c.format ? c.format(shown, raw) : shown
         const fill = ' '.repeat(Math.max(0, c.width - shown.length))
@@ -90,7 +94,7 @@ export function printRecord(
   for (const [key, value] of Object.entries(record)) {
     if (value === undefined || value === null) continue
     const label = labels?.[key] ?? key
-    console.log(`  ${label}: ${sanitize(String(value))}`)
+    console.log(`  ${label}: ${sanitize(stringifyValue(value))}`)
   }
 }
 

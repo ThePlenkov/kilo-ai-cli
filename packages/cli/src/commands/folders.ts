@@ -10,7 +10,7 @@ import {
   listWorkspaceFolders,
   moveWorktreeToFolder,
 } from '../api/workspace-folders.ts'
-import { printTable } from './format.ts'
+import { printTable, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const foldersListCommand = defineCommand({
@@ -54,7 +54,7 @@ export const foldersCreateCommand = defineCommand({
       color: args.color,
       organizationId: args.org,
     })
-    console.log(`Created workspace folder ${String(folder.id ?? '')}`)
+    console.log(`Created workspace folder ${stringifyValue(folder.id ?? '')}`)
   },
 })
 

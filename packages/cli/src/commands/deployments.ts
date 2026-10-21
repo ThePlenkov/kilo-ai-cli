@@ -11,7 +11,7 @@ import {
   getDeployment,
   listDeployments,
 } from '../api/deployments.ts'
-import { printTable, sanitize } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const deploymentsListCommand = defineCommand({
@@ -25,11 +25,11 @@ export const deploymentsListCommand = defineCommand({
     }
     printTable(
       deployments.map((d) => ({
-        id: sanitize(String(d.id ?? '-')),
-        name: sanitize(String(d.name ?? '-')),
-        slug: sanitize(String(d.slug ?? '-')),
-        status: sanitize(String(d.status ?? '-')),
-        url: sanitize(String(d.url ?? '-')),
+        id: sanitize(stringifyValue(d.id ?? '-')),
+        name: sanitize(stringifyValue(d.name ?? '-')),
+        slug: sanitize(stringifyValue(d.slug ?? '-')),
+        status: sanitize(stringifyValue(d.status ?? '-')),
+        url: sanitize(stringifyValue(d.url ?? '-')),
       })),
       [
         { key: 'id', label: 'ID', width: 36 },
@@ -49,7 +49,7 @@ export const deploymentsGetCommand = defineCommand({
     const { token } = await getToken()
     const deployment = await getDeployment(token, args.id)
     for (const [key, value] of Object.entries(deployment)) {
-      const rendered = typeof value === 'object' ? JSON.stringify(value) : String(value)
+      const rendered = stringifyValue(value)
       console.log(`  ${key}: ${sanitize(rendered)}`)
     }
   },
@@ -79,7 +79,7 @@ export const deploymentsEventsCommand = defineCommand({
       const kind = event.type ?? event.status ?? ''
       const message = event.message ?? ''
       console.log(
-        `${sanitize(String(created))} ${sanitize(String(kind))} ${sanitize(String(message))}`,
+        `${sanitize(stringifyValue(created))} ${sanitize(stringifyValue(kind))} ${sanitize(stringifyValue(message))}`,
       )
     }
   },

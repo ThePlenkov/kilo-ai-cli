@@ -1,5 +1,4 @@
 import React from 'react'
-
 import {
   getPermissionStatus,
   getSecurityConfig,
@@ -7,6 +6,7 @@ import {
   listActiveCommands,
 } from '../../api/security-agent.ts'
 import type { SecurityAgentCommand, SecurityAgentRepository } from '../../api/types.ts'
+import { yesNo } from '../../util/value.ts'
 import { QueryListScreen, QueryRecordScreen } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
@@ -49,7 +49,7 @@ export function SecurityReposScreen({ ctx, focused }: ScreenProps) {
         {
           label: 'Private',
           width: 8,
-          value: (r) => (r.private == null ? '-' : r.private ? 'yes' : 'no'),
+          value: (r) => yesNo(r.private),
           color: (r) => (r.private ? 'yellow' : 'gray'),
         },
         { label: 'Last sync', width: 20, value: (r) => r.last_synced_at ?? r.lastSyncedAt ?? '-' },

@@ -9,6 +9,15 @@ import { join } from 'node:path'
 import type { KiloAuth } from '../api/types.ts'
 
 /** Interface for a credential token store. */
+/**
+ * The bearer token of an auth record, whatever its kind.
+ */
+export function tokenOf(auth: KiloAuth): string {
+  if (auth.type === 'oauth') return auth.access
+  if (auth.type === 'api') return auth.key
+  return auth.token
+}
+
 export interface TokenStore {
   get(): Promise<KiloAuth | undefined>
   set(auth: KiloAuth): Promise<void>

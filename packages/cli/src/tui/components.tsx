@@ -2,8 +2,19 @@
 
 import { Box, Text, useInput } from 'ink'
 import React, { useState } from 'react'
-
+import { stringifyValue } from '../util/value.ts'
 import { useQuery, useTermSize } from './hooks.ts'
+
+/**
+ * A stable React key for a table row: the first column is the identifier in
+ * every table this CLI prints, so it survives a re-sort.
+ */
+function rowKey(row: unknown, index: number): string {
+  const first = (row as Record<string, unknown> | undefined)?.[
+    Object.keys(row as Record<string, unknown>)[0] ?? ''
+  ]
+  return first === undefined ? `row-${index}` : String(first)
+}
 
 export function truncate(s: string, width: number): string {
   if (width <= 0) return ''
@@ -78,7 +89,7 @@ export function DataTable<T>({
         <Text dimColor>{widths.map((w) => '─'.repeat(w)).join('  ')}</Text>
       </Box>
       {rows.map((row, i) => (
-        <Box key={i}>
+        <Box key={rowKey(row, i)}>
           <Text color={i === selected ? 'cyan' : undefined}>{i === selected ? '› ' : '  '}</Text>
           {columns.map((c, j) => {
             const raw = clean(c.value(row))
@@ -120,7 +131,7 @@ export interface QueryListScreenProps<T> {
     selected: T | undefined,
   ) => boolean
   /** Optional summary line rendered above the table. */
-  banner?: (data: T[]) => React.ReactNode
+  banner?: React.ReactNode
 }
 
 export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
@@ -178,7 +189,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   if (rows.length === 0) {
     return (
       <Box flexDirection="column">
-        {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
+        {banner ? <Box marginBottom={1}>{banner}</Box> : null}
         <Text>{emptyText ?? 'Nothing found.'}</Text>
         <Text dimColor>r=refresh Esc=back</Text>
       </Box>
@@ -188,7 +199,7 @@ export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
   const visible = rows.slice(offset, offset + maxVisible)
   return (
     <Box flexDirection="column">
-      {banner ? <Box marginBottom={1}>{banner(rows)}</Box> : null}
+      {banner ? <Box marginBottom={1}>{banner}</Box> : null}
       {offset > 0 ? <Text dimColor> ↑ {offset} more</Text> : null}
       <DataTable rows={visible} columns={columns} selected={selIdx - offset} />
       {offset + maxVisible < rows.length ? (
@@ -219,7 +230,7 @@ export function RecordView({
     <Box flexDirection="column">
       {Object.entries(data).map(([k, v]) => {
         if (v === undefined || v === null) return null
-        const text = clean(typeof v === 'object' ? JSON.stringify(v) : String(v))
+        const text = clean(stringifyValue(v))
         return (
           <Box key={k}>
             <Box width={width}>
@@ -401,7 +412,7 @@ export function Sidebar({
       {window.map((e, i) => {
         if (e.kind === 'group') {
           return (
-            <Text key={`g${i}`} bold dimColor>
+            <Text key={e.title || `g${i}`} bold dimColor>
               {e.title}
             </Text>
           )

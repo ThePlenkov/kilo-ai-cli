@@ -80,7 +80,6 @@ export function ActiveSessionsScreen({ ctx, focused }: ScreenProps) {
 
 /** Account → Cursors: the stored "where was I" markers. */
 export function CursorsScreen({ ctx, focused }: ScreenProps) {
-  void ctx
   return (
     <QueryListScreen<CursorEntry & { name: string }>
       focused={focused}

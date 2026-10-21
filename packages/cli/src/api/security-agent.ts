@@ -524,6 +524,26 @@ export interface BulkDismissResult {
  * so a dead queue is reported instead of silently reported as success — the
  * probe speaks for itself only, never for the commands behind it.
  */
+/**
+ * The ids of the findings that pass the date filters. A missing timestamp is
+ * excluded when a date filter is set — the safe default for a destructive
+ * operation rather than silently matching.
+ */
+function matchingFindingIds(findings: SecurityFinding[], filters: BulkFindingFilters): string[] {
+  if (!filters.createdAfter && !filters.createdBefore) {
+    return findings.map((f) => f.id)
+  }
+  const ids: string[] = []
+  for (const f of findings) {
+    const created = f.createdAt ?? f.created_at
+    if (!created) continue
+    if (filters.createdAfter && created < filters.createdAfter) continue
+    if (filters.createdBefore && created > filters.createdBefore) continue
+    ids.push(f.id)
+  }
+  return ids
+}
+
 export async function dismissFindingsBulk(
   token: string,
   filters: BulkFindingFilters,
@@ -533,10 +553,11 @@ export async function dismissFindingsBulk(
   const errors: string[] = []
   const ids: string[] = []
   let totalMatched = 0
-  let offset = 0
   const limit = 100
 
-  for (;;) {
+  // Collect the matching ids first, then dismiss them one by one.
+  for (let offset = 0; ; offset += limit) {
+    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
     const result = await listFindings(token, {
       repoFullName: filters.repoFullName,
       severity: filters.severity,
@@ -547,21 +568,8 @@ export async function dismissFindingsBulk(
       offset,
     })
     totalMatched = result.totalCount ?? result.total_count ?? totalMatched
-
-    for (const f of result.findings) {
-      if (filters.createdAfter || filters.createdBefore) {
-        const created = f.createdAt ?? f.created_at
-        // Missing timestamp: exclude when date filters are set (safe default
-        // for a destructive op rather than silently matching)
-        if (!created) continue
-        if (filters.createdAfter && created < filters.createdAfter) continue
-        if (filters.createdBefore && created > filters.createdBefore) continue
-      }
-      ids.push(f.id)
-    }
-
+    ids.push(...matchingFindingIds(result.findings, filters))
     if (result.findings.length < limit) break
-    offset += limit
   }
 
   let queued = 0

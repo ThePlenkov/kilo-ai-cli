@@ -10,7 +10,8 @@ const mockStore = {
   clear: vi.fn(),
 }
 
-vi.mock('../../src/auth/token-store.ts', () => ({
+vi.mock('../../src/auth/token-store.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/auth/token-store.ts')>()),
   createTokenStore: () => mockStore,
 }))
 

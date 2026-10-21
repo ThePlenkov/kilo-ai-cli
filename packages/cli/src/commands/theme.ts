@@ -75,10 +75,10 @@ export function colorAnalysis(s: string): string {
  */
 export function repoLink(repoFullName: string | undefined, label?: string): string {
   // Strip control characters (C0 and C1) to prevent terminal injection
-  const c0 = String.fromCharCode(0)
-  const c1f = String.fromCharCode(0x1f)
-  const del = String.fromCharCode(0x7f)
-  const c9f = String.fromCharCode(0x9f)
+  const c0 = String.fromCodePoint(0)
+  const c1f = String.fromCodePoint(0x1f)
+  const del = String.fromCodePoint(0x7f)
+  const c9f = String.fromCodePoint(0x9f)
   const ctrl = new RegExp(`[${c0}-${c1f}${del}-${c9f}]`, 'g')
   const safeLabel = label ? label.replace(ctrl, '') : undefined
   if (!repoFullName || repoFullName === '-') return safeLabel || '-'
@@ -91,7 +91,7 @@ export function repoLink(repoFullName: string | undefined, label?: string): stri
   // Check if terminal supports OSC 8 hyperlinks
   if (!supportsHyperlinks()) return safeLabel ?? safe
   // OSC 8 hyperlink: ESC ] 8 ; ; <url> ESC \ <label> ESC ] 8 ; ; ESC \
-  const esc = String.fromCharCode(27)
+  const esc = String.fromCodePoint(27)
   return `${esc}]8;;${url}${esc}\\${safeLabel ?? safe}${esc}]8;;${esc}\\`
 }
 
@@ -100,15 +100,15 @@ export function repoLink(repoFullName: string | undefined, label?: string): stri
  * Defaults to true for TTY — unsupported terminals ignore the sequences
  * and still show the label text. Use FORCE_HYPERLINK=0 to disable.
  */
-let _hyperlinkSupport: boolean | null = null
+let hyperlinkSupport: boolean | null = null
 function supportsHyperlinks(): boolean {
-  if (_hyperlinkSupport !== null) return _hyperlinkSupport
+  if (hyperlinkSupport !== null) return hyperlinkSupport
   if (process.env.FORCE_HYPERLINK) {
-    _hyperlinkSupport = process.env.FORCE_HYPERLINK !== '0'
-    return _hyperlinkSupport
+    hyperlinkSupport = process.env.FORCE_HYPERLINK !== '0'
+    return hyperlinkSupport
   }
-  _hyperlinkSupport = process.stdout.isTTY === true
-  return _hyperlinkSupport
+  hyperlinkSupport = process.stdout.isTTY === true
+  return hyperlinkSupport
 }
 
 /** Get the full GitHub URL for a repo full name. */

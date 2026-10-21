@@ -86,7 +86,9 @@ describe('TUI screen registry', () => {
     }
   })
 
-  it('renders every screen without throwing', async () => {
+  // Rendering ~40 screens with a tick each can exceed the default 5s budget
+  // on a loaded machine.
+  it('renders every screen without throwing', { timeout: 30_000 }, async () => {
     for (const screen of SCREENS) {
       const stdout = fakeStdout()
       const instance = render(
@@ -103,6 +105,7 @@ describe('TUI screen registry', () => {
         { stdout: stdout as unknown as NodeJS.WriteStream, debug: true },
       )
       // Give ink a tick to mount and run the first effect.
+      // eslint-disable-next-line no-await-in-loop -- each screen is mounted in turn
       await new Promise((resolve) => setTimeout(resolve, 20))
       instance.unmount()
       expect(stdout.chunks.join('')).toBeTypeOf('string')

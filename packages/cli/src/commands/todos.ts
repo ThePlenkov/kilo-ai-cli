@@ -18,7 +18,7 @@ import {
   updateTodoList,
 } from '../api/todos.ts'
 import { printTable } from './format.ts'
-import { getToken } from './helpers.ts'
+import { getToken, triState } from './helpers.ts'
 
 function printLists(lists: Awaited<ReturnType<typeof listTodoLists>>): void {
   if (lists.length === 0) {
@@ -110,7 +110,7 @@ export const todosUpdateListCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const archived = args.archive ? true : args.unarchive ? false : undefined
+    const archived = triState(args.archive, args.unarchive)
     const list = await updateTodoList(token, {
       id: args.id,
       name: args.name,
@@ -200,7 +200,7 @@ export const todosUpdateItemCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const done = args.done ? true : args.undone ? false : undefined
+    const done = triState(args.done, args.undone)
     const item = await updateTodoItem(token, {
       id: args.id,
       title: args.title,

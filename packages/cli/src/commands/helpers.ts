@@ -33,3 +33,13 @@ export async function getToken(): Promise<ResolvedToken> {
 
   return { token: auth.token, auth, organizationId: undefined }
 }
+
+/**
+ * Tri-state value from two mutually exclusive CLI flags: `--flag` means
+ * true, `--no-flag` means false, neither means undefined.
+ */
+export function triState(on: boolean | undefined, off: boolean | undefined): boolean | undefined {
+  if (on) return true
+  if (off) return false
+  return undefined
+}

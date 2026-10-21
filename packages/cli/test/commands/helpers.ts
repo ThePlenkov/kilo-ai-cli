@@ -10,22 +10,24 @@ export function memoryStore(initial: Record<string, string> = {}): CursorStore &
   }
   return {
     entries,
-    async get(name) {
-      return entries[name]
+    get(name) {
+      return Promise.resolve(entries[name])
     },
-    async set(name, value) {
+    set(name, value) {
       const entry = { value, updatedAt: '2026-01-01T00:00:00.000Z' }
       entries[name] = entry
-      return entry
+      return Promise.resolve(entry)
     },
-    async remove(name) {
+    remove(name) {
       delete entries[name]
+      return Promise.resolve()
     },
-    async list() {
-      return entries
+    list() {
+      return Promise.resolve(entries)
     },
-    async clear() {
+    clear() {
       for (const key of Object.keys(entries)) delete entries[key]
+      return Promise.resolve()
     },
   }
 }

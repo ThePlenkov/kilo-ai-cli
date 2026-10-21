@@ -56,7 +56,7 @@ export function ReviewsScreen({ ctx, focused }: ScreenProps) {
           : listCodeReviewsForUser(ctx.token)
       }
       columns={columns}
-      banner={() => <Text dimColor>{ctx.organizationId ? 'org reviews' : 'personal reviews'}</Text>}
+      banner={<Text dimColor>{ctx.organizationId ? 'org reviews' : 'personal reviews'}</Text>}
       onSelect={(r) => ctx.navigate('review-detail', { id: r.id })}
       onBack={ctx.goBack}
       emptyText="No code reviews."

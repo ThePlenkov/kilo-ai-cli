@@ -45,7 +45,7 @@ export function SessionsScreen({ ctx, focused }: ScreenProps) {
         { label: 'Updated', width: 20, value: (s) => s.updated_at.slice(0, 16).replace('T', ' ') },
         { label: 'Ver', width: 4, align: 'right', value: (s) => String(s.version) },
       ]}
-      banner={() =>
+      banner={
         truncated ? (
           <Text color="yellow">⚠ more than 1,000 sessions — showing the most recent</Text>
         ) : null

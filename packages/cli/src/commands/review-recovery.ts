@@ -204,8 +204,10 @@ async function pollUntilTerminal(
   deps: RecoveryDeps,
 ): Promise<string> {
   while (deps.now() < deadline) {
+    // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
     const { review } = await deps.getReview(token, reviewId)
     if (TERMINAL_STATUSES.has(review.status)) return review.status
+    // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
     await deps.sleep(pollMs)
   }
   return 'timeout'
@@ -242,6 +244,7 @@ async function recoverOne(
   let lastModel: string | undefined
   let lastScope: 'repo' | 'global' | undefined
   for (;;) {
+    // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
     const status = await pollUntilTerminal(
       token,
       review.id,
@@ -261,7 +264,9 @@ async function recoverOne(
     }
     const orgId = review.owned_by_organization_id ?? opts.orgId
     lastModel = models[modelIdx]
+    // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
     lastScope = await setModelForReview(token, review, lastModel!, orgId, deps)
+    // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
     await deps.retrigger(token, review.id)
   }
 }
@@ -291,6 +296,7 @@ export async function recoverCodeReviews(
     }
     try {
       results.push(
+        // eslint-disable-next-line no-await-in-loop -- the review is polled until it reaches a terminal state
         await recoverOne(
           token,
           review,
