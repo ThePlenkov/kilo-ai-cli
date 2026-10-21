@@ -529,19 +529,29 @@ export interface BulkDismissResult {
  * excluded when a date filter is set — the safe default for a destructive
  * operation rather than silently matching.
  */
-function matchingFindingIds(findings: SecurityFinding[], filters: BulkFindingFilters): string[] {
-  if (!filters.createdAfter && !filters.createdBefore) {
-    return findings.map((f) => f.id)
-  }
-  const ids: string[] = []
-  for (const f of findings) {
-    const created = f.createdAt ?? f.created_at
-    if (!created) continue
-    if (filters.createdAfter && created < filters.createdAfter) continue
-    if (filters.createdBefore && created > filters.createdBefore) continue
-    ids.push(f.id)
-  }
-  return ids
+export function matchingFindingIds(
+  findings: SecurityFinding[],
+  filters: BulkFindingFilters,
+): string[] {
+  return findings.filter((f) => matchesDateFilters(f, filters)).map((f) => f.id)
+}
+
+/**
+ * Whether a finding passes the date filters. A missing timestamp is excluded
+ * when a date filter is set — the safe default for a destructive operation
+ * rather than silently matching. The dry run uses the same rule, so the
+ * preview never shows a finding that would not be queued.
+ */
+export function matchesDateFilters(
+  finding: Pick<SecurityFinding, 'createdAt' | 'created_at'>,
+  filters: { createdAfter?: string; createdBefore?: string },
+): boolean {
+  if (!filters.createdAfter && !filters.createdBefore) return true
+  const created = finding.createdAt ?? finding.created_at
+  if (!created) return false
+  if (filters.createdAfter && created < filters.createdAfter) return false
+  if (filters.createdBefore && created > filters.createdBefore) return false
+  return true
 }
 
 export async function dismissFindingsBulk(

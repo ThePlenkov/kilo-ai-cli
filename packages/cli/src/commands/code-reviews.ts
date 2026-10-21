@@ -454,7 +454,7 @@ export const reviewsMemorySummaryCommand = defineCommand({
       args.org,
     )
     for (const [key, value] of Object.entries(summary)) {
-      console.log(`  ${key}: ${stringifyValue(value)}`)
+      console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
     }
   },
 })

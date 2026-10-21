@@ -16,7 +16,7 @@ import {
   setNotificationPreferences,
   updateAutoTopUpAmount,
 } from '../api/account.ts'
-import { printTable, stringifyValue } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 export const accountBalanceCommand = defineCommand({
@@ -158,7 +158,7 @@ export const accountTopUpCommand = defineCommand({
     }
     const config = await getAutoTopUpPaymentMethod(token)
     for (const [key, value] of Object.entries(config)) {
-      console.log(`  ${key}: ${stringifyValue(value)}`)
+      console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
     }
   },
 })

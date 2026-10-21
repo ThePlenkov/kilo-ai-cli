@@ -6,14 +6,16 @@ import { stringifyValue } from '../util/value.ts'
 import { useQuery, useTermSize } from './hooks.ts'
 
 /**
- * A stable React key for a table row: the first column is the identifier in
- * every table this CLI prints, so it survives a re-sort.
+ * A stable React key for a table row. The identifier field is used when the
+ * row has one — every table this CLI prints keys on `id` — so the key
+ * survives a refresh or a re-sort. Rows without one fall back to the index.
  */
 function rowKey(row: unknown, index: number): string {
-  const first = (row as Record<string, unknown> | undefined)?.[
-    Object.keys(row as Record<string, unknown>)[0] ?? ''
-  ]
-  return first === undefined ? `row-${index}` : String(first)
+  const record = row as Record<string, unknown> | undefined
+  if (!record) return `row-${index}`
+  const id = record.id ?? record.session_id ?? record.name
+  if (id !== undefined && id !== null) return String(id)
+  return `row-${index}`
 }
 
 export function truncate(s: string, width: number): string {

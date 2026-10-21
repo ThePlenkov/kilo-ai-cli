@@ -24,6 +24,7 @@ import {
   getSecurityStats,
   listActiveCommands,
   listFindings,
+  matchesDateFilters,
   retryRemediation,
   setSecurityEnabled,
   startAnalysis,
@@ -765,15 +766,9 @@ export const securityFindingsCloseCommand = defineCommand({
         overdue: filters.overdue,
         limit: 100,
       })
-      let findings = result.findings
-      if (filters.createdAfter || filters.createdBefore) {
-        findings = findings.filter((f) => {
-          const created = f.createdAt ?? f.created_at ?? ''
-          if (filters.createdAfter && created < filters.createdAfter) return false
-          if (filters.createdBefore && created > filters.createdBefore) return false
-          return true
-        })
-      }
+      // The same filter the dismissal uses — the preview must not show a
+      // finding that would not be queued.
+      const findings = result.findings.filter((f) => matchesDateFilters(f, filters))
       const total = result.totalCount ?? result.total_count ?? findings.length
       console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
       if (filterDesc) console.log(`  filters: ${filterDesc}`)

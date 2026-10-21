@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 
 import { getDashboardStats } from '../../api/security-agent.ts'
 import { stringifyValue } from '../../util/value.ts'
+import { clean } from '../components.tsx'
 
 export interface DashboardViewProps {
   readonly token: string
@@ -109,7 +110,7 @@ function DashboardSection({ title, value }: { title: string; value: unknown }) {
           <Box key={String(row.id ?? row.name ?? i)}>
             {cols.map((c) => (
               <Box key={c} width={18}>
-                <Text>{stringifyValue(row[c] ?? '-').slice(0, 17)}</Text>
+                <Text>{clean(stringifyValue(row[c] ?? '-')).slice(0, 17)}</Text>
               </Box>
             ))}
           </Box>

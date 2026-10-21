@@ -172,16 +172,16 @@ function splitByBound<T>(
   return { kept, newest }
 }
 
-/** Move the cursor forward to `newest`; never backwards, and never silently. */
+/**
+ * Move the cursor forward to `newest`; never backwards, and never silently.
+ * The comparison and the write are one atomic step, so overlapping reads
+ * cannot roll the watermark back.
+ */
 async function advanceCursor(
   store: CursorStore,
   cursorName: string,
   newest: string,
 ): Promise<string | undefined> {
-  const current = await store.get(cursorName)
-  const currentEpoch = current ? toEpochMs(current.value) : undefined
-  const newestEpoch = toEpochMs(newest) ?? 0
-  if (currentEpoch !== undefined && newestEpoch <= currentEpoch) return undefined
-  await store.set(cursorName, newest)
-  return newest
+  const written = await store.setIfNewer(cursorName, newest)
+  return written ? newest : undefined
 }

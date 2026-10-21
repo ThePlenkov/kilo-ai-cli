@@ -15,7 +15,13 @@ import {
 } from '../../api/kiloclaw.ts'
 import type { KiloclawFileTreeNode } from '../../api/types.ts'
 import { yesNo } from '../../util/value.ts'
-import { QueryListScreen, QueryRecordScreen, RecordView, TextScreen } from '../components.tsx'
+import {
+  clean,
+  QueryListScreen,
+  QueryRecordScreen,
+  RecordView,
+  TextScreen,
+} from '../components.tsx'
 import { useQuery, useTermSize } from '../hooks.ts'
 import type { ScreenProps } from '../types.ts'
 
@@ -274,7 +280,7 @@ export function KiloclawFilesScreen({ ctx, focused }: ScreenProps) {
         },
         { label: 'Type', width: 10, value: (n) => n.type },
       ]}
-      banner={<Text dimColor>path: {path ?? '/'}</Text>}
+      banner={<Text dimColor>path: {clean(path ?? '/')}</Text>}
       onSelect={(n) =>
         n.type === 'directory'
           ? ctx.navigate('kiloclaw-files', { path: n.path })

@@ -101,7 +101,7 @@ export const briefingPrefsCommand = defineCommand({
     const { token } = await getToken()
     const prefs = await getBriefingPreferences(token, args.timezone, args.language)
     for (const [key, value] of Object.entries(prefs)) {
-      console.log(`  ${key}: ${stringifyValue(value)}`)
+      console.log(`  ${key}: ${sanitize(stringifyValue(value))}`)
     }
   },
 })

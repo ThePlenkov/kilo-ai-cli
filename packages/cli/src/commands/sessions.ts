@@ -19,7 +19,7 @@ import {
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
 import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
-import { printTable, stringifyValue } from './format.ts'
+import { printTable, sanitize, stringifyValue } from './format.ts'
 import { getToken } from './helpers.ts'
 
 /** Cursor name used by `sessions unified --new`. */
@@ -166,8 +166,9 @@ export const sessionsUnifiedCommand = defineCommand({
           cursor = more.nextCursor
         }
         // A cursor left over means the page budget ran out before the window
-        // was read completely.
-        complete = cursor === null
+        // was read completely. The API reports the end of the pagination as a
+        // missing cursor — `undefined` or `null`, not a fixed null.
+        complete = !cursor
         nextCursor = cursor
       }
       if (!complete) {
@@ -322,7 +323,7 @@ export const sessionsDiffCommand = defineCommand({
     const { token } = await getToken()
     const diff = await getSessionDiff(token, args.id)
     if (diff.kind === 'value') {
-      console.log(stringifyValue(diff.value ?? ''))
+      console.log(sanitize(stringifyValue(diff.value ?? '')))
       return
     }
     const files = diff.files ?? []
