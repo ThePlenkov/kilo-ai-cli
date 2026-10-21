@@ -39,8 +39,16 @@ const proj = new Project("kilo-ai-cli");
 // ---------------------------------------------------------------------------
 const ci = new Pipeline(proj, "ci");
 
+// nx loads the plugins configured in nx.json from `.nx-devkit/**/dist`, and
+// that output is gitignored — on a fresh clone the first nx target would fail
+// with a plugin error instead of a real finding. Build them first.
+const plugins = new ShellStep(ci, "plugins", {
+  command: '[ -d .nx-devkit/packages/release/dist ] || npm run build:plugins',
+  runtime: { shell: "sh" },
+});
 const typecheck = new ShellStep(ci, "typecheck", {
   command: "npm run typecheck",
+  dependsOn: [plugins.node.id],
 });
 const lint = new ShellStep(ci, "lint", {
   command: "npm run lint",
@@ -48,9 +56,14 @@ const lint = new ShellStep(ci, "lint", {
 const format = new ShellStep(ci, "format", {
   command: "npm run format:check",
 });
+// The linter is invoked through npx on purpose: `markdownlint-cli2` pulls in
+// the globby → fast-glob → micromatch → braces chain, and `braces` has no
+// patched release at all (the advisory range is `*`), so it cannot be a
+// dependency of this repository without five high-severity findings. The
+// version is pinned so the gate is reproducible.
 const docs = new ShellStep(ci, "docs", {
   command:
-    'npx markdownlint-cli2 "README.md" "AGENTS.md" "docs/**/*.md" "packages/*/README.md" "#**/node_modules"',
+    'npx --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"',
   runtime: { shell: "sh" },
 });
 const test = new ShellStep(ci, "test", {
@@ -68,7 +81,7 @@ const pack = new ShellStep(ci, "pack", {
 // The CLI has to work when it is started from source.
 const smoke = new ShellStep(ci, "smoke", {
   command:
-    "node packages/cli/src/index.ts --help > /dev/null && node packages/cli/src/index.ts cursor list > /dev/null",
+    "npx tsx packages/cli/src/index.ts --help > /dev/null && npx tsx packages/cli/src/index.ts cursor list > /dev/null",
   dependsOn: [build.node.id],
   runtime: { shell: "sh" },
 });
@@ -79,6 +92,7 @@ const audit = new ShellStep(ci, "audit", {
 });
 
 const ciRoots = [
+  plugins.node.id,
   typecheck.node.id,
   lint.node.id,
   format.node.id,
@@ -100,14 +114,16 @@ const health = new Pipeline(proj, "repo-health");
 // Every GitHub Actions check on main's HEAD must be green.
 const mainGreen = new ShellStep(health, "main-green", {
   command:
-    'out=$(gh api --paginate --slurp "repos/{owner}/{repo}/commits/main/check-runs?per_page=100" | jq -r \'map(.check_runs) | add | group_by(.name) | map(last)[] | select(.app.slug=="github-actions") | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\\(.name) (\\(.conclusion // .status))"\') || exit 1; [ -z "$out" ] || { echo "non-green checks on main:"; echo "$out"; exit 1; }',
+    'json=$(gh api --paginate --slurp "repos/{owner}/{repo}/commits/main/check-runs?per_page=100") || { echo "could not read the check runs of main"; exit 1; }; ' +
+    'out=$(printf \'%s\' "$json" | jq -r \'map(.check_runs) | add | group_by(.name) | map(sort_by(.started_at) | last)[] | select(.app.slug=="github-actions") | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | "\\(.name) (\\(.conclusion // .status))"\') || exit 1; ' +
+    '[ -z "$out" ] || { echo "non-green checks on main:"; echo "$out"; exit 1; }',
   runtime: { shell: "sh" },
 });
 
 // Zero unresolved review threads across the last 20 merged PRs.
 const reviewDebt = new ShellStep(health, "review-debt", {
   command:
-    "count=$(gh api graphql -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){pullRequests(first:20,states:MERGED,orderBy:{field:CREATED_AT,direction:DESC}){nodes{reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved}}}}}}' -F owner='{owner}' -F name='{repo}' --jq '([.data.repository.pullRequests.nodes[].reviewThreads.nodes[]|select(.isResolved==false)]|length) + ([.data.repository.pullRequests.nodes[].reviewThreads.pageInfo.hasNextPage|select(.)]|length)') || exit 1; [ \"$count\" = \"0\" ] || { echo \"unresolved threads or truncated thread pages: $count\"; exit 1; }",
+    "count=$(gh api graphql -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){pullRequests(first:20,states:MERGED,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{reviewThreads(first:100){pageInfo{hasNextPage}nodes{isResolved}}}}}}' -F owner='{owner}' -F name='{repo}' --jq '([.data.repository.pullRequests.nodes[].reviewThreads.nodes[]|select(.isResolved==false)]|length) + ([.data.repository.pullRequests.nodes[].reviewThreads.pageInfo.hasNextPage|select(.)]|length)') || exit 1; [ \"$count\" = \"0\" ] || { echo \"unresolved threads or truncated thread pages: $count\"; exit 1; }",
   runtime: { shell: "sh" },
 });
 
@@ -115,14 +131,14 @@ const reviewDebt = new ShellStep(health, "review-debt", {
 // caught the forty stale branches this repository accumulated.
 const staleBranches = new ShellStep(health, "stale-branches", {
   command:
-    'if ! heads=$(git ls-remote --heads origin); then echo "ls-remote failed"; exit 1; fi; if ! owner=$(gh repo view --json owner --jq \'.owner.login\'); then echo "repo query failed"; exit 1; fi; stale=""; for b in $(echo "$heads" | sed \'s|.*refs/heads/||\'); do if [ "$b" != "main" ]; then if ! n=$(gh pr list --head "$owner:$b" --state merged --json number --jq length); then echo "pr query failed for $b"; exit 1; fi; if [ "$n" -gt 0 ]; then stale="$stale $b"; fi; fi; done; [ -z "$stale" ] || { echo "stale branches:$stale"; exit 1; }',
+    'if ! heads=$(git ls-remote --heads origin); then echo "ls-remote failed"; exit 1; fi; if ! owner=$(gh repo view --json owner --jq \'.owner.login\'); then echo "repo query failed"; exit 1; fi; stale=""; for b in $(echo "$heads" | sed \'s|.*refs/heads/||\'); do if [ "$b" != "main" ]; then if ! open=$(gh pr list --head "$owner:$b" --state open --json number --jq length); then echo "pr query failed for $b"; exit 1; fi; if [ "$open" -gt 0 ]; then continue; fi; if ! merged=$(gh pr list --head "$owner:$b" --state merged --json number --jq length); then echo "pr query failed for $b"; exit 1; fi; if [ "$merged" -gt 0 ]; then if git ls-remote --exit-code --heads origin "refs/heads/$b" >/dev/null 2>&1; then stale="$stale $b"; fi; fi; fi; done; [ -z "$stale" ] || { echo "stale branches:$stale"; exit 1; }',
   runtime: { shell: "sh" },
 });
 
 // Zero open dependabot alerts.
 const dependabotAlerts = new ShellStep(health, "dependabot-alerts", {
   command:
-    'out=$(gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open" --jq ".[].number" 2>&1) || { echo "$out" | grep -qi "not accessible\\|403" && { echo "::warning::GITHUB_TOKEN cannot read dependabot alerts (needs the vulnerability-alerts scope); check skipped"; exit 0; }; echo "$out"; exit 1; }; [ -z "$out" ] || { echo "open dependabot alerts:"; echo "$out"; exit 1; }',
+    'out=$(gh api --paginate "repos/{owner}/{repo}/dependabot/alerts?state=open" --jq ".[].number" 2>&1) || { echo "$out" | grep -qi "not accessible\\|403" && { echo "::error::this identity cannot read dependabot alerts — the check needs a token with the vulnerability-alerts scope (set REPO_HEALTH_TOKEN)"; exit 1; }; echo "$out"; exit 1; }; [ -z "$out" ] || { echo "open dependabot alerts:"; echo "$out"; exit 1; }',
   runtime: { shell: "sh" },
 });
 

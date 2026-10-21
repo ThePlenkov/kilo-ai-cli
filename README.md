@@ -660,8 +660,9 @@ npm run ci          # typecheck, lint, format, docs, test, build, pack, smoke, a
 npm run ci:health   # main green, review debt, stale branches, dependabot alerts
 ```
 
-`npm run ci` takes about twenty seconds and is the same set the CI runs, so
-a green local run means a green pipeline. The report of the last run is
+`npm run ci` takes about half a minute and runs the same set as the CI
+workflow, so a green local run means a green pipeline. The pre-push hook
+runs it for every normal push (`git push --no-verify` skips it). The report of the last run is
 openable with `npx sverka view`.
 
 ### Build

@@ -47,12 +47,16 @@ npx nx format kilo-ai-cli      # biome check --write
 ## Local CI (sverka)
 
 `sverka.config.ts` is the single definition of the check set. The pre-push
-hook runs it, so nothing reaches the remote without the full gate:
+hook runs the whole gate before a normal push (`git push --no-verify` skips
+it — it is a guard rail, not a lock):
 
 ```bash
-npm run ci          # the check set: typecheck, lint, format, docs, test, build, pack, smoke, audit
+npm run ci          # the check set: plugins, typecheck, lint, format, docs, test, build, pack, smoke, audit
 npm run ci:health   # repository hygiene: main green, review debt, stale branches, dependabot alerts
 ```
+
+The GitHub workflow runs the same set, so a green local run means a green
+pipeline.
 
 Both are also reachable through the sverka CLI:
 
