@@ -109,6 +109,24 @@ const audit = new ShellStep(ci, "audit", {
   dependsOn: [build.node.id],
 });
 
+// The findings the report collected, against the default policy: any
+// high-severity finding fails. The evaluator is the sverka CLI, which lives
+// outside this repository — so the step belongs to the local entry, where
+// that CLI is available.
+const policy = new ShellStep(ci, "policy", {
+  command:
+    String.raw`sh scripts/local-ci.sh policy --findings "$(find .sverka/artifacts -type f -name '*.sarif' | head -n1)"`,
+  runtime: { shell: "sh" },
+  inputs: [
+    {
+      kind: "step",
+      step: lintSarif.node.id,
+      output: "eslint.sarif",
+      type: "artifact",
+    },
+  ],
+});
+
 const ciRoots = [
   plugins.node.id,
   typecheck.node.id,
@@ -186,7 +204,7 @@ export const onPr = new Entry(ci, "on-pr", {
 /** The local pre-push gate — the same checks, on the developer's machine. */
 export const local = new Entry(ci, "local", {
   trigger: manual(),
-  roots: ciRoots,
+  roots: [...ciRoots, policy.node.id],
 });
 
 /** The repository hygiene sweep — on demand. */
