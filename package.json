@@ -15,14 +15,20 @@
     "typecheck": "nx typecheck kilo-ai-cli",
     "test:live": "npm run test:live -w kilo-ai-cli",
     "cli": "node packages/cli/dist/index.mjs",
-    "dev": "node packages/cli/src/index.ts"
+    "dev": "node packages/cli/src/index.ts",
+    "ci": "sh scripts/local-ci.sh ci/local",
+    "ci:health": "sh scripts/local-ci.sh repo-health/check",
+    "prepare": "husky",
+    "build:plugins": "cd .nx-devkit && bun install --frozen-lockfile --ignore-scripts && bun run build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
     "@nx-devkit/release": "file:.nx-devkit/packages/release",
     "@nx/devkit": "23.3.0",
+    "@sverka/workflow": "0.2.34",
     "@types/node": "22.20.2",
     "@types/react": "^18.3.31",
+    "husky": "^9.1.7",
     "memfs": "^4.50.0",
     "nx": "23.3.0",
     "oxlint": "1.82.0",

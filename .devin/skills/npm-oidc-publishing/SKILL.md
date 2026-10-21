@@ -99,6 +99,7 @@ The `--env npm` flag restricts publishing to workflows running in the `npm` GitH
 ### 4. Create the GitHub environment
 
 In GitHub repository settings:
+
 1. Settings → Environments → New environment
 2. Name it `npm` (must match the `environment` field in the release workflow)
 3. (Optional) Add protection rules (required reviewers, deployment branch restrictions)
@@ -111,6 +112,7 @@ git push origin v0.1.0
 ```
 
 This triggers the release workflow, which:
+
 1. Builds the package
 2. Runs typecheck, lint, test
 3. Runs `npm pack` to verify contents
@@ -125,7 +127,7 @@ npm view <pkg-name> version
 
 ## How OIDC trusted publishing works
 
-```
+```text
 GitHub Actions (id-token: write)
     │
     ▼

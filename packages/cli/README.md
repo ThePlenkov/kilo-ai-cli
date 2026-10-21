@@ -392,7 +392,7 @@ Keys: **↑/↓** move in the focused pane, **Enter/→** open the selected scre
 
 ---
 
-## Environment Variables
+## Environment Variable Overrides
 
 ```bash
 # Override the API base URL (e.g. for self-hosted or staging)
@@ -407,7 +407,7 @@ export KILO_CLI_VERSION=1.0.0
 
 ---
 
-## Credential Storage
+## Credential File Locations
 
 | OS | Path |
 |----|------|
@@ -578,13 +578,12 @@ Contributions are welcome via pull requests to the [`ThePlenkov/kilo-ai-cli`](ht
 1. Fork the repository.
 2. Create a feature branch: `git checkout -b feat/my-feature`.
 3. Make your changes following the existing conventions.
-4. Run the full verification suite:
+4. Run the full verification suite — the same gate the pre-push hook runs:
+
    ```bash
-   npx nx typecheck kilo-ai-cli
-   npx nx lint kilo-ai-cli
-   npx nx test kilo-ai-cli
-   npx nx build kilo-ai-cli
+   npm run ci
    ```
+
 5. Open a pull request against `main`.
 
 ### Conventions

@@ -12,3 +12,6 @@ tmp/
 
 # npm pack artifacts
 *.tgz
+
+# sverka run artifacts (local CI reports)
+.sverka/

@@ -32,5 +32,15 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
+      - name: Docs lint
+        run: npx --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"
       - run: npm run test
       - run: npm run build
+      - name: Pack (dry run)
+        run: npm pack --dry-run --workspace kilo-ai-cli
+      - name: Smoke (the CLI from source)
+        run: |
+          ./node_modules/.bin/tsx packages/cli/src/index.ts --help > /dev/null
+          ./node_modules/.bin/tsx packages/cli/src/index.ts cursor list > /dev/null
+      - name: Dependency audit
+        run: npm audit --audit-level=high
