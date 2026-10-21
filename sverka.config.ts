@@ -52,9 +52,11 @@ const typecheck = new ShellStep(ci, "typecheck", {
 });
 const lint = new ShellStep(ci, "lint", {
   command: "npm run lint",
+  dependsOn: [plugins.node.id],
 });
 const format = new ShellStep(ci, "format", {
   command: "npm run format:check",
+  dependsOn: [plugins.node.id],
 });
 // The linter is invoked through npx on purpose: `markdownlint-cli2` pulls in
 // the globby → fast-glob → micromatch → braces chain, and `braces` has no
@@ -68,6 +70,7 @@ const docs = new ShellStep(ci, "docs", {
 });
 const test = new ShellStep(ci, "test", {
   command: "npm run test",
+  dependsOn: [plugins.node.id],
 });
 const build = new ShellStep(ci, "build", {
   command: "npm run build",
