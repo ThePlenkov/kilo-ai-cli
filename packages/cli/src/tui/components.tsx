@@ -381,7 +381,7 @@ export function Sidebar({
   readonly focused: boolean
   readonly width?: number
   /** Max content lines (excl. border). Window scrolls to keep `selected` visible. */
-  height?: number
+  readonly height?: number
 }) {
   const entries = flattenSidebar(groups)
 
