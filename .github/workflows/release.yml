@@ -245,8 +245,10 @@ jobs:
           # Match the run by the PR's head commit — a branch can carry an
           # older run that is still awaiting approval, and approving that one
           # would leave the current PR without a `check`.
-          read -r BRANCH SHA <<< "$(gh pr list --state open --json headRefName,headRefOid \
-            --jq '[.[] | select(.headRefName | startswith("release/"))] | .[0] | "\(.headRefName) \(.headRefOid)"' 2>/dev/null || true)"
+          # The newest open release PR is the one this job just created —
+          # an older one must not be picked up when several are open.
+          read -r BRANCH SHA <<< "$(gh pr list --state open --json headRefName,headRefOid,createdAt \
+            --jq '[.[] | select(.headRefName | startswith("release/"))] | max_by(.createdAt) | "\(.headRefName) \(.headRefOid)"' 2>/dev/null || true)"
           if [ -z "$BRANCH" ] || [ -z "$SHA" ]; then
             echo "::warning::No open release PR found — nothing to approve"
             exit 0
@@ -263,4 +265,8 @@ jobs:
             echo "No run awaiting approval yet (attempt $attempt/12)"
             sleep 5
           done
-          echo "::warning::No CI run awaiting approval for $BRANCH — approve it manually"
+          # The bump PR exists, so a CI run for it must exist too. Exiting
+          # successfully here would leave the PR blocked on the required
+          # `check` with nothing pointing at the problem.
+          echo "::error::No CI run awaiting approval for $BRANCH — approve it manually"
+          exit 1
