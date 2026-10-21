@@ -664,27 +664,27 @@ async function main() {
     // the command never got past the API and nothing was mutated.
     const restoreBroke = !!postError && (ok || !entitlement || !ENTITLEMENT.test(postError))
     const restoreNote = postError ? ` (restore also failed: ${truncate(postError, 80)})` : ''
-    const status: Status = restoreBroke
-      ? 'FAIL'
-      : ok
-        ? 'PASS'
-        : expected || entitlement
-          ? 'SKIP'
-          : 'FAIL'
+    const exitNote = truncate(errLine ?? `exit ${code}`, 140)
+
+    let status: Status = 'FAIL'
+    if (!restoreBroke) {
+      if (ok) status = 'PASS'
+      else if (expected || entitlement) status = 'SKIP'
+    }
+
+    let detail: string
+    if (postError && ok) detail = `restore failed: ${truncate(postError, 160)}`
+    else if (ok) detail = c.note ?? ''
+    else if (expected)
+      detail = `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
+    else if (entitlement) detail = `entitlement: ${exitNote}${restoreNote}`
+    else detail = `${exitNote}${restoreNote}`
+
     rows.push({
       cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
       cls: c.cls,
       status,
-      detail:
-        postError && ok
-          ? `restore failed: ${truncate(postError, 160)}`
-          : ok
-            ? (c.note ?? '')
-            : expected
-              ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
-              : entitlement
-                ? `entitlement: ${truncate(errLine ?? `exit ${code}`, 140)}${restoreNote}`
-                : `${truncate(errLine ?? `exit ${code}`, 140)}${restoreNote}`,
+      detail,
     })
     console.log(
       `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
