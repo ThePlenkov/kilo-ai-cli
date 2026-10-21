@@ -71,6 +71,19 @@ interface Ctx {
 }
 
 const INCLUDE_MANUAL = process.argv.includes('--include-manual')
+
+/**
+ * Entitlement errors — the account is not in a state that allows the call
+ * (expired trial, no subscription). They say nothing about the API
+ * contract, so they are a skip, never a failure. Without this an expired
+ * trial turns the whole weekly run red and hides the real signal.
+ *
+ * Deliberately narrow: a generic "does not have access" is a *permission*
+ * problem, which can be a real regression (wrong scope, wrong auth), so it
+ * must stay a failure.
+ */
+const ENTITLEMENT =
+  /trial has expired|requires an active subscription|subscription is not eligible/i
 const outIdx = process.argv.indexOf('--out')
 const OUT = outIdx > 0 ? process.argv[outIdx + 1]! : OUT_DEFAULT
 
@@ -641,18 +654,37 @@ async function main() {
       .find((l) => /ERROR|Error:|error/i.test(l) && l.length > 3)
     const ok = code === 0 && !/\bERROR\b/.test(output)
     const expected = !ok && c.expectError && c.expectError.test(output)
-    const status: Status = postError ? 'FAIL' : ok ? 'PASS' : expected ? 'SKIP' : 'FAIL'
+    // Only the error line decides: a command that fails for another reason
+    // and merely mentions an entitlement word somewhere in its output is
+    // still a failure.
+    const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
+    // A restore failure matters when the command applied a change, or when it
+    // failed for a different reason than the restore — that means the state
+    // may be half-mutated. When both failed on the same entitlement error,
+    // the command never got past the API and nothing was mutated.
+    const restoreBroke = !!postError && (ok || !entitlement || !ENTITLEMENT.test(postError))
+    const restoreNote = postError ? ` (restore also failed: ${truncate(postError, 80)})` : ''
+    const exitNote = truncate(errLine ?? `exit ${code}`, 140)
+
+    let status: Status = 'FAIL'
+    if (!restoreBroke) {
+      if (ok) status = 'PASS'
+      else if (expected || entitlement) status = 'SKIP'
+    }
+
+    let detail: string
+    if (postError && ok) detail = `restore failed: ${truncate(postError, 160)}`
+    else if (ok) detail = c.note ?? ''
+    else if (expected)
+      detail = `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
+    else if (entitlement) detail = `entitlement: ${exitNote}${restoreNote}`
+    else detail = `${exitNote}${restoreNote}`
+
     rows.push({
       cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
       cls: c.cls,
       status,
-      detail: postError
-        ? `restore failed: ${truncate(postError, 160)}`
-        : ok
-          ? (c.note ?? '')
-          : expected
-            ? `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
-            : truncate(errLine ?? `exit ${code}`, 160),
+      detail,
     })
     console.log(
       `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
