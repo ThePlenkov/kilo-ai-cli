@@ -51,9 +51,16 @@ hook runs the whole gate before a normal push (`git push --no-verify` skips
 it — it is a guard rail, not a lock):
 
 ```bash
-npm run ci          # the check set: plugins, typecheck, lint, format, docs, test, build, pack, smoke, audit
+npm run ci          # the check set: plugins, typecheck, lint, lint-sarif, format, docs,
+                    #   test, build, pack, smoke, audit, policy
 npm run ci:health   # repository hygiene: main green, review debt, stale branches, dependabot alerts
+npm run ci:policy   # evaluate the collected findings against the policy on their own
 ```
+
+The `policy` step is the one the hosted workflow does not run: the evaluator
+is the sverka CLI, which lives outside this repository, so the hosted
+workflow keeps the lint step's own gate until the sverka npm package is
+installable in CI.
 
 The GitHub workflow runs the same set, so a green local run means a green
 pipeline.

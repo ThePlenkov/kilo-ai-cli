@@ -115,7 +115,7 @@ const audit = new ShellStep(ci, "audit", {
 // that CLI is available.
 const policy = new ShellStep(ci, "policy", {
   command:
-    String.raw`sh scripts/local-ci.sh policy --findings "$(find .sverka/artifacts -type f -name '*.sarif' | head -n1)"`,
+    String.raw`sh scripts/local-ci.sh policy --findings eslint.sarif`,
   runtime: { shell: "sh" },
   inputs: [
     {
@@ -198,7 +198,7 @@ export const onPush = new Entry(ci, "on-push", {
 
 export const onPr = new Entry(ci, "on-pr", {
   trigger: changeRequest({ branches: ["main"] }),
-  roots: ciRoots,
+  roots: [...ciRoots, policy.node.id],
 });
 
 /** The local pre-push gate — the same checks, on the developer's machine. */

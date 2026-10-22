@@ -12,7 +12,28 @@
 #   sh scripts/local-ci.sh policy --findings <file>
 set -e
 SVERKA_REPO="${SVERKA_REPO:-$HOME/projects/sverka}"
-if [ -f "$SVERKA_REPO/packages/cli/src/bin.ts" ]; then
-  exec bun "$SVERKA_REPO/packages/cli/src/bin.ts" "$@"
+
+sverka() {
+  if [ -f "$SVERKA_REPO/packages/cli/src/bin.ts" ]; then
+    bun "$SVERKA_REPO/packages/cli/src/bin.ts" "$@"
+  else
+    npx --yes sverka@0.2.34 "$@"
+  fi
+}
+
+# No arguments means the local gate.
+if [ "$#" -eq 0 ]; then
+  set -- run --entry ci/local
 fi
-exec npx --yes sverka@0.2.34 "$@"
+
+# `policy` without an explicit --findings uses the newest collected report.
+if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
+  latest="$(ls -td .sverka/artifacts/*/ 2>/dev/null | head -1)"
+  if [ -z "$latest" ]; then
+    echo "no collected report — run the gate first (npm run ci)" >&2
+    exit 1
+  fi
+  set -- policy --findings "${latest}ci/lint-sarif/eslint.sarif"
+fi
+
+sverka "$@"
