@@ -110,7 +110,7 @@ export const todosUpdateListCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const archived = triState(args.archive, args.unarchive)
+    const archived = triState(args.archive, args.unarchive, "'--archive' and '--unarchive'")
     const list = await updateTodoList(token, {
       id: args.id,
       name: args.name,
@@ -200,7 +200,7 @@ export const todosUpdateItemCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const done = triState(args.done, args.undone)
+    const done = triState(args.done, args.undone, "'--done' and '--undone'")
     const item = await updateTodoItem(token, {
       id: args.id,
       title: args.title,

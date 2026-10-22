@@ -153,7 +153,7 @@ export const webhooksUpdateCommand = defineCommand({
       promptTemplate: args.prompt,
       model: args.model,
       organizationId: args.org,
-      enabled: triState(args.enable, args.disable),
+      enabled: triState(args.enable, args.disable, "'--enable' and '--disable'"),
     })
     console.log(`Updated webhook trigger ${args.id}`)
   },

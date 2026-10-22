@@ -85,14 +85,35 @@ describe('command layer', () => {
       expect(todosApi.updateTodoItem).toHaveBeenCalledWith('tok', { id: 'i1' })
     })
 
+    it('update-item turns --undone into done: false', async () => {
+      todosApi.updateTodoItem.mockResolvedValue({ id: 'i1', listId: 'l1', title: 'Ship it' })
+
+      await runCommand(todosUpdateItemCommand, { id: 'i1', undone: true })
+
+      expect(todosApi.updateTodoItem).toHaveBeenCalledWith('tok', {
+        id: 'i1',
+        done: false,
+      })
+    })
+
+    it('update-item rejects --done together with --undone', async () => {
+      await expect(
+        runCommand(todosUpdateItemCommand, { id: 'i1', done: true, undone: true }),
+      ).rejects.toThrow(/Conflicting flags/)
+      expect(todosApi.updateTodoItem).not.toHaveBeenCalled()
+    })
+
     it('up-next lists the next open items', async () => {
       todosApi.listUpNextTodos.mockResolvedValue([
         { id: 'i1', listId: 'l1', title: 'Next thing', listName: 'Backlog' },
       ])
 
       const capture = captureConsole()
-      await runCommand(todosUpNextCommand, { limit: '3' })
-      capture.restore()
+      try {
+        await runCommand(todosUpNextCommand, { limit: '3' })
+      } finally {
+        capture.restore()
+      }
 
       expect(todosApi.listUpNextTodos).toHaveBeenCalledWith('tok', undefined, 3)
       expect(capture.lines.join('\n')).toContain('Next thing')
@@ -112,6 +133,7 @@ describe('command layer', () => {
       await expect(runCommand(accountTopUpCommand, { amount: '12oops' })).rejects.toThrow(
         /whole number of cents/,
       )
+      expect(accountApi.updateAutoTopUpAmount).not.toHaveBeenCalled()
     })
 
     it('top-up passes a whole amount through', async () => {
@@ -149,8 +171,11 @@ describe('command layer', () => {
       ])
 
       const capture = captureConsole()
-      await runCommand(accountDevicesCommand, {})
-      capture.restore()
+      try {
+        await runCommand(accountDevicesCommand, {})
+      } finally {
+        capture.restore()
+      }
 
       expect(capture.lines.join('\n')).toContain('kilo-ai-cli/1.0')
     })
@@ -185,6 +210,24 @@ describe('command layer', () => {
       )
     })
 
+    it('update can disable a trigger', async () => {
+      webhooksApi.updateWebhookTrigger.mockResolvedValue({ id: 'w1' })
+
+      await runCommand(webhooksUpdateCommand, { id: 'w1', disable: true })
+
+      expect(webhooksApi.updateWebhookTrigger).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ id: 'w1', enabled: false }),
+      )
+    })
+
+    it('update rejects --enable together with --disable', async () => {
+      await expect(
+        runCommand(webhooksUpdateCommand, { id: 'w1', enable: true, disable: true }),
+      ).rejects.toThrow(/Conflicting flags/)
+      expect(webhooksApi.updateWebhookTrigger).not.toHaveBeenCalled()
+    })
+
     it('update leaves the enabled flag alone when neither flag is given', async () => {
       webhooksApi.updateWebhookTrigger.mockResolvedValue({ id: 'w1' })
 
@@ -207,11 +250,16 @@ describe('command layer', () => {
       ])
 
       const capture = captureConsole()
-      await runCommand(deploymentsListCommand, {})
-      capture.restore()
+      try {
+        await runCommand(deploymentsListCommand, {})
+      } finally {
+        capture.restore()
+      }
 
       const output = capture.lines.join('\n')
-      expect(output).toContain('my app')
+      for (const value of ['d1', 'my app', 'my-app', 'deployed', 'https://x']) {
+        expect(output).toContain(value)
+      }
       expect(output).not.toContain('[object Object]')
     })
   })

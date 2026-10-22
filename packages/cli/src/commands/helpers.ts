@@ -36,9 +36,16 @@ export async function getToken(): Promise<ResolvedToken> {
 
 /**
  * Tri-state value from two mutually exclusive CLI flags: `--flag` means
- * true, `--no-flag` means false, neither means undefined.
+ * true, `--no-flag` means false, neither means undefined. Both at once is a
+ * mistake and is rejected — silently picking one of them hides the
+ * contradiction from the user.
  */
-export function triState(on: boolean | undefined, off: boolean | undefined): boolean | undefined {
+export function triState(
+  on: boolean | undefined,
+  off: boolean | undefined,
+  label = 'the two flags conflict',
+): boolean | undefined {
+  if (on && off) throw new Error(`Conflicting flags: ${label}.`)
   if (on) return true
   if (off) return false
   return undefined
