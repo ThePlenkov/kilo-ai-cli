@@ -61,34 +61,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="$(node -p "require('./packages/cli/package.json').version")"
-          # The packument is served with `max-age=300`, so `npm view <pkg>
-          # version` can report a stale value for minutes after a publish —
-          # and a stale "not published" would send the release job into a
-          # second publish of a version that is already out. The per-version
-          # manifest is created together with the version, so probe that.
-          # `curl` prints 000 and exits non-zero when it cannot connect.
-          # `|| echo 000` would append a second 000 ("000000") and every
-          # comparison below would miss it, so the status is normalised here.
-          STATUS="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-            "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)")" || STATUS="000"
-          if [ "$STATUS" = "200" ]; then
-            # The version is on the registry. A release is still needed when
-            # its tag or its GitHub Release is missing — the executor skips
-            # the publish and finishes the rest.
-            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
-               gh release view "v$VERSION" >/dev/null 2>&1; then
-              echo "needed=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "needed=true" >> "$GITHUB_OUTPUT"
-            fi
-          elif [ "$STATUS" = "404" ]; then
-            echo "needed=true" >> "$GITHUB_OUTPUT"
+          # The tag and the GitHub Release are the authoritative evidence that
+          # this version is out: both are created in the same run as the
+          # publish. The registry is not — it replicates a fresh version over
+          # minutes (the 0.4.8 publish was visible seven minutes after
+          # `npm publish` returned), and a stale "not published" here would
+          # send the release job into a second publish of a version that is
+          # already out, which npm refuses.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1 && \
+             gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
           else
-            # The registry state is unknown. Publishing on a guess risks a
-            # second publish of a version that is already out, so fail
-            # loudly instead.
-            echo "::error::npm registry probe failed with HTTP $STATUS — failing guard"
-            exit 1
+            # A release is still needed when the tag or the GitHub Release is
+            # missing — the executor skips the publish and finishes the rest.
+            echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
 
   release:
@@ -97,7 +83,7 @@ jobs:
     if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.guard.outputs.needed == 'true') }}
     runs-on: ubuntu-latest
     environment: npm
-    timeout-minutes: 10
+    timeout-minutes: 30
     # contents:write — push release branch + tags
     # pull-requests:write — open the release PR (bump mode)
     # id-token:write — npm OIDC trusted publishing
@@ -191,13 +177,18 @@ jobs:
       # version over several minutes (the 0.4.8 publish was visible seven
       # minutes after `npm publish` returned), and a three-minute window
       # reported a successful release as failed.
+      #
+      # Sixteen attempts of forty-five seconds is twelve minutes of waiting
+      # — comfortably past the observed lag. The curl timeout is ten seconds
+      # so that a hanging registry cannot push the step past the job's
+      # thirty-minute budget (the earlier steps need some of it too).
       - name: Verify published version
         if: ${{ steps.release.outputs.published == 'true' }}
         working-directory: packages/cli
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           MANIFEST="$(mktemp)"
-          ATTEMPTS=20
+          ATTEMPTS=16
           for attempt in $(seq 1 $ATTEMPTS); do
             # The version manifest, not the packument: the packument is
             # served with `max-age=300` and stays stale for minutes after a
@@ -205,7 +196,7 @@ jobs:
             # `npm view <pkg>` both report the version as missing. The
             # per-version document is created with the version, and the
             # cache-buster keeps a stale 404 from being served.
-            STATUS="$(curl -s -o "$MANIFEST" -w '%{http_code}' --max-time 20 \
+            STATUS="$(curl -s -o "$MANIFEST" -w '%{http_code}' --max-time 10 \
               "https://registry.npmjs.org/kilo-ai-cli/$VERSION?cb=$(date +%s%N)")" || STATUS="000"
             PUBLISHED=""
             if [ "$STATUS" = "200" ]; then
