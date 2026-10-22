@@ -468,12 +468,15 @@ function cleanFindingString(s: string): string {
   let out = ''
   for (let i = 0; i < result.length; i++) {
     const ch = result.charAt(i)
-    const code = ch.charCodeAt(0)
+    const code = ch.codePointAt(0)
+    if (code === undefined) {
+      continue
+    }
     if (code === 27 || code === 7 || (code >= 0x80 && code <= 0x9f)) {
       continue
     }
     if (code >= 32 && code !== 127) {
-      out += ch
+      out += String.fromCodePoint(code)
     }
   }
   return out
