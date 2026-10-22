@@ -123,3 +123,18 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
   **per-version manifest** (`registry.npmjs.org/<pkg>/<version>`), not the
   packument: the packument is served with `max-age=300` and stays stale for
   minutes after a publish.
+  The npm-side trust is what lets `release.yml` publish without a token. It
+  binds the package to that workflow **and** to the `npm` GitHub environment,
+  so a release from any other environment is refused:
+
+  ```bash
+  npm trust github kilo-ai-cli --file release.yml --repo ThePlenkov/kilo-ai-cli \
+    --env npm --allow-publish --yes
+  ```
+
+  Run it only when that binding is lost (a rotated trust, a new
+  environment, a `EOTP`/`E403` on publish) — it needs npm MFA in a browser.
+  The general playbook for the OIDC setup lives with the plugin that
+  implements it, `nx-devkit-prepare-for-release`
+  (`nx-devkit/nx.ts` → `skills/nx-devkit-prepare-for-release/SKILL.md`);
+  this repository keeps only the part that is specific to it.
