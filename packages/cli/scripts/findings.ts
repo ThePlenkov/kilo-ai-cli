@@ -192,10 +192,10 @@ async function sonarResults(): Promise<Finding[]> {
   const results = []
   let skipped = 0
   for (const issue of issues) {
-    const path = String(issue.component ?? '')
-      .split(':')
-      .slice(1)
-      .join(':')
+    // The component is `project:path` — but an issue without one is skipped
+    // rather than stringified into '[object Object]'.
+    const component = issue.component
+    const path = typeof component === 'string' ? component.split(':').slice(1).join(':') : ''
     if (!path) {
       skipped += 1
       continue
