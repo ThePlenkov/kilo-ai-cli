@@ -16,10 +16,11 @@
     "test:live": "npm run test:live -w kilo-ai-cli",
     "cli": "node packages/cli/dist/index.mjs",
     "dev": "node packages/cli/src/index.ts",
-    "ci": "sh scripts/local-ci.sh ci/local",
-    "ci:health": "sh scripts/local-ci.sh repo-health/check",
+    "ci": "sh scripts/local-ci.sh run --entry ci/local",
+    "ci:health": "sh scripts/local-ci.sh run --entry repo-health/check",
     "prepare": "husky",
-    "build:plugins": "cd .nx-devkit && bun install --frozen-lockfile --ignore-scripts && bun run build"
+    "build:plugins": "cd .nx-devkit && bun install --frozen-lockfile --ignore-scripts && bun run build",
+    "ci:policy": "sh scripts/local-ci.sh policy"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
