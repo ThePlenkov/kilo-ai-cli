@@ -76,17 +76,12 @@ npx kilo-ai-cli auth login
 ### From source (development)
 
 ```bash
-git clone --recurse-submodules https://github.com/ThePlenkov/kilo-ai-cli.git
+git clone https://github.com/ThePlenkov/kilo-ai-cli.git
 cd kilo-ai-cli
 
 # Install dependencies
 npm install
 
-# Build the .nx-devkit submodule plugins (required for Nx)
-cd .nx-devkit
-bun install --frozen-lockfile --ignore-scripts
-bun run build
-cd ..
 
 # Build the CLI
 npx nx build kilo-ai-cli
@@ -434,17 +429,11 @@ Errors are printed to `stderr`. The CLI exits non-zero on any failure.
 ### Prerequisites
 
 - Node.js `>= 24.21.0`
-- [Bun](https://bun.sh) (for building the `.nx-devkit` submodule)
 - [Nx](https://nx.dev) (installed via `npm install`)
 
 ### Build
 
 ```bash
-# Build the .nx-devkit submodule plugins (first time only)
-cd .nx-devkit
-bun install --frozen-lockfile --ignore-scripts
-bun run build
-cd ..
 
 # Build the CLI (tsdown bundles to packages/cli/dist/index.mjs)
 npx nx build kilo-ai-cli
@@ -511,7 +500,6 @@ kilo-ai-cli/
 │       ├── package.json
 │       ├── tsconfig.json
 │       └── tsdown.config.ts
-├── .nx-devkit/                 # Nx TypeScript plugin submodule
 ├── .github/workflows/          # CI/CD
 ├── docs/                       # Design docs
 ├── nx.json
@@ -539,7 +527,7 @@ kilo-ai-cli/
 
 ## Architecture
 
-The CLI is a single-package Nx monorepo workspace. The `packages/cli` package contains all source code. The `.nx-devkit` submodule provides Nx TypeScript plugins for zero-config inference (tsdown, vitest, oxlint, biome, tsc).
+The CLI is a single-package Nx monorepo workspace. The `packages/cli` package contains all source code. The `@nx-devkit` plugins (from npm) provide zero-config inference (tsdown, vitest, oxlint, biome, tsc).
 
 ### API layer
 

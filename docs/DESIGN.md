@@ -238,7 +238,7 @@ kilo-ai-cli account balance     # Balance and context budget
 - **Test**: vitest
 - **Lint**: oxlint
 - **Format**: biome
-- **Monorepo**: Nx with @nx-devkit plugins (from submodule)
+- **Monorepo**: Nx with @nx-devkit plugins (from npm)
 - **CLI framework**: citty
 - **HTTP**: native fetch
 - **Validation**: zod
@@ -247,7 +247,6 @@ kilo-ai-cli account balance     # Balance and context budget
 
 ```text
 kilo-ai-cli/
-├── .nx-devkit/              # git submodule (nx-devkit/nx.ts)
 ├── docs/
 │   └── DESIGN.md            # This file
 ├── src/
@@ -318,11 +317,12 @@ kilo-ai-cli/
 
 ## Nx Plugin Configuration
 
-Uses `@nx-devkit/*` plugins from the `.nx-devkit/` submodule. Plugins are
-referenced via `file:` protocol in `package.json` and registered by package
-name in `nx.json`. The typescript preset plugin auto-infers `typecheck`,
-`test`, `build` (via tsdown), `lint` (via oxlint), and `format` (via biome)
-targets from config files — no `project.json` needed.
+Uses the `@nx-devkit/*` plugins from npm. They are versioned dependencies
+in `package.json` and registered in `nx.json` by the path of their built
+plugin (`./node_modules/@nx-devkit/<name>/dist/plugin.mjs`). The typescript
+preset plugin auto-infers `typecheck`, `test`, `build` (via tsdown), `lint`
+(via oxlint), and `format` (via biome) targets from config files — no
+`project.json` needed.
 
 ## Development Workflow (TDD + SDD)
 

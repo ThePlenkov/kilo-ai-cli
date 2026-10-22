@@ -29,7 +29,7 @@ packages/cli/
 - **Test**: vitest
 - **Lint**: oxlint
 - **Format**: biome
-- **Monorepo**: Nx with @nx-devkit plugins (from `.nx-devkit/` submodule)
+- **Monorepo**: Nx with @nx-devkit plugins (from npm)
 - **CLI framework**: citty
 - **Validation**: zod
 
@@ -75,10 +75,8 @@ npx sverka view      # the last run's report
 
 The GitHub workflow is still the hand-written `.github/workflows/ci.yml`:
 sverka's GitHub template emits only checkout + setup-node + `npm ci
---ignore-scripts`, and this repository additionally needs bun and a built
-`.nx-devkit` submodule, which the template cannot express yet. Migrating it
-means either sverka gaining a way to inject CI steps, or the submodule
-build moving into the install.
+--ignore-scripts`, with no way to inject the extra steps this repository
+needs. Migrating it means sverka gaining that ability.
 
 ## TDD Workflow
 

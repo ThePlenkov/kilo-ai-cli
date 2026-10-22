@@ -19,12 +19,11 @@
     "ci": "sh scripts/local-ci.sh run --entry ci/local",
     "ci:health": "sh scripts/local-ci.sh run --entry repo-health/check",
     "prepare": "husky",
-    "build:plugins": "cd .nx-devkit && bun install --frozen-lockfile --ignore-scripts && bun run build",
     "ci:policy": "sh scripts/local-ci.sh policy"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
-    "@nx-devkit/release": "file:.nx-devkit/packages/release",
+    "@nx-devkit/release": "0.0.21",
     "@nx/devkit": "23.3.0",
     "@sverka/workflow": "0.2.34",
     "@types/node": "22.20.2",
@@ -37,7 +36,11 @@
     "tsdown": "0.23.0",
     "tsx": "^4.23.15",
     "typescript": "7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "@nx-devkit/typescript": "0.2.18",
+    "@nx-devkit/skill": "0.1.19",
+    "vite": "^6.4.5",
+    "@nx/js": "23.3.0"
   },
   "dependencies": {
     "ink-select-input": "^6.2.0",
@@ -45,15 +48,17 @@
   },
   "overrides": {
     "smol-toml": "1.9.0",
-    "@nx-devkit/release": {
-      "vitest": "^4.1.12",
-      "vite": "^6.4.5",
-      "esbuild": "^0.25.0"
-    },
     "axios": "1.20.0",
     "source-map-js": "1.2.2",
     "brace-expansion": "5.0.12",
     "undici": "7.29.1",
-    "@nx/devkit": "23.3.0"
+    "@nx/devkit": "23.3.0",
+    "@nx-devkit/typescript": {
+      "typescript": "$typescript",
+      "vitest": "$vitest",
+      "tsdown": "$tsdown",
+      "@biomejs/biome": "$@biomejs/biome",
+      "oxlint": "$oxlint"
+    }
   }
 }

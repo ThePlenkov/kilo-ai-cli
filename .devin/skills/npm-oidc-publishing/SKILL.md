@@ -10,7 +10,7 @@ Set up npm OIDC trusted publishing for a package using `@nx-devkit/prepare-for-r
 ## When to use
 
 - A new package needs to be published to npm via GitHub Actions OIDC (no long-lived npm tokens).
-- The `@nx-devkit/prepare-for-release` plugin is available in the workspace (via `.nx-devkit` submodule).
+- The `@nx-devkit/prepare-for-release` plugin is installed in the workspace (`@nx-devkit/prepare-for-release`).
 - The package name is not yet registered on npm.
 
 ## Prerequisites
@@ -18,7 +18,7 @@ Set up npm OIDC trusted publishing for a package using `@nx-devkit/prepare-for-r
 1. **npm account** with MFA enabled (browser-based approval — npm sends a push notification, you click approve in your browser; no OTP codes needed).
 2. **npm CLI** version 11.15.0 or later (required for `npm trust github`). Check with `npm --version`; update with `npm install -g npm@^11.15.0`.
 3. **npm CLI** logged in (`npm whoami` returns your username).
-4. **`.nx-devkit` submodule** built (`cd .nx-devkit && bun install && bun run build`).
+4. **The `@nx-devkit/prepare-for-release` plugin** installed (`npm install`).
 5. **GitHub repository** with a release workflow (e.g. `.github/workflows/release.yml`) that uses `id-token: write` and `registry-url: https://registry.npmjs.org`.
 
 ## Steps
@@ -34,7 +34,7 @@ Create `release/project.json` in the workspace root:
   "sourceRoot": "release",
   "targets": {
     "prepare-for-release": {
-      "executor": "./.nx-devkit/packages/prepare-for-release:publish-placeholder",
+      "executor": "@nx-devkit/prepare-for-release:publish-placeholder",
       "options": {
         "trustRepo": "<owner>/<repo>"
       }
@@ -68,7 +68,7 @@ Or run the executor directly:
 
 ```bash
 node -e "
-import('./.nx-devkit/packages/prepare-for-release/dist/executors/publish-placeholder/executor.mjs').then(async (m) => {
+import('@nx-devkit/prepare-for-release').then(async (m) => {
   const result = await m.default(
     { trustRepo: '<owner>/<repo>', dryRun: false },
     { projectGraph: { nodes: { '<pkg-name>': { type: 'lib', data: { root: 'packages/cli' } } } }, root: process.cwd() }
