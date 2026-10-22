@@ -62,8 +62,8 @@ is the sverka CLI, which lives outside this repository, so the hosted
 workflow keeps the lint step's own gate until the sverka npm package is
 installable in CI.
 
-The GitHub workflow runs the same set, so a green local run means a green
-pipeline.
+The GitHub workflow runs the same set except the `policy` step, so a green
+local run means a green pipeline.
 
 Both are also reachable through the sverka CLI:
 

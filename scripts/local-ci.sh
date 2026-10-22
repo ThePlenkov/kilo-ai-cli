@@ -26,14 +26,23 @@ if [ "$#" -eq 0 ]; then
   set -- run --entry ci/local
 fi
 
-# `policy` without an explicit --findings uses the newest collected report.
+# `policy` without an explicit --findings uses the newest collected report —
+# the newest run that actually produced one.
 if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
-  latest="$(ls -td .sverka/artifacts/*/ 2>/dev/null | head -1)"
-  if [ -z "$latest" ]; then
+  report=""
+  for dir in $(ls -td .sverka/artifacts/*/ 2>/dev/null); do
+    if [ -f "${dir}ci/lint-sarif/eslint.sarif" ]; then
+      report="${dir}ci/lint-sarif/eslint.sarif"
+      break
+    fi
+  done
+  if [ -z "$report" ]; then
     echo "no collected report — run the gate first (npm run ci)" >&2
     exit 1
   fi
-  set -- policy --findings "${latest}ci/lint-sarif/eslint.sarif"
+  # Keep the other options (--baseline, --format, …) and add the findings.
+  shift
+  set -- policy --findings "$report" "$@"
 fi
 
 sverka "$@"

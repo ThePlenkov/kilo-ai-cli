@@ -656,18 +656,21 @@ The check set is defined once, in `sverka.config.ts`, and runs locally
 before every push — the pre-push hook does it for you:
 
 ```bash
-npm run ci          # typecheck, lint, format, docs, test, build, pack, smoke, audit, policy
+npm run ci          # plugins, typecheck, lint, lint-sarif, format, docs,
+                    #   test, build, pack, smoke, audit, policy
 npm run ci:health   # main green, review debt, stale branches, dependabot alerts
 npm run ci:policy   # the collected findings against the policy, on their own
 ```
 
-The `policy` step fails on any high-severity finding. It is the one step the
-hosted workflow does not run — the evaluator is the sverka CLI, which lives
-outside this repository.
+The `policy` step fails on any high-severity finding, and on any *new*
+medium-severity finding (the repository has none today, so there is nothing
+to grandfather). It is the one step the hosted workflow does not run — the
+evaluator is the sverka CLI, which lives outside this repository.
 
-`npm run ci` takes about half a minute and runs the same set as the CI
-workflow, so a green local run means a green pipeline. The pre-push hook
-runs it for every normal push (`git push --no-verify` skips it). The report of the last run is
+`npm run ci` takes about half a minute and runs the same checks as the CI
+workflow — plus the policy step, which the hosted workflow cannot run yet —
+so a green local run means a green pipeline. The pre-push hook runs it for
+every normal push (`git push --no-verify` skips it). The report of the last run is
 openable with `npx sverka view`.
 
 ### Build
