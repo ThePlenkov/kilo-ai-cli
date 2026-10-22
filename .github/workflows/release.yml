@@ -112,7 +112,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          submodules: true
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -122,23 +122,11 @@ jobs:
           # OIDC trusted publishing — npm authenticates via the OIDC token
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: latest
-
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Build .nx-devkit submodule plugins
-        working-directory: .nx-devkit
-        run: |
-          bun install --frozen-lockfile --ignore-scripts
-          bun run build
 
-      # npm run scripts are scoped to kilo-ai-cli (unscoped run-many would
-      # execute targets on the .nx-devkit packages too, whose executors
-      # aren't resolvable from the root install) and npm puts
+      # npm run scripts are scoped to kilo-ai-cli and npm puts
       # node_modules/.bin on PATH without npx's registry fallback.
       - name: Build
         run: npm run build

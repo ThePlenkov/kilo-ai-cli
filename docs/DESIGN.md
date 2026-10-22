@@ -317,11 +317,12 @@ kilo-ai-cli/
 
 ## Nx Plugin Configuration
 
-Uses the `@nx-devkit/*` plugins from npm. Plugins are
-referenced via `file:` protocol in `package.json` and registered by package
-name in `nx.json`. The typescript preset plugin auto-infers `typecheck`,
-`test`, `build` (via tsdown), `lint` (via oxlint), and `format` (via biome)
-targets from config files — no `project.json` needed.
+Uses the `@nx-devkit/*` plugins from npm. They are versioned dependencies
+in `package.json` and registered in `nx.json` by the path of their built
+plugin (`./node_modules/@nx-devkit/<name>/dist/plugin.mjs`). The typescript
+preset plugin auto-infers `typecheck`, `test`, `build` (via tsdown), `lint`
+(via oxlint), and `format` (via biome) targets from config files — no
+`project.json` needed.
 
 ## Development Workflow (TDD + SDD)
 

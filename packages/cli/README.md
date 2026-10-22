@@ -82,7 +82,6 @@ cd kilo-ai-cli
 # Install dependencies
 npm install
 
-cd ..
 
 # Build the CLI
 npx nx build kilo-ai-cli
@@ -435,7 +434,6 @@ Errors are printed to `stderr`. The CLI exits non-zero on any failure.
 ### Build
 
 ```bash
-cd ..
 
 # Build the CLI (tsdown bundles to packages/cli/dist/index.mjs)
 npx nx build kilo-ai-cli
