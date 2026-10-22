@@ -463,8 +463,14 @@ async function refreshBaseline(target: string): Promise<void> {
 }
 
 function stripAnsi(s: string): string {
-  let result = s.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
-  result = result.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+  const csi = String.fromCharCode(0x1b) + '['
+  const osc = String.fromCharCode(0x1b) + ']'
+  const bel = String.fromCharCode(0x07)
+  let result = s.replace(new RegExp(csi + '[0-9;?]*[ -/]*[@-~]', 'g'), '')
+  result = result.replace(
+    new RegExp(osc + '[^' + bel + ']*(?:' + bel + '|' + String.fromCharCode(0x1b) + '\\\\)', 'g'),
+    '',
+  )
   return result
 }
 
