@@ -472,11 +472,18 @@ function cleanFindingString(s: string): string {
   )
   let out = ''
   for (let i = 0; i < result.length; i++) {
-    const code = result.charCodeAt(i)
+    const ch = result.charAt(i)
+    const code = ch.codePointAt(0)
+    if (code === undefined) {
+      continue
+    }
     if (code < 32 || code === 127 || (code >= 0x80 && code <= 0x9f)) {
       continue
     }
-    out += result.charAt(i)
+    out = out + ch
+    if (code >= 0x10000) {
+      i++
+    }
   }
   return out
 }
