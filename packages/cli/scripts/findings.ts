@@ -470,7 +470,21 @@ function cleanFindingString(s: string): string {
   let result = s
   // Strip ANSI escape sequences
   result = result.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[ -/]*[@-~]', 'g'), '')
-  result = result.replace(new RegExp(String.fromCharCode(27) + '\\][^' + String.fromCharCode(7) + String.fromCharCode(27) + ']*(?:' + String.fromCharCode(7) + '|' + String.fromCharCode(27) + '\\\\)', 'g'), '')
+  result = result.replace(
+    new RegExp(
+      String.fromCharCode(27) +
+        '\\][^' +
+        String.fromCharCode(7) +
+        String.fromCharCode(27) +
+        ']*(?:' +
+        String.fromCharCode(7) +
+        '|' +
+        String.fromCharCode(27) +
+        '\\\\)',
+      'g',
+    ),
+    '',
+  )
   // Strip other control chars
   let out = ''
   for (let i = 0; i < result.length; i++) {
