@@ -123,3 +123,27 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
   **per-version manifest** (`registry.npmjs.org/<pkg>/<version>`), not the
   packument: the packument is served with `max-age=300` and stays stale for
   minutes after a publish.
+  The npm-side trust is what lets `release.yml` publish without a token. It
+  binds the package to that workflow **and** to the `npm` GitHub environment,
+  so a release from any other environment is refused:
+
+  ```bash
+  npm trust github kilo-ai-cli --file release.yml --repo ThePlenkov/kilo-ai-cli \
+    --env npm --allow-publish --yes
+  ```
+
+  Run it only when that binding is lost (a rotated trust, a new
+  environment, an `EOTP`/`E403` on publish) — it needs npm MFA in a browser.
+  Replacing an existing binding takes two commands: `npm trust list
+  kilo-ai-cli` to see the current relationship, `npm trust revoke --id=<id>
+  kilo-ai-cli` to drop it — a new one cannot be created while the old
+  relationship is still there.
+  A *new* environment needs two steps: create it in the repository settings
+  (Settings → Environments, named to match `environment: npm` in
+  `.github/workflows/release.yml`) and re-bind the trust to it with
+  `--env <that name>`.
+  The general playbook for the OIDC setup lives with the plugin that
+  implements it, `nx-devkit-prepare-for-release`
+  (<https://github.com/nx-devkit/nx.ts> →
+  `skills/nx-devkit-prepare-for-release/SKILL.md`); this repository keeps
+  only the part that is specific to it.
