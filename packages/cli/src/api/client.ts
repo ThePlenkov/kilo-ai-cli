@@ -103,7 +103,16 @@ async function readBody(response: Response, procedure: string): Promise<string> 
   assertDeclaredSize(response, procedure)
   const streamed = await readStreamedBody(response, procedure)
   if (streamed !== null) return streamed
-  return await response.text()
+  const text = await response.text()
+  if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) {
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Response too large: >${MAX_BODY_BYTES} bytes`,
+    )
+  }
+  return text
 }
 
 /**

@@ -199,10 +199,15 @@ async function sonarResults(): Promise<Finding[]> {
       }),
     )
     // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-    const body = (await readJson(response, SONAR_API, SONAR_ISSUES_PATH)) as {
-      issues?: Record<string, unknown>[]
+    const body = (await readJson(response, SONAR_API, SONAR_ISSUES_PATH)) as unknown
+    if (!body || typeof body !== 'object') {
+      throw new Error('sonar: unexpected response shape')
     }
-    const batch = body.issues ?? []
+    const issuesValue = (body as Record<string, unknown>).issues
+    if (!Array.isArray(issuesValue)) {
+      throw new Error('sonar: issues must be an array')
+    }
+    const batch = issuesValue as Record<string, unknown>[]
     issues.push(...batch)
     if (batch.length < SONAR_PAGE_SIZE) break
   }
@@ -215,6 +220,28 @@ async function sonarResults(): Promise<Finding[]> {
     const component = issue.component
     const path = typeof component === 'string' ? component.split(':').slice(1).join(':') : ''
     if (!path) {
+      // If the component equals the project key only, treat as project-level issue
+      if (component === SONAR_KEY) {
+        results.push({
+          ruleId: (issue.rule as string) ?? 'sonar:unknown',
+          level: GATE_LEVEL,
+          message: { text: (issue.message as string) ?? (issue.rule as string) ?? 'finding' },
+          locations: [
+            {
+              physicalLocation: {
+                artifactLocation: { uri: 'packages/cli' },
+                region: { startLine: (issue.line as number) ?? 1 },
+              },
+            },
+          ],
+          properties: {
+            'sonar:severity': (issue.severity as string) ?? 'unknown',
+            'sonar:type': (issue.type as string) ?? 'unknown',
+            'sonar:effort': (issue.effort as string) ?? 'unknown',
+          },
+        })
+        continue
+      }
       skipped += 1
       continue
     }
@@ -279,16 +306,53 @@ async function codeqlResults(): Promise<Finding[]> {
           signal: AbortSignal.timeout(SCANNER_TIMEOUT_MS),
         }),
       )
+      if (!response.ok) {
+        const remaining = response.headers.get('x-ratelimit-remaining')
+        const reset = response.headers.get('x-ratelimit-reset')
+        const retryAfter = response.headers.get('retry-after')
+        if (response.status === 401) {
+          console.error('codeql: the token cannot read the code-scanning alerts — skipped')
+          return []
+        }
+        if (response.status === 403) {
+          if (
+            remaining === '0' ||
+            retryAfter !== null ||
+            (reset !== null && Number.isNaN(Number(reset)) === false)
+          ) {
+            throw new HttpError(
+              response.status,
+              `HTTP ${response.status} — rate limited (remaining:${remaining} reset:${reset} retry-after:${retryAfter})`,
+            )
+          }
+          // Default to propagate to avoid hiding rate limits
+          throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
+        }
+        throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
+      }
       // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-      body = await readJson(response, GITHUB_API, path)
+      body = await response.json()
     } catch (err) {
-      if (err instanceof HttpError && (err.status === 401 || err.status === 403)) {
-        console.error('codeql: the token cannot read the code-scanning alerts — skipped')
-        return []
+      if (err instanceof HttpError) {
+        if (err.status === 401) {
+          console.error('codeql: the token cannot read the code-scanning alerts — skipped')
+          return []
+        }
+        if (err.status === 403) {
+          const msg = err.message.toLowerCase()
+          if (msg.includes('rate') || msg.includes('limit') || msg.includes('retry')) {
+            throw err
+          }
+          // If ambiguous, be safe and propagate to avoid hiding rate-limited results
+          throw err
+        }
       }
       throw err
     }
-    const batch = Array.isArray(body) ? (body as Record<string, unknown>[]) : []
+    if (!Array.isArray(body)) {
+      throw new Error('codeql: alerts must be an array')
+    }
+    const batch = body as Record<string, unknown>[]
     alerts.push(...batch)
     if (batch.length < CODEQL_PAGE_SIZE) break
   }
@@ -412,11 +476,12 @@ async function backlog(): Promise<void> {
   } catch {
     console.error('backlog: no baseline yet — every finding counts as new')
   }
+  const sanitize = (s: string) => s.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').replace(/[\x00-\x1F\x7F]/g, '')
   const rows = findings.map((finding) => ({
     state: known.has(finding.fingerprint) ? 'known' : 'new',
-    rule: finding.rule,
-    at: `${finding.file}:${finding.startLine}`,
-    message: finding.message.slice(0, 80),
+    rule: sanitize(finding.rule),
+    at: sanitize(`${finding.file}:${finding.startLine}`),
+    message: sanitize(finding.message.slice(0, 80)),
   }))
   const newCount = rows.filter((row) => row.state === 'new').length
   console.log(`# Findings — ${findings.length} total, ${newCount} new\n`)
