@@ -460,23 +460,13 @@ async function refreshBaseline(target: string): Promise<void> {
 
 function cleanFindingString(s: string): string {
   let result = s
+  const esc = '\u001b'
+  const bel = '\u0007'
   // Strip ANSI escape sequences
-  result = result.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[ -/]*[@-~]', 'g'), '')
-  result = result.replace(
-    new RegExp(
-      String.fromCharCode(27) +
-        '\\][^' +
-        String.fromCharCode(7) +
-        String.fromCharCode(27) +
-        ']*(?:' +
-        String.fromCharCode(7) +
-        '|' +
-        String.fromCharCode(27) +
-        '\\\\)',
-      'g',
-    ),
-    '',
-  )
+  const ansiCsi = new RegExp(esc + '\\[[0-9;?]*[ -/]*[@-~]', 'g')
+  result = result.replace(ansiCsi, '')
+  const ansiOsc = new RegExp(esc + '\\][^' + bel + esc + ']*(?:' + bel + '|' + esc + '\\\\)', 'g')
+  result = result.replace(ansiOsc, '')
   // Strip other control chars
   let out = ''
   for (let i = 0; i < result.length; i++) {
