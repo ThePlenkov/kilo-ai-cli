@@ -345,14 +345,14 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   }
 
   const handleToggleKey = () => {
-    if (!config || confirmToggle) {
-      if (confirmToggle) {
-        setConfirmToggle(false)
-        void doToggle()
-      }
+    // Two presses: the first arms the confirmation, the second acts. Without
+    // a configuration there is nothing to toggle — the key is swallowed.
+    if (!confirmToggle) {
+      if (config) setConfirmToggle(true)
       return
     }
-    setConfirmToggle(true)
+    setConfirmToggle(false)
+    void doToggle()
   }
 
   const handleAgentKey = (input: string, key: Key) => {

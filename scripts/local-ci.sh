@@ -27,16 +27,21 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # `policy` without an explicit --findings uses the newest collected report —
-# the newest run that actually produced one: the merged findings of every
-# tool, not the lint alone.
+# the merged findings of every tool, not the lint alone. Two places hold one:
+# the artifact of the newest run that produced it, and the file a standalone
+# `npm run ci:findings` writes. The newer of the two wins.
 if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
-  report=""
+  candidates=""
   for dir in $(ls -td .sverka/artifacts/*/ 2>/dev/null); do
     if [ -f "${dir}ci/findings/findings.sarif" ]; then
-      report="${dir}ci/findings/findings.sarif"
+      candidates="${candidates} ${dir}ci/findings/findings.sarif"
       break
     fi
   done
+  if [ -f .sverka/findings.sarif ]; then
+    candidates="${candidates} .sverka/findings.sarif"
+  fi
+  report=$(ls -t $candidates 2>/dev/null | head -1)
   if [ -z "$report" ]; then
     echo "no collected findings — run the gate first (npm run ci)" >&2
     exit 1

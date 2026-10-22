@@ -834,8 +834,8 @@ function maskArg(s: string): string {
 /** Escape a value for embedding in a Markdown table cell (backslashes first). */
 function escapeMdCell(s: string): string {
   return s
-    .replaceAll(/\\/g, String.raw`\\`)
-    .replaceAll(/\|/g, String.raw`\|`)
+    .replaceAll('\\', String.raw`\\`)
+    .replaceAll('|', String.raw`\|`)
     .replaceAll(/\r?\n/g, ' <br> ')
 }
 

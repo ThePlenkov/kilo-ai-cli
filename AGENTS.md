@@ -69,6 +69,11 @@ run: the collector needs the network and the evaluator is the sverka CLI,
 which lives outside this repository, so the hosted workflow keeps the lint
 step's own gate until the sverka npm package is installable in CI.
 
+The CodeQL source needs a token with the security-events scope (`GH_TOKEN` or
+`GITHUB_TOKEN`); without one it is skipped and the log says so. A scanner
+that cannot answer fails the collection — a gate that passes without the
+findings of a tool is worse than a gate that stops.
+
 The GitHub workflow runs the same set except the `findings` and `policy`
 steps, so a green local run means a green pipeline.
 

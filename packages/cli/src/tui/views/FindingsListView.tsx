@@ -221,13 +221,13 @@ function FilterSelectScreen({
   focused,
   onSelect,
   onCancel,
-}: {
+}: Readonly<{
   title: string
   items: { label: string; value: string }[]
   focused: boolean
   onSelect: (value: string | undefined) => void
   onCancel: () => void
-}) {
+}>) {
   return (
     <Box flexDirection="column">
       <Text bold color="cyan">
@@ -251,13 +251,13 @@ function RepoFilterScreen({
   focused,
   onSelect,
   onCancel,
-}: {
+}: Readonly<{
   repos: SecurityAgentRepository[] | null
   reposError: string | null
   focused: boolean
   onSelect: (repo: string | undefined) => void
   onCancel: () => void
-}) {
+}>) {
   if (reposError) {
     return (
       <Box flexDirection="column">

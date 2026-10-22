@@ -20,9 +20,9 @@
     "ci:health": "sh scripts/local-ci.sh run --entry repo-health/check",
     "prepare": "husky",
     "ci:policy": "sh scripts/local-ci.sh policy",
-    "ci:findings": "node packages/cli/scripts/findings.mjs collect --out .sverka/findings.sarif",
-    "ci:baseline": "node packages/cli/scripts/findings.mjs baseline",
-    "ci:backlog": "node packages/cli/scripts/findings.mjs backlog"
+    "ci:findings": "node packages/cli/scripts/findings.ts collect --out .sverka/findings.sarif",
+    "ci:baseline": "node packages/cli/scripts/findings.ts baseline",
+    "ci:backlog": "node packages/cli/scripts/findings.ts backlog"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",

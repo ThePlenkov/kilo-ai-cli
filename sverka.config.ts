@@ -105,7 +105,7 @@ const audit = new ShellStep(ci, "audit", {
 // needs the network and the sverka CLI, and the hosted workflow keeps the
 // lint step's own gate until the sverka package is installable in CI.
 const findings = new ShellStep(ci, "findings", {
-  command: "node scripts/findings.mjs collect",
+  command: "node scripts/findings.ts collect",
   runtime: { shell: "sh", workingDir: "packages/cli" },
   outputs: { "findings.sarif": { type: "artifact", fromStdout: true } },
 });
