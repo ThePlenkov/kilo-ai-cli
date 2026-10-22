@@ -77,30 +77,25 @@ class HttpError extends Error {
 }
 
 /**
- * Fetch JSON from a scanner API — the base and the path are constants, the
- * parameters the query needs. The URL is built here and not handed in: a URL
- * that reaches the HTTP client from the outside is a request injection.
+ * Perform a scanner request, mapping a transport failure to a collection
+ * error.
  *
- * The request has a timeout — a scanner that stalls must not block the gate.
+ * The request is handed in as a function: the URL is built by the caller,
+ * where the base and the path are constants, and not passed in from the
+ * outside — a URL that reaches the HTTP client from the outside is a request
+ * injection.
  */
-async function fetchJson(
-  base: string,
-  path: string,
-  params: Record<string, string>,
-  headers: Record<string, string> = {},
-): Promise<unknown> {
-  const query = new URLSearchParams(params).toString()
-  const target = query ? `${base}${path}?${query}` : `${base}${path}`
-  let response: Response
+async function request(fetchIt: () => Promise<Response>): Promise<Response> {
   try {
-    response = await fetch(target, {
-      headers,
-      signal: AbortSignal.timeout(SCANNER_TIMEOUT_MS),
-    })
+    return await fetchIt()
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     throw new Error(`request failed: ${detail}`, { cause: err })
   }
+}
+
+/** The JSON of a scanner response, or the failure it carries. */
+async function readJson(response: Response, base: string, path: string): Promise<unknown> {
   if (!response.ok) {
     throw new HttpError(response.status, `HTTP ${response.status} — ${base}${path}`)
   }
@@ -190,14 +185,23 @@ function lintResults(): Finding[] {
 async function sonarResults(): Promise<Finding[]> {
   const issues: Record<string, unknown>[] = []
   for (let page = 1; ; page++) {
-    // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-    const body = (await fetchJson(SONAR_API, SONAR_ISSUES_PATH, {
+    const query = new URLSearchParams({
       componentKeys: SONAR_KEY,
       branch: SONAR_BRANCH,
       resolved: 'false',
       ps: String(SONAR_PAGE_SIZE),
       p: String(page),
-    })) as { issues?: Record<string, unknown>[] }
+    }).toString()
+    // eslint-disable-next-line no-await-in-loop -- the pages come one after another
+    const response = await request(() =>
+      fetch(`${SONAR_API}${SONAR_ISSUES_PATH}?${query}`, {
+        signal: AbortSignal.timeout(SCANNER_TIMEOUT_MS),
+      }),
+    )
+    // eslint-disable-next-line no-await-in-loop -- the pages come one after another
+    const body = (await readJson(response, SONAR_API, SONAR_ISSUES_PATH)) as {
+      issues?: Record<string, unknown>[]
+    }
     const batch = body.issues ?? []
     issues.push(...batch)
     if (batch.length < SONAR_PAGE_SIZE) break
@@ -256,23 +260,27 @@ async function codeqlResults(): Promise<Finding[]> {
 
   const alerts: Record<string, unknown>[] = []
   for (let page = 1; ; page++) {
+    const query = new URLSearchParams({
+      state: 'open',
+      per_page: String(CODEQL_PAGE_SIZE),
+      page: String(page),
+    }).toString()
+    const path = `/repos/${REPOSITORY}/code-scanning/alerts`
     let body: unknown
     try {
       // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-      body = await fetchJson(
-        GITHUB_API,
-        `/repos/${REPOSITORY}/code-scanning/alerts`,
-        {
-          state: 'open',
-          per_page: String(CODEQL_PAGE_SIZE),
-          page: String(page),
-        },
-        {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+      const response = await request(() =>
+        fetch(`${GITHUB_API}${path}?${query}`, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          signal: AbortSignal.timeout(SCANNER_TIMEOUT_MS),
+        }),
       )
+      // eslint-disable-next-line no-await-in-loop -- the pages come one after another
+      body = await readJson(response, GITHUB_API, path)
     } catch (err) {
       if (err instanceof HttpError && (err.status === 401 || err.status === 403)) {
         console.error('codeql: the token cannot read the code-scanning alerts — skipped')

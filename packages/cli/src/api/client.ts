@@ -109,20 +109,14 @@ async function readBody(response: Response, procedure: string): Promise<string> 
 /**
  * Perform the request, mapping a transport failure to a network error.
  *
- * The path is built here and not handed in as a URL: a URL that reaches the
- * HTTP client from the outside is a request injection.
+ * The request is handed in as a function: the URL is built by the caller,
+ * where the base and the path are known, and not passed in from the
+ * outside — a URL that reaches the HTTP client from the outside is a
+ * request injection.
  */
-async function fetchResponse(
-  baseUrl: string,
-  path: string,
-  init: RequestInit,
-  procedure: string,
-): Promise<Response> {
+async function perform(request: () => Promise<Response>, procedure: string): Promise<Response> {
   try {
-    return await fetch(`${baseUrl}${path}`, {
-      ...init,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
+    return await request()
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     throw new CloudTrpcError('network', undefined, procedure, detail)
@@ -252,10 +246,14 @@ async function requestQuery<T>(
     kilocodeOrganizationId: options?.organizationId,
   })
 
-  const response = await fetchResponse(
-    baseUrl,
-    `/api/trpc/${procedure}${query}`,
-    { method: 'GET', headers },
+  const url = `${baseUrl}/api/trpc/${procedure}${query}`
+  const response = await perform(
+    () =>
+      fetch(url, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
     procedure,
   )
   const text = await readText(response, procedure)
@@ -329,10 +327,15 @@ async function requestMutation<T>(
     'Content-Type': 'application/json',
   }
 
-  const response = await fetchResponse(
-    baseUrl,
-    `/api/trpc/${procedure}?batch=1`,
-    { method: 'POST', headers, body: JSON.stringify({ '0': input }) },
+  const url = `${baseUrl}/api/trpc/${procedure}?batch=1`
+  const response = await perform(
+    () =>
+      fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ '0': input }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
     procedure,
   )
   const text = await readText(response, procedure)
