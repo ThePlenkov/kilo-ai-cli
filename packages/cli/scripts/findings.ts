@@ -222,6 +222,8 @@ async function sonarResults(): Promise<Finding[]> {
     if (!path) {
       // If the component equals the project key only, treat as project-level issue
       if (component === SONAR_KEY) {
+        const severity = String(issue.severity ?? '').toUpperCase()
+        const isHigh = severity === 'BLOCKER' || severity === 'CRITICAL'
         results.push({
           ruleId: (issue.rule as string) ?? 'sonar:unknown',
           level: GATE_LEVEL,
@@ -235,6 +237,7 @@ async function sonarResults(): Promise<Finding[]> {
             },
           ],
           properties: {
+            sverkaSeverity: isHigh ? 'high' : 'medium',
             'sonar:severity': (issue.severity as string) ?? 'unknown',
             'sonar:type': (issue.type as string) ?? 'unknown',
             'sonar:effort': (issue.effort as string) ?? 'unknown',
@@ -245,6 +248,8 @@ async function sonarResults(): Promise<Finding[]> {
       skipped += 1
       continue
     }
+    const severity = String(issue.severity ?? '').toUpperCase()
+    const isHigh = severity === 'BLOCKER' || severity === 'CRITICAL'
     results.push({
       ruleId: (issue.rule as string) ?? 'sonar:unknown',
       level: GATE_LEVEL,
@@ -258,6 +263,7 @@ async function sonarResults(): Promise<Finding[]> {
         },
       ],
       properties: {
+        sverkaSeverity: isHigh ? 'high' : 'medium',
         'sonar:severity': (issue.severity as string) ?? 'unknown',
         'sonar:type': (issue.type as string) ?? 'unknown',
         'sonar:effort': (issue.effort as string) ?? 'unknown',
@@ -311,6 +317,9 @@ async function codeqlResults(): Promise<Finding[]> {
         const reset = response.headers.get('x-ratelimit-reset')
         const retryAfter = response.headers.get('retry-after')
         if (response.status === 401) {
+          if (token) {
+            throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
+          }
           console.error('codeql: the token cannot read the code-scanning alerts — skipped')
           return []
         }
@@ -335,6 +344,9 @@ async function codeqlResults(): Promise<Finding[]> {
     } catch (err) {
       if (err instanceof HttpError) {
         if (err.status === 401) {
+          if (token) {
+            throw err
+          }
           console.error('codeql: the token cannot read the code-scanning alerts — skipped')
           return []
         }
@@ -343,7 +355,6 @@ async function codeqlResults(): Promise<Finding[]> {
           if (msg.includes('rate') || msg.includes('limit') || msg.includes('retry')) {
             throw err
           }
-          // If ambiguous, be safe and propagate to avoid hiding rate-limited results
           throw err
         }
       }
@@ -362,14 +373,18 @@ async function codeqlResults(): Promise<Finding[]> {
       | { location?: { path?: string; start_line?: number } }
       | undefined
     const location = instance?.location
+    const rule = alert.rule as
+      | { id?: string; description?: string; security_severity_level?: string; severity?: string }
+      | undefined
+    const secSev = rule?.security_severity_level
+    const sevNum = secSev ? Number(secSev) : NaN
+    const isHigh = !Number.isNaN(sevNum) ? sevNum >= 7 : secSev === 'CRITICAL' || secSev === 'HIGH'
+    const codeqlSev = secSev ?? rule?.severity ?? 'unknown'
     return {
-      ruleId: (alert.rule as { id?: string })?.id ?? 'codeql:unknown',
+      ruleId: rule?.id ?? 'codeql:unknown',
       level: GATE_LEVEL,
       message: {
-        text:
-          (alert.rule as { description?: string })?.description ??
-          (alert.rule as { id?: string })?.id ??
-          'finding',
+        text: rule?.description ?? rule?.id ?? 'finding',
       },
       locations: [
         {
@@ -380,9 +395,8 @@ async function codeqlResults(): Promise<Finding[]> {
         },
       ],
       properties: {
-        'codeql:severity':
-          (alert.rule as { security_severity_level?: string })?.security_severity_level ??
-          'unknown',
+        sverkaSeverity: isHigh ? 'high' : 'medium',
+        'codeql:severity': codeqlSev,
       },
     }
   })

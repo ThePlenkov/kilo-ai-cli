@@ -34,18 +34,19 @@ if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
   candidates=""
   for dir in $(ls -td .sverka/artifacts/*/ 2>/dev/null); do
     if [ -f "${dir}ci/findings/findings.sarif" ]; then
-      candidates="${candidates} ${dir}ci/findings/findings.sarif"
+      candidates="$candidates ${dir}ci/findings/findings.sarif"
       break
     fi
   done
   if [ -f .sverka/findings.sarif ]; then
-    candidates="${candidates} .sverka/findings.sarif"
+    candidates="$candidates .sverka/findings.sarif"
   fi
-  report=$(ls -t $candidates 2>/dev/null | head -1)
-  if [ -z "$report" ]; then
+  if [ -z "$candidates" ]; then
     echo "no collected findings — run the gate first (npm run ci)" >&2
     exit 1
   fi
+  report=$(ls -t $candidates 2>/dev/null | head -1)
+  [ -n "$report" ] || { echo "no collected findings — run the gate first (npm run ci)" >&2; exit 1; }
   # Keep the other options (--format, …) and add the findings.
   shift
   set -- policy --findings "$report" "$@"
