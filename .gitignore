@@ -16,5 +16,6 @@ tmp/
 # sverka run artifacts (local CI reports)
 .sverka/
 
-# the lint report the local gate collects
+# the reports the local gate collects
 eslint.sarif
+findings.sarif

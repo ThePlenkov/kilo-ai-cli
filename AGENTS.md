@@ -52,18 +52,25 @@ it — it is a guard rail, not a lock):
 
 ```bash
 npm run ci          # the check set: plugins, typecheck, lint, lint-sarif, format, docs,
-                    #   test, build, pack, smoke, audit, policy
+                    #   test, build, pack, smoke, audit, findings, policy
 npm run ci:health   # repository hygiene: main green, review debt, stale branches, dependabot alerts
 npm run ci:policy   # evaluate the collected findings against the policy on their own
 ```
 
-The `policy` step is the one the hosted workflow does not run: the evaluator
-is the sverka CLI, which lives outside this repository, so the hosted
-workflow keeps the lint step's own gate until the sverka npm package is
-installable in CI.
+The `findings` step merges what every tool knows into one SARIF log — oxlint,
+SonarCloud, CodeQL — and the `policy` step evaluates it against the default
+policy: it fails on a high-severity finding (a lint error) and on any *new*
+medium-severity finding. The known findings live in the ratchet
+`config/findings-baseline.json`; `npm run ci:baseline` refreshes it and
+`npm run ci:backlog` prints the work queue.
 
-The GitHub workflow runs the same set except the `policy` step, so a green
-local run means a green pipeline.
+The `findings` and `policy` steps are the ones the hosted workflow does not
+run: the collector needs the network and the evaluator is the sverka CLI,
+which lives outside this repository, so the hosted workflow keeps the lint
+step's own gate until the sverka npm package is installable in CI.
+
+The GitHub workflow runs the same set except the `findings` and `policy`
+steps, so a green local run means a green pipeline.
 
 Both are also reachable through the sverka CLI:
 

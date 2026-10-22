@@ -651,15 +651,23 @@ before every push — the pre-push hook does it for you:
 
 ```bash
 npm run ci          # plugins, typecheck, lint, lint-sarif, format, docs,
-                    #   test, build, pack, smoke, audit, policy
+                    #   test, build, pack, smoke, audit, findings, policy
 npm run ci:health   # main green, review debt, stale branches, dependabot alerts
 npm run ci:policy   # the collected findings against the policy, on their own
+npm run ci:findings # collect the findings of every tool into one SARIF log
+npm run ci:baseline # refresh the ratchet — the findings that are already known
+npm run ci:backlog  # print the work queue: every finding, the new ones first
 ```
 
-The `policy` step fails on any high-severity finding, and on any *new*
-medium-severity finding (the repository has none today, so there is nothing
-to grandfather). It is the one step the hosted workflow does not run — the
-evaluator is the sverka CLI, which lives outside this repository.
+The `findings` step merges what every tool knows into one SARIF log — oxlint,
+SonarCloud, CodeQL — and the `policy` step evaluates that log against the
+default policy: it fails on a high-severity finding (a lint error) and on
+any *new* medium-severity finding. The findings that are already known live
+in the ratchet `config/findings-baseline.json`; `npm run ci:baseline`
+refreshes it and `npm run ci:backlog` prints the queue. The `findings` and
+`policy` steps are the ones the hosted workflow does not run — the collector
+needs the network, and the evaluator is the sverka CLI, which lives outside
+this repository.
 
 `npm run ci` takes about half a minute and runs the same checks as the CI
 workflow — plus the policy step, which the hosted workflow cannot run yet —

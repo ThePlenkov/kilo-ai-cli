@@ -66,10 +66,11 @@ const format = new ShellStep(ci, "format", {
 // the globby → fast-glob → micromatch → braces chain, and `braces` has no
 // patched release at all (the advisory range is `*`), so it cannot be a
 // dependency of this repository without five high-severity findings. The
-// version is pinned so the gate is reproducible.
+// version is pinned so the gate is reproducible, and `--ignore-scripts` keeps
+// the on-demand install from running the package's lifecycle scripts.
 const docs = new ShellStep(ci, "docs", {
   command:
-    'npx --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"',
+    'npx --ignore-scripts --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"',
   runtime: { shell: "sh" },
 });
 const test = new ShellStep(ci, "test", {
@@ -97,19 +98,32 @@ const audit = new ShellStep(ci, "audit", {
   dependsOn: [build.node.id],
 });
 
+// Every finding the tools know about, merged into one SARIF log: oxlint,
+// SonarCloud and CodeQL. The collector runs oxlint itself, in the package
+// (that is where its own .oxlintrc.json lives), and reads the other two
+// over the network. It is not part of the hosted workflow — the collector
+// needs the network and the sverka CLI, and the hosted workflow keeps the
+// lint step's own gate until the sverka package is installable in CI.
+const findings = new ShellStep(ci, "findings", {
+  command: "node scripts/findings.mjs collect",
+  runtime: { shell: "sh", workingDir: "packages/cli" },
+  outputs: { "findings.sarif": { type: "artifact", fromStdout: true } },
+});
+
 // The findings the report collected, against the default policy: any
-// high-severity finding fails. The evaluator is the sverka CLI, which lives
-// outside this repository — so the step belongs to the local entry, where
-// that CLI is available.
+// high-severity finding fails, any medium one fails when it is new. The
+// baseline is the ratchet — the findings that are already known pass, so
+// the backlog does not block the gate but stays visible in the report.
+// The evaluator is the sverka CLI, which lives outside this repository —
+// so the step belongs to the local entry, where that CLI is available.
 const policy = new ShellStep(ci, "policy", {
-  command:
-    String.raw`sh scripts/local-ci.sh policy --findings eslint.sarif`,
+  command: `sh scripts/local-ci.sh policy --findings findings.sarif --baseline config/findings-baseline.json`,
   runtime: { shell: "sh" },
   inputs: [
     {
       kind: "step",
-      step: lintSarif.node.id,
-      output: "eslint.sarif",
+      step: findings.node.id,
+      output: "findings.sarif",
       type: "artifact",
     },
   ],

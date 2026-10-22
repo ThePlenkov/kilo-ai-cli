@@ -27,22 +27,32 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # `policy` without an explicit --findings uses the newest collected report —
-# the newest run that actually produced one.
+# the newest run that actually produced one: the merged findings of every
+# tool, not the lint alone.
 if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
   report=""
   for dir in $(ls -td .sverka/artifacts/*/ 2>/dev/null); do
-    if [ -f "${dir}ci/lint-sarif/eslint.sarif" ]; then
-      report="${dir}ci/lint-sarif/eslint.sarif"
+    if [ -f "${dir}ci/findings/findings.sarif" ]; then
+      report="${dir}ci/findings/findings.sarif"
       break
     fi
   done
   if [ -z "$report" ]; then
-    echo "no collected report — run the gate first (npm run ci)" >&2
+    echo "no collected findings — run the gate first (npm run ci)" >&2
     exit 1
   fi
-  # Keep the other options (--baseline, --format, …) and add the findings.
+  # Keep the other options (--format, …) and add the findings.
   shift
   set -- policy --findings "$report" "$@"
+  # The ratchet, unless the caller named its own baseline.
+  case " $* " in
+    *" --baseline "*) ;;
+    *)
+      if [ -f config/findings-baseline.json ]; then
+        set -- "$@" --baseline config/findings-baseline.json
+      fi
+      ;;
+  esac
 fi
 
 sverka "$@"
