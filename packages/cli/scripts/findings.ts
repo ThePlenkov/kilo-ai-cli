@@ -463,17 +463,23 @@ async function refreshBaseline(target: string): Promise<void> {
 }
 
 function cleanFindingString(s: string): string {
-  const csi = String.raw`\u001b[`
-  const osc = String.raw`\u001b]`
-  const bel = String.raw`\u0007`
-  let result = s.replace(new RegExp(csi + '[0-9;?]*[ -/]*[@-~]', 'g'), '')
-  result = result.replace(
-    new RegExp(
-      osc + '[^' + bel + String.raw`\u001b]*(?:` + bel + '|' + String.raw`\u001b\\` + ')',
-      'g',
-    ),
-    '',
+  const csi = String.fromCharCode(0x1b) + '['
+  const osc = String.fromCharCode(0x1b) + ']'
+  const bel = String.fromCharCode(0x07)
+  const csiRegex = new RegExp(csi.replace(/\\/g, '\\\\') + '[0-9;?]*[ -/]*[@-~]', 'g')
+  let result = s.replace(csiRegex, '')
+  const oscRegex = new RegExp(
+    osc.replace(/\\/g, '\\\\') +
+      '[^' +
+      bel.replace(/\\/g, '\\\\') +
+      ']*(?:' +
+      bel.replace(/\\/g, '\\\\') +
+      '|' +
+      String.fromCharCode(0x1b).replace(/\\/g, '\\\\') +
+      '\\\\)',
+    'g',
   )
+  result = result.replace(oscRegex, '')
   let out = ''
   for (let i = 0; i < result.length; i++) {
     const ch = result.charAt(i)
