@@ -134,6 +134,10 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
 
   Run it only when that binding is lost (a rotated trust, a new
   environment, an `EOTP`/`E403` on publish) — it needs npm MFA in a browser.
+  Replacing an existing binding takes two commands: `npm trust list
+  kilo-ai-cli` to see the current relationship, `npm trust revoke --id=<id>
+  kilo-ai-cli` to drop it — a new one cannot be created while the old
+  relationship is still there.
   A *new* environment needs two steps: create it in the repository settings
   (Settings → Environments, named to match `environment: npm` in
   `.github/workflows/release.yml`) and re-bind the trust to it with
