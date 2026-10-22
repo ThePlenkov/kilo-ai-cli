@@ -462,7 +462,7 @@ async function refreshBaseline(target: string): Promise<void> {
   )
 }
 
-function cleanFindingString(s: string): string {
+function stripAnsiSequences(s: string): string {
   const csi = String.raw`\u001b[`
   const osc = String.raw`\u001b]`
   const bel = String.raw`\u0007`
@@ -474,6 +474,11 @@ function cleanFindingString(s: string): string {
     ),
     '',
   )
+  return result
+}
+
+function cleanFindingString(s: string): string {
+  let result = stripAnsiSequences(s)
   let out = ''
   for (let i = 0; i < result.length; i++) {
     const ch = result.charAt(i)
