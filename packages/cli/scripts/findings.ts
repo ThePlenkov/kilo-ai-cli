@@ -463,11 +463,13 @@ async function refreshBaseline(target: string): Promise<void> {
 }
 
 function stripAnsiSequences(s: string): string {
-  let result = s.replace(
-    /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+  const esc = String.fromCharCode(0x1b)
+  const bel = String.fromCharCode(0x07)
+  let result = s.replace(new RegExp(esc + '\\[[0-9;?]*[ -/]*[@-~]', 'g'), '')
+  result = result.replace(
+    new RegExp(esc + '\\][^' + bel + esc + ']*(?:' + bel + '|' + esc + '\\\\)', 'g'),
     '',
   )
-  result = result.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
   return result
 }
 
