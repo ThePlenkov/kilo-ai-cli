@@ -140,6 +140,6 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
   `--env <that name>`.
   The general playbook for the OIDC setup lives with the plugin that
   implements it, `nx-devkit-prepare-for-release`
-  (https://github.com/nx-devkit/nx.ts →
+  (<https://github.com/nx-devkit/nx.ts> →
   `skills/nx-devkit-prepare-for-release/SKILL.md`); this repository keeps
   only the part that is specific to it.
