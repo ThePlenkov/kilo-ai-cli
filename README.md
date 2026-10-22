@@ -104,16 +104,12 @@ npx kilo-ai-cli auth login
 ### From source (development)
 
 ```bash
-git clone --recurse-submodules https://github.com/ThePlenkov/kilo-ai-cli.git
+git clone https://github.com/ThePlenkov/kilo-ai-cli.git
 cd kilo-ai-cli
 
 # Install dependencies
 npm install
 
-# Build the .nx-devkit submodule plugins (required for Nx)
-cd .nx-devkit
-bun install --frozen-lockfile --ignore-scripts
-bun run build
 cd ..
 
 # Build the CLI
@@ -647,7 +643,6 @@ Errors are printed to `stderr`. The CLI exits non-zero on any failure.
 ### Prerequisites
 
 - Node.js `>= 24.21.0`
-- [Bun](https://bun.sh) (for building the `.nx-devkit` submodule)
 - [Nx](https://nx.dev) (installed via `npm install`)
 
 ### Local CI
@@ -676,10 +671,6 @@ openable with `npx sverka view`.
 ### Build
 
 ```bash
-# Build the .nx-devkit submodule plugins (first time only)
-cd .nx-devkit
-bun install --frozen-lockfile --ignore-scripts
-bun run build
 cd ..
 
 # Build the CLI (tsdown bundles to packages/cli/dist/index.mjs)
@@ -747,7 +738,6 @@ kilo-ai-cli/
 │       ├── package.json
 │       ├── tsconfig.json
 │       └── tsdown.config.ts
-├── .nx-devkit/                 # Nx TypeScript plugin submodule
 ├── .github/workflows/          # CI/CD
 ├── docs/                       # Design docs
 ├── nx.json

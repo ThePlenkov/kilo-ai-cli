@@ -5,14 +5,16 @@
     "libsDir": "packages"
   },
   "plugins": [
-    "./.nx-devkit/packages/typescript-preset/dist/plugin.mjs",
-    "./.nx-devkit/packages/release/dist/plugin.mjs",
-    "./.nx-devkit/packages/skill/dist/plugin.mjs"
+    "./node_modules/@nx-devkit/typescript/dist/plugin.mjs",
+    "./node_modules/@nx-devkit/release/dist/plugin.mjs",
+    "./node_modules/@nx-devkit/skill/dist/plugin.mjs"
   ],
   "targetDefaults": {
     "build": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "inputs": [
         "{projectRoot}/src/**/*",
         "{projectRoot}/tsdown.config.*",
@@ -20,11 +22,15 @@
         "{projectRoot}/package.json",
         "{workspaceRoot}/package-lock.json"
       ],
-      "outputs": ["{projectRoot}/dist"]
+      "outputs": [
+        "{projectRoot}/dist"
+      ]
     },
     "test": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "inputs": [
         "{projectRoot}/src/**/*",
         "{projectRoot}/test/**/*",
@@ -36,7 +42,9 @@
     },
     "typecheck": {
       "cache": true,
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "inputs": [
         "{projectRoot}/src/**/*",
         "{projectRoot}/test/**/*",

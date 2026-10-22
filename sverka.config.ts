@@ -39,20 +39,11 @@ const proj = new Project("kilo-ai-cli");
 // ---------------------------------------------------------------------------
 const ci = new Pipeline(proj, "ci");
 
-// nx loads the plugins configured in nx.json from `.nx-devkit/**/dist`, and
-// that output is gitignored — on a fresh clone the first nx target would fail
-// with a plugin error instead of a real finding. Build them first.
-const plugins = new ShellStep(ci, "plugins", {
-  command: '[ -d .nx-devkit/packages/release/dist ] || npm run build:plugins',
-  runtime: { shell: "sh" },
-});
 const typecheck = new ShellStep(ci, "typecheck", {
   command: "npm run typecheck",
-  dependsOn: [plugins.node.id],
 });
 const lint = new ShellStep(ci, "lint", {
   command: "npm run lint",
-  dependsOn: [plugins.node.id],
 });
 // The same lint run, as SARIF, so the report can collect the findings and a
 // policy can be evaluated against them. The artifact lands in
@@ -65,13 +56,11 @@ const lintSarif = new ShellStep(ci, "lint-sarif", {
   // The local binary, not npx: the version comes from the lockfile and
   // nothing is fetched on the fly.
   command: "../../node_modules/.bin/oxlint --format=sarif",
-  dependsOn: [plugins.node.id],
   runtime: { shell: "sh", workingDir: "packages/cli" },
   outputs: { "eslint.sarif": { type: "artifact", fromStdout: true } },
 });
 const format = new ShellStep(ci, "format", {
   command: "npm run format:check",
-  dependsOn: [plugins.node.id],
 });
 // The linter is invoked through npx on purpose: `markdownlint-cli2` pulls in
 // the globby → fast-glob → micromatch → braces chain, and `braces` has no
@@ -85,7 +74,6 @@ const docs = new ShellStep(ci, "docs", {
 });
 const test = new ShellStep(ci, "test", {
   command: "npm run test",
-  dependsOn: [plugins.node.id],
 });
 const build = new ShellStep(ci, "build", {
   command: "npm run build",
@@ -128,7 +116,6 @@ const policy = new ShellStep(ci, "policy", {
 });
 
 const ciRoots = [
-  plugins.node.id,
   typecheck.node.id,
   lint.node.id,
   lintSarif.node.id,
