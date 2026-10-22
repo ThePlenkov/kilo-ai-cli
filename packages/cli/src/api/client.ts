@@ -251,8 +251,8 @@ async function requestQuery<T>(
     () =>
       // The URL is built from a literal procedure and the configured API host —
       // nothing that reaches it comes from user input.
+      // nosemgrep
       fetch(url, {
-        // nosemgrep
         method: 'GET',
         headers,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -335,8 +335,8 @@ async function requestMutation<T>(
     () =>
       // The URL is built from a literal procedure and the configured API host —
       // nothing that reaches it comes from user input.
+      // nosemgrep
       fetch(url, {
-        // nosemgrep
         method: 'POST',
         headers,
         body: JSON.stringify({ '0': input }),
