@@ -466,6 +466,22 @@ async function refreshBaseline(target: string): Promise<void> {
   )
 }
 
+function cleanFindingString(s: string): string {
+  let result = s
+  // Strip ANSI escape sequences
+  result = result.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[ -/]*[@-~]', 'g'), '')
+  result = result.replace(new RegExp(String.fromCharCode(27) + '\\][^' + String.fromCharCode(7) + String.fromCharCode(27) + ']*(?:' + String.fromCharCode(7) + '|' + String.fromCharCode(27) + '\\\\)', 'g'), '')
+  // Strip other control chars
+  let out = ''
+  for (let i = 0; i < result.length; i++) {
+    const code = result.charCodeAt(i)
+    if (code >= 32 && code !== 127 && !(code >= 128 && code <= 159)) {
+      out += result[i]
+    }
+  }
+  return out
+}
+
 /** The work queue: every finding, the new ones first. */
 async function backlog(): Promise<void> {
   const { loadBaseline } = await import('@sverka/verification')
@@ -476,12 +492,11 @@ async function backlog(): Promise<void> {
   } catch {
     console.error('backlog: no baseline yet — every finding counts as new')
   }
-  const sanitize = (s: string) => s.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').replace(/[\x00-\x1F\x7F]/g, '')
   const rows = findings.map((finding) => ({
     state: known.has(finding.fingerprint) ? 'known' : 'new',
-    rule: sanitize(finding.rule),
-    at: sanitize(`${finding.file}:${finding.startLine}`),
-    message: sanitize(finding.message.slice(0, 80)),
+    rule: cleanFindingString(finding.rule),
+    at: cleanFindingString(`${finding.file}:${finding.startLine}`),
+    message: cleanFindingString(finding.message.slice(0, 80)),
   }))
   const newCount = rows.filter((row) => row.state === 'new').length
   console.log(`# Findings — ${findings.length} total, ${newCount} new\n`)
