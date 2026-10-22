@@ -69,24 +69,30 @@ function printReviews(reviews: Awaited<ReturnType<typeof listCodeReviewsForUser>
   )
 }
 
+/** Print a `Label: value` line — but only when the value is set. */
+function printOptional(label: string, value: string | null | undefined): void {
+  if (value) console.log(`${label}: ${sanitize(value)}`)
+}
+
+/** Print a `Label: yes/no` line — but only when the flag is set. */
+function printOptionalFlag(label: string, value: boolean | null | undefined): void {
+  if (value != null) console.log(`${label}: ${value ? 'yes' : 'no'}`)
+}
+
 function printAgentConfig(config: ReviewAgentConfig, platform: string, scope: string) {
   console.log(`Scope: ${scope}`)
   console.log(`Platform: ${platform}`)
   console.log(`Enabled: ${config.isEnabled ? 'yes' : 'no'}`)
-  if (config.modelSlug) console.log(`Model: ${sanitize(config.modelSlug)}`)
-  if (config.reviewStyle) console.log(`Style: ${sanitize(config.reviewStyle)}`)
-  if (config.gateThreshold) console.log(`Gate threshold: ${sanitize(config.gateThreshold)}`)
+  printOptional('Model', config.modelSlug)
+  printOptional('Style', config.reviewStyle)
+  printOptional('Gate threshold', config.gateThreshold)
   if (config.focusAreas?.length)
     console.log(`Focus areas: ${config.focusAreas.map(sanitize).join(', ')}`)
-  if (config.customInstructions)
-    console.log(`Custom instructions: ${sanitize(config.customInstructions)}`)
-  if (config.thinkingEffort) console.log(`Thinking effort: ${sanitize(config.thinkingEffort)}`)
-  if (config.repositorySelectionMode)
-    console.log(`Repositories: ${sanitize(config.repositorySelectionMode)}`)
-  if (config.disableReviewMd != null)
-    console.log(`Disable review.md: ${config.disableReviewMd ? 'yes' : 'no'}`)
-  if (config.skipBotPullRequests != null)
-    console.log(`Skip bot PRs: ${config.skipBotPullRequests ? 'yes' : 'no'}`)
+  printOptional('Custom instructions', config.customInstructions)
+  printOptional('Thinking effort', config.thinkingEffort)
+  printOptional('Repositories', config.repositorySelectionMode)
+  printOptionalFlag('Disable review.md', config.disableReviewMd)
+  printOptionalFlag('Skip bot PRs', config.skipBotPullRequests)
   if (config.reviewMemoryEnabled != null)
     console.log(`Review memory: ${config.reviewMemoryEnabled ? 'enabled' : 'disabled'}`)
   if (config.councilEnabledRepositoryIds?.length)
@@ -129,6 +135,42 @@ const REVIEWS_MAX_PAGES = 20
 /** Pages read past the last page that still contained a newer review. */
 const REVIEWS_TRAILING_PAGES = 2
 
+/** One page of reviews — the organization list or the personal one. */
+async function fetchReviewPage(
+  token: string,
+  orgId: string | undefined,
+  request: {
+    limit: number
+    offset: number
+    status?: string
+    platform?: string
+    repoFullName?: string
+  },
+): Promise<{ reviews: CodeReview[]; hasMore?: boolean }> {
+  return orgId ? listOrgCodeReviewsPage(token, orgId, request) : listCodeReviewsPage(token, request)
+}
+
+/** Whether a page holds a review newer than the bound. */
+function hasNewerReview(reviews: CodeReview[], boundEpoch: number): boolean {
+  return reviews.some((r) => {
+    const at = Date.parse(r.updated_at ?? r.created_at)
+    return Number.isFinite(at) && at > boundEpoch
+  })
+}
+
+/**
+ * The number of pages in a row without a review newer than the bound. The
+ * window ends after REVIEWS_TRAILING_PAGES such pages.
+ */
+function countEmptyPages(
+  emptyPages: number,
+  reviews: CodeReview[],
+  boundEpoch: number | undefined,
+): number {
+  if (boundEpoch === undefined) return emptyPages
+  return hasNewerReview(reviews, boundEpoch) ? 0 : emptyPages + 1
+}
+
 /**
  * Walk the review list until the delta window is exhausted, so the cursor is
  * only advanced once every newer review has been seen.
@@ -153,25 +195,17 @@ async function fetchReviewWindow(
   let emptyPages = 0
   for (let page = 0; page < REVIEWS_MAX_PAGES; page++) {
     const request = { ...options, limit: options.limit ?? REVIEWS_PAGE_LIMIT, offset }
-    const fetchPage = orgId
-      ? () => listOrgCodeReviewsPage(token, orgId, request)
-      : () => listCodeReviewsPage(token, request)
     // eslint-disable-next-line no-await-in-loop -- offset pagination is sequential
-    const result = await fetchPage()
+    const result = await fetchReviewPage(token, orgId, request)
     reviews.push(...result.reviews)
 
     // A bare-array response carries no `hasMore`; a full page then means
     // there are more pages behind it.
     const hasMore = result.hasMore ?? result.reviews.length >= request.limit
 
-    if (boundEpoch !== undefined) {
-      const hasNewer = result.reviews.some((r) => {
-        const at = Date.parse(r.updated_at ?? r.created_at)
-        return Number.isFinite(at) && at > boundEpoch
-      })
-      emptyPages = hasNewer ? 0 : emptyPages + 1
-      if (emptyPages > REVIEWS_TRAILING_PAGES) return { reviews, complete: true }
-    }
+    emptyPages = countEmptyPages(emptyPages, result.reviews, boundEpoch)
+    const windowEnded = boundEpoch !== undefined && emptyPages > REVIEWS_TRAILING_PAGES
+    if (windowEnded) return { reviews, complete: true }
 
     if (!hasMore) return { reviews, complete: true }
     offset += request.limit
@@ -240,20 +274,20 @@ export const reviewsGetCommand = defineCommand({
     console.log(`Status: ${sanitize(review.status)}`)
     if (success != null) console.log(`Success: ${success ? 'yes' : 'no'}`)
     console.log(`Repo: ${sanitize(review.repo_full_name ?? '-')}  PR #${review.pr_number ?? '?'}`)
-    if (review.pr_author) console.log(`Author: ${sanitize(review.pr_author)}`)
-    if (review.pr_url) console.log(`URL: ${sanitize(review.pr_url)}`)
-    if (review.model) console.log(`Model: ${sanitize(review.model)}`)
-    if (review.agent_version) console.log(`Agent version: ${sanitize(review.agent_version)}`)
-    if (review.trigger_source) console.log(`Trigger: ${sanitize(review.trigger_source)}`)
-    if (review.error_message) console.log(`Error: ${sanitize(review.error_message)}`)
-    if (review.terminal_reason) console.log(`Terminal reason: ${sanitize(review.terminal_reason)}`)
+    printOptional('Author', review.pr_author)
+    printOptional('URL', review.pr_url)
+    printOptional('Model', review.model)
+    printOptional('Agent version', review.agent_version)
+    printOptional('Trigger', review.trigger_source)
+    printOptional('Error', review.error_message)
+    printOptional('Terminal reason', review.terminal_reason)
     if (review.total_tokens_in != null || review.total_tokens_out != null) {
       console.log(`Tokens: in ${review.total_tokens_in ?? 0} / out ${review.total_tokens_out ?? 0}`)
     }
     if (review.total_cost_musd != null)
       console.log(`Cost: $${(review.total_cost_musd / 1000).toFixed(3)}`)
-    if (review.started_at) console.log(`Started: ${sanitize(review.started_at)}`)
-    if (review.completed_at) console.log(`Completed: ${sanitize(review.completed_at)}`)
+    printOptional('Started', review.started_at)
+    printOptional('Completed', review.completed_at)
     if (tokenUsage) {
       console.log(
         `Token usage: in ${tokenUsage.input} / out ${tokenUsage.output} / cached ${tokenUsage.cached}`,

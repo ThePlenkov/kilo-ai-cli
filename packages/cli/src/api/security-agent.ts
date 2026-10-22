@@ -549,6 +549,80 @@ export function matchesDateFilters(
   return true
 }
 
+/** The ids of the findings that match the filters, read page by page. */
+async function collectMatchingIds(
+  token: string,
+  filters: BulkFindingFilters,
+): Promise<{ ids: string[]; totalMatched: number }> {
+  const ids: string[] = []
+  let totalMatched = 0
+  const limit = 100
+  for (let offset = 0; ; offset += limit) {
+    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
+    const result = await listFindings(token, {
+      repoFullName: filters.repoFullName,
+      severity: filters.severity,
+      status: filters.status,
+      outcomeFilter: filters.outcomeFilter,
+      overdue: filters.overdue,
+      limit,
+      offset,
+    })
+    totalMatched = result.totalCount ?? result.total_count ?? totalMatched
+    ids.push(...matchingFindingIds(result.findings, filters))
+    if (result.findings.length < limit) break
+  }
+  return { ids, totalMatched }
+}
+
+/** Dismiss every finding — one request each, in order. */
+async function dismissEach(
+  token: string,
+  ids: string[],
+  reason?: DismissReason,
+): Promise<{ queued: number; rejected: number; commandIds: string[]; errors: string[] }> {
+  let queued = 0
+  let rejected = 0
+  const commandIds: string[] = []
+  const errors: string[] = []
+  for (const id of ids) {
+    try {
+      // eslint-disable-next-line no-await-in-loop -- one dismissal per request, in order
+      const result = await dismissFinding(token, id, reason)
+      if (result.accepted) {
+        queued++
+        if (result.commandId) commandIds.push(result.commandId)
+      } else {
+        rejected++
+        errors.push(`${id}: server did not accept the dismissal`)
+      }
+    } catch (e) {
+      errors.push(`${id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  return { queued, rejected, commandIds, errors }
+}
+
+/** Poll the first queued command, so a dead queue is reported. */
+async function probeFirstCommand(
+  token: string,
+  commandIds: string[],
+  options: BulkDismissOptions,
+): Promise<{ probe?: CommandOutcome; failureDetail?: string; probeError?: string }> {
+  if (!options.probeQueue || commandIds.length === 0) return {}
+  // A failed poll must not discard the queued count — report it, don't throw.
+  try {
+    const first = await waitForCommand(token, commandIds[0], options)
+    const probe = commandOutcome(first)
+    if (probe !== 'failed') return { probe }
+    const failureDetail =
+      commandFailureDetail(first) || `command ${first.id ?? commandIds[0]} failed`
+    return { probe, failureDetail }
+  } catch (e) {
+    return { probeError: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 /**
  * Dismiss findings matching the given filters.
  * Collects matching IDs first (read-only pagination — dismissing shifts
@@ -565,64 +639,9 @@ export async function dismissFindingsBulk(
   reason?: DismissReason,
   options: BulkDismissOptions = {},
 ): Promise<BulkDismissResult> {
-  const errors: string[] = []
-  const ids: string[] = []
-  let totalMatched = 0
-  const limit = 100
-
-  // Collect the matching ids first, then dismiss them one by one.
-  for (let offset = 0; ; offset += limit) {
-    // eslint-disable-next-line no-await-in-loop -- the findings are paged one page at a time
-    const result = await listFindings(token, {
-      repoFullName: filters.repoFullName,
-      severity: filters.severity,
-      status: filters.status,
-      outcomeFilter: filters.outcomeFilter,
-      overdue: filters.overdue,
-      limit,
-      offset,
-    })
-    totalMatched = result.totalCount ?? result.total_count ?? totalMatched
-    ids.push(...matchingFindingIds(result.findings, filters))
-    if (result.findings.length < limit) break
-  }
-
-  let queued = 0
-  let rejected = 0
-  const commandIds: string[] = []
-  for (const id of ids) {
-    try {
-      // eslint-disable-next-line no-await-in-loop -- one dismissal per request, in order
-      const result = await dismissFinding(token, id, reason)
-      if (result.accepted) {
-        queued++
-        if (result.commandId) commandIds.push(result.commandId)
-      } else {
-        rejected++
-        errors.push(`${id}: server did not accept the dismissal`)
-      }
-    } catch (e) {
-      errors.push(`${id}: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
-
-  let probe: CommandOutcome | undefined
-  let failureDetail: string | undefined
-  let probeError: string | undefined
-  if (options.probeQueue && commandIds.length > 0) {
-    // A failed poll must not discard the queued count — report it, don't throw.
-    try {
-      const first = await waitForCommand(token, commandIds[0], options)
-      probe = commandOutcome(first)
-      if (probe === 'failed') {
-        failureDetail = commandFailureDetail(first)
-        if (!failureDetail) failureDetail = `command ${first.id ?? commandIds[0]} failed`
-      }
-    } catch (e) {
-      probeError = e instanceof Error ? e.message : String(e)
-    }
-  }
-
+  const { ids, totalMatched } = await collectMatchingIds(token, filters)
+  const { queued, rejected, commandIds, errors } = await dismissEach(token, ids, reason)
+  const { probe, failureDetail, probeError } = await probeFirstCommand(token, commandIds, options)
   return { queued, rejected, probe, failureDetail, probeError, totalMatched, errors }
 }
 

@@ -73,6 +73,34 @@ export const kiloclawBillingCommand = defineCommand({
   },
 })
 
+/** Walk every page of the billing history and print the entries. */
+async function printAllBillingHistory(
+  token: string,
+  args: { id: string; period?: string; cursor?: string },
+): Promise<void> {
+  let cursor: string | undefined = args.cursor
+  let emitted = 0
+  for (let i = 0; i < 20; i++) {
+    // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+    const page = await getBillingHistory(token, args.id, args.period, cursor)
+    for (const entry of page.entries) console.log(JSON.stringify(entry))
+    emitted += page.entries.length
+    if (!page.hasMore || !page.cursor) {
+      if (emitted === 0) {
+        console.log(
+          args.cursor
+            ? 'No more billing history entries after the given cursor.'
+            : 'No billing history found.',
+        )
+      }
+      return
+    }
+    cursor = page.cursor ?? undefined
+  }
+  console.error('Stopped after 20 pages — history continues')
+  process.exitCode = 1
+}
+
 export const kiloclawBillingHistoryCommand = defineCommand({
   meta: { name: 'billing-history', description: 'Show KiloClaw billing history for an instance' },
   args: {
@@ -84,27 +112,7 @@ export const kiloclawBillingHistoryCommand = defineCommand({
   async run({ args }) {
     const { token } = await getToken()
     if (args.all) {
-      let cursor: string | undefined = args.cursor
-      let emitted = 0
-      for (let i = 0; i < 20; i++) {
-        // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
-        const page = await getBillingHistory(token, args.id, args.period, cursor)
-        for (const entry of page.entries) console.log(JSON.stringify(entry))
-        emitted += page.entries.length
-        if (!page.hasMore || !page.cursor) {
-          if (emitted === 0) {
-            console.log(
-              args.cursor
-                ? 'No more billing history entries after the given cursor.'
-                : 'No billing history found.',
-            )
-          }
-          return
-        }
-        cursor = page.cursor ?? undefined
-      }
-      console.error('Stopped after 20 pages — history continues')
-      process.exitCode = 1
+      await printAllBillingHistory(token, args)
       return
     }
     const page = await getBillingHistory(token, args.id, args.period, args.cursor)

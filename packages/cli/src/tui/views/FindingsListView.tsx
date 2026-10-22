@@ -201,6 +201,174 @@ const SORT_OPTIONS = [
 /* Component                                                           */
 /* ================================================================== */
 
+/** The items of the repository picker: every repository with its finding count. */
+function repoFilterItems(repos: SecurityAgentRepository[]): { label: string; value: string }[] {
+  return [
+    { label: '(all repositories)', value: '' },
+    ...repos.flatMap((r) => {
+      const full = r.fullName ?? r.full_name
+      if (!full) return []
+      const count = r.findingsCount ?? r.findings_count
+      return [{ label: count != null ? `${full} (${count})` : full, value: full }]
+    }),
+  ]
+}
+
+/** The severity and status pickers share their shape. */
+function FilterSelectScreen({
+  title,
+  items,
+  focused,
+  onSelect,
+  onCancel,
+}: {
+  title: string
+  items: { label: string; value: string }[]
+  focused: boolean
+  onSelect: (value: string | undefined) => void
+  onCancel: () => void
+}) {
+  return (
+    <Box flexDirection="column">
+      <Text bold color="cyan">
+        {title}
+      </Text>
+      <SelectInput
+        items={items}
+        isFocused={focused}
+        onSelect={(item) => onSelect(item.value || undefined)}
+      />
+      <Text dimColor>Esc to cancel</Text>
+      <BackHandler onBack={onCancel} focused={focused} />
+    </Box>
+  )
+}
+
+/** The repository picker of the findings list. */
+function RepoFilterScreen({
+  repos,
+  reposError,
+  focused,
+  onSelect,
+  onCancel,
+}: {
+  repos: SecurityAgentRepository[] | null
+  reposError: string | null
+  focused: boolean
+  onSelect: (repo: string | undefined) => void
+  onCancel: () => void
+}) {
+  if (reposError) {
+    return (
+      <Box flexDirection="column">
+        <Text color="red">Failed to load repositories: {reposError}</Text>
+        <Text dimColor>Esc to go back</Text>
+        <BackHandler onBack={onCancel} focused={focused} />
+      </Box>
+    )
+  }
+  if (repos === null) {
+    return (
+      <Box flexDirection="column">
+        <Text color="yellow">Loading repositories…</Text>
+        <BackHandler onBack={onCancel} focused={focused} />
+      </Box>
+    )
+  }
+  return (
+    <FilterSelectScreen
+      title="Filter by repository:"
+      items={repoFilterItems(repos)}
+      focused={focused}
+      onSelect={onSelect}
+      onCancel={onCancel}
+    />
+  )
+}
+
+/**
+ * The request of a findings read. Severity sorts go through the API (global
+ * order across pages); other fields are sorted client-side — page-local only.
+ */
+function severitySortInput(
+  filter: FindingsFilter,
+  sortField: string,
+  sortDir: 'asc' | 'desc',
+): FindingsFilter & { sortBy?: 'severity_asc' | 'severity_desc' } {
+  if (sortField !== 'severity') return filter
+  return {
+    ...filter,
+    sortBy: sortDir === 'asc' ? ('severity_asc' as const) : ('severity_desc' as const),
+  }
+}
+
+/** The summary bar above the list. */
+function SummaryBar({
+  total,
+  running,
+  concurrency,
+  sortField,
+  sortDir,
+}: Readonly<{
+  total: number | string
+  running: number
+  concurrency: number | string
+  sortField: string
+  sortDir: 'asc' | 'desc'
+}>) {
+  return (
+    <Box marginBottom={1}>
+      <Text>
+        <Text bold>Total: {total}</Text>
+        <Text dimColor>
+          {' '}
+          | Running: {running} | Concurrency: {concurrency} | Sort: {sortField}
+          {sortDir === 'desc' ? '↓' : '↑'}
+          {sortField !== 'severity' ? ' (page)' : ''}
+        </Text>
+      </Text>
+    </Box>
+  )
+}
+
+/** The bar with the filters that are currently active. */
+function FiltersBar({ filter }: Readonly<{ filter: FindingsFilter }>) {
+  return (
+    <Box marginBottom={1}>
+      <Text dimColor>
+        Filters: {filter.repoFullName ? <Text color="cyan">repo={filter.repoFullName}</Text> : null}
+        {filter.repoFullName ? '  ' : ''}
+        {filter.severity ? (
+          <Text color={SEVERITY_COLORS[filter.severity] ?? 'white'}>
+            severity={filter.severity}
+          </Text>
+        ) : (
+          <Text>severity=all</Text>
+        )}
+        {'  '}
+        {filter.status ? (
+          <Text color="green">status={filter.status}</Text>
+        ) : (
+          <Text>status=all</Text>
+        )}
+        {'  '}
+        <Text>page {filter.limit > 0 ? Math.floor(filter.offset / filter.limit) + 1 : 1}</Text>
+      </Text>
+    </Box>
+  )
+}
+
+/** The scroll offset that keeps the selection inside the visible slice. */
+function scrollOffsetFor(
+  selectedIdx: number,
+  scrollOffset: number,
+  maxVisible: number,
+): number | undefined {
+  if (selectedIdx < scrollOffset) return selectedIdx
+  if (selectedIdx >= scrollOffset + maxVisible) return selectedIdx - maxVisible + 1
+  return undefined
+}
+
 export function FindingsListView({
   token,
   filter,
@@ -244,15 +412,7 @@ export function FindingsListView({
     setLoading(true)
     setError(null)
     try {
-      // Severity sorts go through the API (global order across pages).
-      // Other fields are sorted client-side — page-local only.
-      const input =
-        sortField === 'severity'
-          ? {
-              ...filter,
-              sortBy: sortDir === 'asc' ? ('severity_asc' as const) : ('severity_desc' as const),
-            }
-          : filter
+      const input = severitySortInput(filter, sortField, sortDir)
       const result = await listFindings(token, input)
       if (seq !== loadSeqRef.current) return // stale response, discard
       setData(result)
@@ -267,21 +427,15 @@ export function FindingsListView({
   }
 
   useEffect(() => {
-    loadFindings()
+    void loadFindings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, sortField, sortDir])
 
   // Adjust scroll offset when selection changes
   useEffect(() => {
-    if (!data) return
-    const findings = data.findings
-    if (findings.length === 0) return
-
-    if (selectedIdx < scrollOffset) {
-      setScrollOffset(selectedIdx)
-    } else if (selectedIdx >= scrollOffset + maxVisible) {
-      setScrollOffset(selectedIdx - maxVisible + 1)
-    }
+    if (!data || data.findings.length === 0) return
+    const next = scrollOffsetFor(selectedIdx, scrollOffset, maxVisible)
+    if (next !== undefined) setScrollOffset(next)
   }, [selectedIdx, scrollOffset, maxVisible, data])
 
   useInput(
@@ -306,103 +460,60 @@ export function FindingsListView({
 
   // --- Filter selection modes ---
   if (filterMode === 'repo') {
-    if (reposError) {
-      return (
-        <Box flexDirection="column">
-          <Text color="red">Failed to load repositories: {reposError}</Text>
-          <Text dimColor>Esc to go back</Text>
-          <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
-        </Box>
-      )
-    }
-    if (repos === null) {
-      return (
-        <Box flexDirection="column">
-          <Text color="yellow">Loading repositories…</Text>
-          <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
-        </Box>
-      )
-    }
-    const items = [
-      { label: '(all repositories)', value: '' },
-      ...repos.flatMap((r) => {
-        const full = r.fullName ?? r.full_name
-        if (!full) return []
-        const count = r.findingsCount ?? r.findings_count
-        return [{ label: count != null ? `${full} (${count})` : full, value: full }]
-      }),
-    ]
     return (
-      <Box flexDirection="column">
-        <Text bold color="cyan">
-          Filter by repository:
-        </Text>
-        <SelectInput
-          items={items}
-          isFocused={focused}
-          onSelect={(item) => {
-            onFilterChange({ ...filter, repoFullName: item.value || undefined, offset: 0 })
-            setFilterMode('none')
-          }}
-        />
-        <Text dimColor>Esc to cancel</Text>
-        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
-      </Box>
+      <RepoFilterScreen
+        repos={repos}
+        reposError={reposError}
+        focused={focused}
+        onSelect={(repo) => {
+          onFilterChange({ ...filter, repoFullName: repo, offset: 0 })
+          setFilterMode('none')
+        }}
+        onCancel={() => setFilterMode('none')}
+      />
     )
   }
 
   if (filterMode === 'severity') {
-    const items = [
-      { label: '(all severities)', value: '' },
-      { label: 'critical', value: 'critical' },
-      { label: 'high', value: 'high' },
-      { label: 'medium', value: 'medium' },
-      { label: 'low', value: 'low' },
-      { label: 'info', value: 'info' },
-    ]
     return (
-      <Box flexDirection="column">
-        <Text bold color="cyan">
-          Filter by severity:
-        </Text>
-        <SelectInput
-          items={items}
-          isFocused={focused}
-          onSelect={(item) => {
-            onFilterChange({ ...filter, severity: item.value || undefined, offset: 0 })
-            setFilterMode('none')
-          }}
-        />
-        <Text dimColor>Esc to cancel</Text>
-        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
-      </Box>
+      <FilterSelectScreen
+        title="Filter by severity:"
+        items={[
+          { label: '(all severities)', value: '' },
+          { label: 'critical', value: 'critical' },
+          { label: 'high', value: 'high' },
+          { label: 'medium', value: 'medium' },
+          { label: 'low', value: 'low' },
+          { label: 'info', value: 'info' },
+        ]}
+        focused={focused}
+        onSelect={(severity) => {
+          onFilterChange({ ...filter, severity, offset: 0 })
+          setFilterMode('none')
+        }}
+        onCancel={() => setFilterMode('none')}
+      />
     )
   }
 
   if (filterMode === 'status') {
-    const items = [
-      { label: '(all statuses)', value: '' },
-      { label: 'open', value: 'open' },
-      { label: 'dismissed', value: 'dismissed' },
-      { label: 'remediated', value: 'remediated' },
-      { label: 'in_progress', value: 'in_progress' },
-    ]
     return (
-      <Box flexDirection="column">
-        <Text bold color="cyan">
-          Filter by status:
-        </Text>
-        <SelectInput
-          items={items}
-          isFocused={focused}
-          onSelect={(item) => {
-            onFilterChange({ ...filter, status: item.value || undefined, offset: 0 })
-            setFilterMode('none')
-          }}
-        />
-        <Text dimColor>Esc to cancel</Text>
-        <BackHandler onBack={() => setFilterMode('none')} focused={focused} />
-      </Box>
+      <FilterSelectScreen
+        title="Filter by status:"
+        items={[
+          { label: '(all statuses)', value: '' },
+          { label: 'open', value: 'open' },
+          { label: 'dismissed', value: 'dismissed' },
+          { label: 'remediated', value: 'remediated' },
+          { label: 'in_progress', value: 'in_progress' },
+        ]}
+        focused={focused}
+        onSelect={(status) => {
+          onFilterChange({ ...filter, status, offset: 0 })
+          setFilterMode('none')
+        }}
+        onCancel={() => setFilterMode('none')}
+      />
     )
   }
 
@@ -494,41 +605,16 @@ export function FindingsListView({
   return (
     <Box flexDirection="column">
       {/* Summary bar */}
-      <Box marginBottom={1}>
-        <Text>
-          <Text bold>Total: {total}</Text>
-          <Text dimColor>
-            {' '}
-            | Running: {running} | Concurrency: {concurrency} | Sort: {sortField}
-            {sortDir === 'desc' ? '↓' : '↑'}
-            {sortField !== 'severity' ? ' (page)' : ''}
-          </Text>
-        </Text>
-      </Box>
+      <SummaryBar
+        total={total}
+        running={running}
+        concurrency={concurrency}
+        sortField={sortField}
+        sortDir={sortDir}
+      />
 
       {/* Active filters */}
-      <Box marginBottom={1}>
-        <Text dimColor>
-          Filters:{' '}
-          {filter.repoFullName ? <Text color="cyan">repo={filter.repoFullName}</Text> : null}
-          {filter.repoFullName ? '  ' : ''}
-          {filter.severity ? (
-            <Text color={SEVERITY_COLORS[filter.severity] ?? 'white'}>
-              severity={filter.severity}
-            </Text>
-          ) : (
-            <Text>severity=all</Text>
-          )}
-          {'  '}
-          {filter.status ? (
-            <Text color="green">status={filter.status}</Text>
-          ) : (
-            <Text>status=all</Text>
-          )}
-          {'  '}
-          <Text>page {filter.limit > 0 ? Math.floor(filter.offset / filter.limit) + 1 : 1}</Text>
-        </Text>
-      </Box>
+      <FiltersBar filter={filter} />
 
       {/* Column header */}
       <Box>
@@ -611,11 +697,11 @@ function FindingRow({
   finding,
   selected,
   columns,
-}: {
+}: Readonly<{
   finding: SecurityFinding
   selected: boolean
   columns: string[]
-}) {
+}>) {
   return (
     <Box>
       <Text color={selected ? 'cyan' : undefined}>{selected ? '>' : ' '}</Text>
@@ -644,13 +730,13 @@ function ColumnPicker({
   onApply,
   onCancel,
   focused,
-}: {
+}: Readonly<{
   allColumns: string[]
   visible: Set<string>
   onApply: (cols: Set<string>) => void
   onCancel: () => void
   focused: boolean
-}) {
+}>) {
   const [cursor, setCursor] = useState(0)
   const [checked, setChecked] = useState(new Set(visible))
 

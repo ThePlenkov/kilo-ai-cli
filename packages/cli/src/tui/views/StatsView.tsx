@@ -27,7 +27,7 @@ export function StatsView({ token, onBack, focused }: StatsViewProps) {
         setLoading(false)
       }
     }
-    load()
+    void load()
   }, [token])
 
   useInput(
@@ -154,12 +154,12 @@ function StatBar({
   value,
   total,
   color,
-}: {
+}: Readonly<{
   label: string
   value: number
   total: number
   color: string
-}) {
+}>) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0
   const barLen = Math.round(pct / 5)
   const bar = '#'.repeat(barLen) + '-'.repeat(20 - barLen)

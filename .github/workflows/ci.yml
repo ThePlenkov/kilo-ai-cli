@@ -25,7 +25,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - name: Docs lint
-        run: npx --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"
+        run: npx --ignore-scripts --yes markdownlint-cli2@0.24.0 "README.md" "AGENTS.md" "SECURITY.md" "docs/**/*.md" "packages/*/README.md" ".devin/**/*.md"
       - name: Lint report (SARIF)
         working-directory: packages/cli
         run: ../../node_modules/.bin/oxlint --format=sarif > eslint.sarif || true

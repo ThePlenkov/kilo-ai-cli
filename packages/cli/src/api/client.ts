@@ -38,59 +38,140 @@ function extractErrorMessage(error: unknown): string | undefined {
 }
 
 /**
- * Read a response body as text, enforcing a 512 KB size limit.
- * Falls back to `response.text()` when no readable stream is available.
+ * Reject a response that declares more than the limit before reading it.
  */
-async function readBody(response: Response, procedure: string): Promise<string> {
+function assertDeclaredSize(response: Response, procedure: string): void {
   const contentLengthHeader = response.headers?.get?.('content-length')
-  if (contentLengthHeader) {
-    const declared = Number.parseInt(contentLengthHeader, 10)
-    if (!Number.isNaN(declared) && declared > MAX_BODY_BYTES) {
+  if (!contentLengthHeader) return
+  const declared = Number.parseInt(contentLengthHeader, 10)
+  if (!Number.isNaN(declared) && declared > MAX_BODY_BYTES) {
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Response too large: ${declared} bytes`,
+    )
+  }
+}
+
+/**
+ * Read a streamed response body, enforcing the size limit while it is read.
+ * Returns `null` when the response has no readable stream.
+ */
+async function readStreamedBody(response: Response, procedure: string): Promise<string | null> {
+  const body = (
+    response as { body?: { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } }
+  ).body
+  if (!body || typeof body.getReader !== 'function') return null
+
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
+    const { done, value } = await reader.read()
+    if (done) break
+    if (!value) continue
+    total += value.byteLength
+    if (total > MAX_BODY_BYTES) {
+      // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
+      await reader.cancel()
       throw new CloudTrpcError(
         'protocol',
         response.status,
         procedure,
-        `Response too large: ${declared} bytes`,
+        `Response too large: >${MAX_BODY_BYTES} bytes`,
       )
     }
+    chunks.push(value)
   }
 
-  const body = (
-    response as { body?: { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } }
-  ).body
-  if (body && typeof body.getReader === 'function') {
-    const reader = body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for (;;) {
-      // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value) {
-        total += value.byteLength
-        if (total > MAX_BODY_BYTES) {
-          // eslint-disable-next-line no-await-in-loop -- the response body is read chunk by chunk
-          await reader.cancel()
-          throw new CloudTrpcError(
-            'protocol',
-            response.status,
-            procedure,
-            `Response too large: >${MAX_BODY_BYTES} bytes`,
-          )
-        }
-        chunks.push(value)
-      }
-    }
-    const merged = new Uint8Array(total)
-    let offset = 0
-    for (const chunk of chunks) {
-      merged.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-    return new TextDecoder().decode(merged)
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
   }
+  return new TextDecoder().decode(merged)
+}
 
+/**
+ * Read a response body as text, enforcing a 512 KB size limit.
+ * Falls back to `response.text()` when no readable stream is available.
+ */
+async function readBody(response: Response, procedure: string): Promise<string> {
+  assertDeclaredSize(response, procedure)
+  const streamed = await readStreamedBody(response, procedure)
+  if (streamed !== null) return streamed
   return await response.text()
+}
+
+/** Perform the request, mapping a transport failure to a network error. */
+async function fetchResponse(url: string, init: RequestInit, procedure: string): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', undefined, procedure, detail)
+  }
+}
+
+/** Read the body as text, mapping a transport failure to a network error. */
+async function readText(response: Response, procedure: string): Promise<string> {
+  try {
+    return await readBody(response, procedure)
+  } catch (err) {
+    if (err instanceof CloudTrpcError) throw err
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new CloudTrpcError('network', response.status, procedure, detail)
+  }
+}
+
+/** Parse the body as JSON, mapping a malformed body to a protocol error. */
+function parseJson(text: string, response: Response, procedure: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    const snippet = text.slice(0, 200)
+    throw new CloudTrpcError(
+      'protocol',
+      response.status,
+      procedure,
+      `Non-JSON response: ${snippet}`,
+    )
+  }
+}
+
+/** The tRPC error carried by a response envelope. */
+function throwForEnvelopeError(error: unknown, response: Response, procedure: string): never {
+  const detail = extractErrorMessage(error)
+  if (isAuthError(response.status)) {
+    throw new CloudTrpcError('unauthorized', response.status, procedure, detail)
+  }
+  throw new CloudTrpcError('procedure', response.status, procedure, detail)
+}
+
+/** A failed response that carries no tRPC error. */
+function throwForStatus(response: Response, procedure: string): never {
+  if (isAuthError(response.status)) {
+    throw new CloudTrpcError('unauthorized', response.status, procedure)
+  }
+  throw new CloudTrpcError('http', response.status, procedure)
+}
+
+/** Validate the payload against the schema. */
+function validatePayload<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  response: Response,
+  procedure: string,
+): T {
+  const validated = schema.safeParse(extractData(data))
+  if (!validated.success) {
+    const detail = validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new CloudTrpcError('schema', response.status, procedure, detail)
+  }
+  return validated.data
 }
 
 /** Extract the JSON payload from a tRPC result.data, unwrapping the `{ json }` wrapper when present. */
@@ -161,39 +242,9 @@ async function requestQuery<T>(
     kilocodeOrganizationId: options?.organizationId,
   })
 
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new CloudTrpcError('network', undefined, procedure, detail)
-  }
-
-  let text: string
-  try {
-    text = await readBody(response, procedure)
-  } catch (err) {
-    if (err instanceof CloudTrpcError) throw err
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new CloudTrpcError('network', response.status, procedure, detail)
-  }
-
-  let json: unknown
-  try {
-    json = JSON.parse(text)
-  } catch {
-    const snippet = text.slice(0, 200)
-    throw new CloudTrpcError(
-      'protocol',
-      response.status,
-      procedure,
-      `Non-JSON response: ${snippet}`,
-    )
-  }
+  const response = await fetchResponse(url, { method: 'GET', headers }, procedure)
+  const text = await readText(response, procedure)
+  const json = parseJson(text, response, procedure)
 
   const envelope = envelopeSchema.safeParse(json)
   if (!envelope.success) {
@@ -208,30 +259,16 @@ async function requestQuery<T>(
   const { result, error } = envelope.data
 
   if (error != null) {
-    const detail = extractErrorMessage(error)
-    if (isAuthError(response.status)) {
-      throw new CloudTrpcError('unauthorized', response.status, procedure, detail)
-    }
-    throw new CloudTrpcError('procedure', response.status, procedure, detail)
+    throwForEnvelopeError(error, response, procedure)
   }
   if (!response.ok) {
-    if (isAuthError(response.status)) {
-      throw new CloudTrpcError('unauthorized', response.status, procedure)
-    }
-    throw new CloudTrpcError('http', response.status, procedure)
+    throwForStatus(response, procedure)
   }
   if (!result) {
     throw new CloudTrpcError('protocol', response.status, procedure, 'No result in response')
   }
 
-  const extracted = extractData(result.data)
-
-  const validated = schema.safeParse(extracted)
-  if (!validated.success) {
-    const detail = validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
-    throw new CloudTrpcError('schema', response.status, procedure, detail)
-  }
-  return validated.data
+  return validatePayload(schema, result.data, response, procedure)
 }
 
 /**
@@ -278,46 +315,15 @@ async function requestMutation<T>(
     'Content-Type': 'application/json',
   }
 
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ '0': input }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new CloudTrpcError('network', undefined, procedure, detail)
-  }
+  const response = await fetchResponse(
+    url,
+    { method: 'POST', headers, body: JSON.stringify({ '0': input }) },
+    procedure,
+  )
+  const text = await readText(response, procedure)
+  const json = parseJson(text, response, procedure)
 
-  let text: string
-  try {
-    text = await readBody(response, procedure)
-  } catch (err) {
-    if (err instanceof CloudTrpcError) throw err
-    const detail = err instanceof Error ? err.message : String(err)
-    throw new CloudTrpcError('network', response.status, procedure, detail)
-  }
-
-  let json: unknown
-  try {
-    json = JSON.parse(text)
-  } catch {
-    const snippet = text.slice(0, 200)
-    throw new CloudTrpcError(
-      'protocol',
-      response.status,
-      procedure,
-      `Non-JSON response: ${snippet}`,
-    )
-  }
-
-  const batchEntrySchema = z.object({
-    result: z.object({ data: z.unknown() }).optional(),
-    error: z.unknown().optional(),
-  })
-  const batchSchema = z.array(batchEntrySchema)
+  const batchSchema = z.array(envelopeSchema)
   const batch = batchSchema.safeParse(json)
   if (!batch.success) {
     const snippet = text.slice(0, 200)
@@ -334,28 +340,14 @@ async function requestMutation<T>(
   }
 
   if (entry.error != null) {
-    const detail = extractErrorMessage(entry.error)
-    if (isAuthError(response.status)) {
-      throw new CloudTrpcError('unauthorized', response.status, procedure, detail)
-    }
-    throw new CloudTrpcError('procedure', response.status, procedure, detail)
+    throwForEnvelopeError(entry.error, response, procedure)
   }
   if (!response.ok) {
-    if (isAuthError(response.status)) {
-      throw new CloudTrpcError('unauthorized', response.status, procedure)
-    }
-    throw new CloudTrpcError('http', response.status, procedure)
+    throwForStatus(response, procedure)
   }
   if (!entry.result) {
     throw new CloudTrpcError('protocol', response.status, procedure, 'No result in batch entry')
   }
 
-  const extracted = extractData(entry.result.data)
-
-  const validated = schema.safeParse(extracted)
-  if (!validated.success) {
-    const detail = validated.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
-    throw new CloudTrpcError('schema', response.status, procedure, detail)
-  }
-  return validated.data
+  return validatePayload(schema, entry.result.data, response, procedure)
 }

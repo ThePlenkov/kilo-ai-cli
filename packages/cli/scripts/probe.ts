@@ -36,7 +36,7 @@ if (inputJson) url.searchParams.set('input', inputJson)
 // Sanitize remote payloads before logging (Sonar S5145 — log injection).
 const safe = (s: string, n: number): string => s.slice(0, n).replace(/[^\x20-\x7E\n]/g, '.')
 // Non-JSON output also escapes newlines so one remote line can't forge entries.
-const safeLine = (s: string, n: number): string => safe(s, n).replace(/\n/g, '\\n')
+const safeLine = (s: string, n: number): string => safe(s, n).replaceAll(/\n/g, String.raw`\n`)
 
 const res = await fetch(url, {
   method: 'GET',

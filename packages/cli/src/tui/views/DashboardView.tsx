@@ -29,7 +29,7 @@ export function DashboardView({ token, onBack, focused }: DashboardViewProps) {
         setLoading(false)
       }
     }
-    load()
+    void load()
   }, [token])
 
   useInput(
@@ -77,7 +77,7 @@ export function DashboardView({ token, onBack, focused }: DashboardViewProps) {
   )
 }
 
-function DashboardSection({ title, value }: { title: string; value: unknown }) {
+function DashboardSection({ title, value }: Readonly<{ title: string; value: unknown }>) {
   if (
     Array.isArray(value) &&
     value.length > 0 &&
