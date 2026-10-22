@@ -41,11 +41,15 @@ if [ "$1" = "policy" ] && [ "${2:-}" != "--findings" ]; then
   if [ -f .sverka/findings.sarif ]; then
     candidates="$candidates .sverka/findings.sarif"
   fi
-  if [ -z "$candidates" ]; then
+  if [ -z "$(echo "$candidates" | tr -d '[:space:]')" ]; then
     echo "no collected findings — run the gate first (npm run ci)" >&2
     exit 1
   fi
-  report=$(ls -t $candidates 2>/dev/null | head -1)
+  report=""
+  for c in $candidates; do
+    [ -n "$c" ] && [ -f "$c" ] && report="$c"
+  done
+  [ -z "$report" ] && report=$(ls -t $candidates 2>/dev/null | head -1)
   [ -n "$report" ] || { echo "no collected findings — run the gate first (npm run ci)" >&2; exit 1; }
   # Keep the other options (--format, …) and add the findings.
   shift

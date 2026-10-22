@@ -311,24 +311,15 @@ async function codeqlResults(): Promise<Finding[]> {
         const reset = response.headers.get('x-ratelimit-reset')
         const retryAfter = response.headers.get('retry-after')
         if (response.status === 401) {
-          if (token) {
-            throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
-          }
-          console.error('codeql: the token cannot read the code-scanning alerts — skipped')
-          return []
+          throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
         }
         if (response.status === 403) {
-          if (
-            remaining === '0' ||
-            retryAfter !== null ||
-            (reset !== null && Number.isNaN(Number(reset)) === false)
-          ) {
+          if (remaining === '0' || retryAfter !== null) {
             throw new HttpError(
               response.status,
               `HTTP ${response.status} — rate limited (remaining:${remaining} reset:${reset} retry-after:${retryAfter})`,
             )
           }
-          // Default to propagate to avoid hiding rate limits
           throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
         }
         throw new HttpError(response.status, `HTTP ${response.status} — ${GITHUB_API}${path}`)
@@ -338,11 +329,7 @@ async function codeqlResults(): Promise<Finding[]> {
     } catch (err) {
       if (err instanceof HttpError) {
         if (err.status === 401) {
-          if (token) {
-            throw err
-          }
-          console.error('codeql: the token cannot read the code-scanning alerts — skipped')
-          return []
+          throw err
         }
         if (err.status === 403) {
           const msg = err.message.toLowerCase()

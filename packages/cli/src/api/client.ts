@@ -104,27 +104,16 @@ async function readBody(response: Response, procedure: string): Promise<string> 
   const streamed = await readStreamedBody(response, procedure)
   if (streamed !== null) return streamed
   const contentLengthHeader = response.headers?.get?.('content-length')
-  if (!contentLengthHeader) {
-    // No way to bound size - read with limit enforcement
-    const text = await response.text()
-    if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) {
+  if (contentLengthHeader) {
+    const declared = Number.parseInt(contentLengthHeader, 10)
+    if (!Number.isNaN(declared) && declared > MAX_BODY_BYTES) {
       throw new CloudTrpcError(
         'protocol',
         response.status,
         procedure,
-        `Response too large: >${MAX_BODY_BYTES} bytes`,
+        `Response too large: ${declared} bytes`,
       )
     }
-    return text
-  }
-  const declared = Number.parseInt(contentLengthHeader, 10)
-  if (Number.isNaN(declared) || declared > MAX_BODY_BYTES) {
-    throw new CloudTrpcError(
-      'protocol',
-      response.status,
-      procedure,
-      `Response too large: ${Number.isNaN(declared) ? 'unknown' : declared} bytes`,
-    )
   }
   const text = await response.text()
   if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) {
