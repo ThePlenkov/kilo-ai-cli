@@ -463,15 +463,72 @@ async function refreshBaseline(target: string): Promise<void> {
 }
 
 function stripAnsiSequences(s: string): string {
-  const esc = String.fromCharCode(27)
-  const bel = String.fromCharCode(7)
-  const st = esc + String.fromCharCode(92)
-  let result = s.replace(new RegExp(esc + String.fromCharCode(91) + '[^@-~]*[@-~]', 'g'), '')
-  result = result.replace(
-    new RegExp(esc + String.fromCharCode(93) + '.*?(?:' + bel + '|' + st + ')', 'g'),
-    '',
-  )
-  return result
+  let out = ''
+  let i = 0
+  const len = s.length
+  while (i < len) {
+    const ch = s.charAt(i)
+    const code = ch.charCodeAt(0)
+    if (code === 27) {
+      i++
+      if (i >= len) {
+        break
+      }
+      const next = s.charAt(i)
+      if (next === '[') {
+        i++
+        while (i < len) {
+          const c = s.charAt(i)
+          const cc = c.charCodeAt(0)
+          if (cc >= 64 && cc <= 126) {
+            i++
+            break
+          }
+          i++
+        }
+        continue
+      }
+      if (next === ']') {
+        i++
+        while (i < len) {
+          const c = s.charAt(i)
+          const cc = c.charCodeAt(0)
+          if (cc === 7) {
+            i++
+            break
+          }
+          if (cc === 27 && i + 1 < len && s.charAt(i + 1) === '\\') {
+            i += 2
+            break
+          }
+          i++
+        }
+        continue
+      }
+      if (next === '(' || next === ')' || next === '*') {
+        i += 2
+        continue
+      }
+      i++
+      continue
+    }
+    if (code === 155) {
+      i++
+      while (i < len) {
+        const c = s.charAt(i)
+        const cc = c.charCodeAt(0)
+        if (cc >= 64 && cc <= 126) {
+          i++
+          break
+        }
+        i++
+      }
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
 }
 
 function cleanFindingString(s: string): string {
