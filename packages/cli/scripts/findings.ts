@@ -222,8 +222,6 @@ async function sonarResults(): Promise<Finding[]> {
     if (!path) {
       // If the component equals the project key only, treat as project-level issue
       if (component === SONAR_KEY) {
-        const severity = String(issue.severity ?? '').toUpperCase()
-        const isHigh = severity === 'BLOCKER' || severity === 'CRITICAL'
         results.push({
           ruleId: (issue.rule as string) ?? 'sonar:unknown',
           level: GATE_LEVEL,
@@ -237,7 +235,6 @@ async function sonarResults(): Promise<Finding[]> {
             },
           ],
           properties: {
-            sverkaSeverity: isHigh ? 'high' : 'medium',
             'sonar:severity': (issue.severity as string) ?? 'unknown',
             'sonar:type': (issue.type as string) ?? 'unknown',
             'sonar:effort': (issue.effort as string) ?? 'unknown',
@@ -248,8 +245,6 @@ async function sonarResults(): Promise<Finding[]> {
       skipped += 1
       continue
     }
-    const severity = String(issue.severity ?? '').toUpperCase()
-    const isHigh = severity === 'BLOCKER' || severity === 'CRITICAL'
     results.push({
       ruleId: (issue.rule as string) ?? 'sonar:unknown',
       level: GATE_LEVEL,
@@ -263,7 +258,6 @@ async function sonarResults(): Promise<Finding[]> {
         },
       ],
       properties: {
-        sverkaSeverity: isHigh ? 'high' : 'medium',
         'sonar:severity': (issue.severity as string) ?? 'unknown',
         'sonar:type': (issue.type as string) ?? 'unknown',
         'sonar:effort': (issue.effort as string) ?? 'unknown',
@@ -377,9 +371,7 @@ async function codeqlResults(): Promise<Finding[]> {
       | { id?: string; description?: string; security_severity_level?: string; severity?: string }
       | undefined
     const secSev = rule?.security_severity_level
-    const sevNum = secSev ? Number(secSev) : NaN
-    const isHigh = !Number.isNaN(sevNum) ? sevNum >= 7 : secSev === 'CRITICAL' || secSev === 'HIGH'
-    const codeqlSev = secSev ?? rule?.severity ?? 'unknown'
+    const codeqlSev2 = secSev ?? rule?.severity ?? 'unknown'
     return {
       ruleId: rule?.id ?? 'codeql:unknown',
       level: GATE_LEVEL,
@@ -395,8 +387,7 @@ async function codeqlResults(): Promise<Finding[]> {
         },
       ],
       properties: {
-        sverkaSeverity: isHigh ? 'high' : 'medium',
-        'codeql:severity': codeqlSev,
+        'codeql:severity': codeqlSev2,
       },
     }
   })
