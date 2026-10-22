@@ -462,20 +462,17 @@ async function refreshBaseline(target: string): Promise<void> {
   )
 }
 
-function stripAnsi(s: string): string {
-  const csi = String.fromCharCode(0x1b) + '['
-  const osc = String.fromCharCode(0x1b) + ']'
-  const bel = String.fromCharCode(0x07)
-  let result = s.replace(new RegExp(csi + '[0-9;?]*[ -/]*[@-~]', 'g'), '')
-  result = result.replace(
-    new RegExp(osc + '[^' + bel + ']*(?:' + bel + '|' + String.fromCharCode(0x1b) + '\\\\)', 'g'),
+function stripAnsiSequences(s: string): string {
+  let result = s.replace(
+    /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
     '',
   )
+  result = result.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
   return result
 }
 
 function cleanFindingString(s: string): string {
-  let result = stripAnsi(s)
+  let result = stripAnsiSequences(s)
   let out = ''
   for (let i = 0; i < result.length; i++) {
     const ch = result.charAt(i)
