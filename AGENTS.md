@@ -133,8 +133,13 @@ Based on `@kilocode/kilo-gateway` (Kilo-Org/kilocode) and `@kilocode/trpc` (Kilo
   ```
 
   Run it only when that binding is lost (a rotated trust, a new
-  environment, a `EOTP`/`E403` on publish) — it needs npm MFA in a browser.
+  environment, an `EOTP`/`E403` on publish) — it needs npm MFA in a browser.
+  A *new* environment needs two steps: create it in the repository settings
+  (Settings → Environments, named to match `environment: npm` in
+  `.github/workflows/release.yml`) and re-bind the trust to it with
+  `--env <that name>`.
   The general playbook for the OIDC setup lives with the plugin that
   implements it, `nx-devkit-prepare-for-release`
-  (`nx-devkit/nx.ts` → `skills/nx-devkit-prepare-for-release/SKILL.md`);
-  this repository keeps only the part that is specific to it.
+  (https://github.com/nx-devkit/nx.ts →
+  `skills/nx-devkit-prepare-for-release/SKILL.md`); this repository keeps
+  only the part that is specific to it.
