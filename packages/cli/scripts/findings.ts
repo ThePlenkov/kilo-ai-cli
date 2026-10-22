@@ -467,15 +467,13 @@ function cleanFindingString(s: string): string {
   result = result.replace(new RegExp(oscPattern, 'g'), '')
   let out = ''
   for (let i = 0; i < result.length; i++) {
-    const code = result.codePointAt(i)
-    if (code === undefined) {
+    const ch = result.charAt(i)
+    const code = ch.charCodeAt(0)
+    if (code === 27 || code === 7 || (code >= 0x80 && code <= 0x9f)) {
       continue
     }
-    if (code >= 32 && code !== 127 && !(code >= 128 && code <= 159)) {
-      out += String.fromCodePoint(code)
-    }
-    if (code >= 0x10000) {
-      i++
+    if (code >= 32 && code !== 127) {
+      out += ch
     }
   }
   return out
