@@ -201,11 +201,11 @@ async function sonarResults(): Promise<Finding[]> {
     // eslint-disable-next-line no-await-in-loop -- the pages come one after another
     const body = (await readJson(response, SONAR_API, SONAR_ISSUES_PATH)) as unknown
     if (!body || typeof body !== 'object') {
-      throw new Error('sonar: unexpected response shape')
+      throw new TypeError('sonar: unexpected response shape')
     }
     const issuesValue = (body as Record<string, unknown>).issues
     if (!Array.isArray(issuesValue)) {
-      throw new Error('sonar: issues must be an array')
+      throw new TypeError('sonar: issues must be an array')
     }
     const batch = issuesValue as Record<string, unknown>[]
     issues.push(...batch)
@@ -342,7 +342,7 @@ async function codeqlResults(): Promise<Finding[]> {
       throw err
     }
     if (!Array.isArray(body)) {
-      throw new Error('codeql: alerts must be an array')
+      throw new TypeError('codeql: alerts must be an array')
     }
     const batch = body as Record<string, unknown>[]
     alerts.push(...batch)
@@ -462,17 +462,24 @@ function cleanFindingString(s: string): string {
   let result = s
   const esc = '\u001b'
   const bel = '\u0007'
-  // Strip ANSI escape sequences
-  const ansiCsi = new RegExp(esc + '\\[[0-9;?]*[ -/]*[@-~]', 'g')
-  result = result.replace(ansiCsi, '')
-  const ansiOsc = new RegExp(esc + '\\][^' + bel + esc + ']*(?:' + bel + '|' + esc + '\\\\)', 'g')
-  result = result.replace(ansiOsc, '')
-  // Strip other control chars
+  const csiRe = new RegExp(esc + String.raw`\[` + String.raw`[0-9;?]*[ -/]*[@-~]`, 'g')
+  result = result.replace(csiRe, '')
+  const oscRe = new RegExp(
+    esc + String.raw`\][^` + bel + esc + String.raw`]*(?:` + bel + '|' + esc + String.raw`\\)`,
+    'g',
+  )
+  result = result.replace(oscRe, '')
   let out = ''
   for (let i = 0; i < result.length; i++) {
-    const code = result.charCodeAt(i)
+    const code = result.codePointAt(i)
+    if (code === undefined) {
+      continue
+    }
     if (code >= 32 && code !== 127 && !(code >= 128 && code <= 159)) {
-      out += result[i]
+      out += String.fromCodePoint(code)
+    }
+    if (code >= 0x10000) {
+      i++
     }
   }
   return out
