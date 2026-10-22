@@ -208,7 +208,9 @@ async function sonarResults(): Promise<Finding[]> {
       throw new TypeError('sonar: issues must be an array')
     }
     const batch = issuesValue as Record<string, unknown>[]
-    issues.push(...batch)
+    for (const item of batch) {
+      issues.push(item)
+    }
     if (batch.length < SONAR_PAGE_SIZE) break
   }
 
@@ -345,7 +347,9 @@ async function codeqlResults(): Promise<Finding[]> {
       throw new TypeError('codeql: alerts must be an array')
     }
     const batch = body as Record<string, unknown>[]
-    alerts.push(...batch)
+    for (const item of batch) {
+      alerts.push(item)
+    }
     if (batch.length < CODEQL_PAGE_SIZE) break
   }
 
