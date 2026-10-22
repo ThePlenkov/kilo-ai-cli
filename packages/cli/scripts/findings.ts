@@ -462,13 +462,10 @@ function cleanFindingString(s: string): string {
   let result = s
   const esc = '\u001b'
   const bel = '\u0007'
-  const csiRe = new RegExp(esc + String.raw`\[` + String.raw`[0-9;?]*[ -/]*[@-~]`, 'g')
-  result = result.replace(csiRe, '')
-  const oscRe = new RegExp(
-    esc + String.raw`\][^` + bel + esc + String.raw`]*(?:` + bel + '|' + esc + String.raw`\\)`,
-    'g',
-  )
-  result = result.replace(oscRe, '')
+  const csiPattern = esc + String.raw`\[` + '[0-9;?]*[ -/]*[@-~]'
+  result = result.replace(new RegExp(csiPattern, 'g'), '')
+  const oscPattern = esc + String.raw`\][^\x07\x1b]*(?:\x07|\x1b\\)`
+  result = result.replace(new RegExp(oscPattern, 'g'), '')
   let out = ''
   for (let i = 0; i < result.length; i++) {
     const code = result.codePointAt(i)
