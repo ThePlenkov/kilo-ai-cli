@@ -43,7 +43,8 @@ const PACKAGE_DIR = resolve(ROOT, 'packages/cli')
 const BASELINE_FILE = 'config/findings-baseline.json'
 const SONAR_KEY = 'ThePlenkov_kilo-ai-cli'
 const SONAR_BRANCH = 'main'
-const SONAR_API = 'https://sonarcloud.io/api/issues/search'
+const SONAR_API = 'https://sonarcloud.io'
+const SONAR_ISSUES_PATH = '/api/issues/search'
 const GITHUB_API = 'https://api.github.com'
 const REPOSITORY = 'ThePlenkov/kilo-ai-cli'
 
@@ -75,11 +76,24 @@ class HttpError extends Error {
   }
 }
 
-/** Fetch JSON with a timeout — a scanner that stalls must not block the gate. */
-async function fetchJson(url: URL, headers: Record<string, string> = {}): Promise<unknown> {
+/**
+ * Fetch JSON from a scanner API — the base and the path are constants, the
+ * parameters the query needs. The URL is built here and not handed in: a URL
+ * that reaches the HTTP client from the outside is a request injection.
+ *
+ * The request has a timeout — a scanner that stalls must not block the gate.
+ */
+async function fetchJson(
+  base: string,
+  path: string,
+  params: Record<string, string>,
+  headers: Record<string, string> = {},
+): Promise<unknown> {
+  const query = new URLSearchParams(params).toString()
+  const target = query ? `${base}${path}?${query}` : `${base}${path}`
   let response: Response
   try {
-    response = await fetch(url, {
+    response = await fetch(target, {
       headers,
       signal: AbortSignal.timeout(SCANNER_TIMEOUT_MS),
     })
@@ -88,7 +102,7 @@ async function fetchJson(url: URL, headers: Record<string, string> = {}): Promis
     throw new Error(`request failed: ${detail}`, { cause: err })
   }
   if (!response.ok) {
-    throw new HttpError(response.status, `HTTP ${response.status} — ${url.origin}${url.pathname}`)
+    throw new HttpError(response.status, `HTTP ${response.status} — ${base}${path}`)
   }
   return await response.json()
 }
@@ -176,14 +190,14 @@ function lintResults(): Finding[] {
 async function sonarResults(): Promise<Finding[]> {
   const issues: Record<string, unknown>[] = []
   for (let page = 1; ; page++) {
-    const url = new URL(SONAR_API)
-    url.searchParams.set('componentKeys', SONAR_KEY)
-    url.searchParams.set('branch', SONAR_BRANCH)
-    url.searchParams.set('resolved', 'false')
-    url.searchParams.set('ps', String(SONAR_PAGE_SIZE))
-    url.searchParams.set('p', String(page))
     // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-    const body = (await fetchJson(url)) as { issues?: Record<string, unknown>[] }
+    const body = (await fetchJson(SONAR_API, SONAR_ISSUES_PATH, {
+      componentKeys: SONAR_KEY,
+      branch: SONAR_BRANCH,
+      resolved: 'false',
+      ps: String(SONAR_PAGE_SIZE),
+      p: String(page),
+    })) as { issues?: Record<string, unknown>[] }
     const batch = body.issues ?? []
     issues.push(...batch)
     if (batch.length < SONAR_PAGE_SIZE) break
@@ -242,18 +256,23 @@ async function codeqlResults(): Promise<Finding[]> {
 
   const alerts: Record<string, unknown>[] = []
   for (let page = 1; ; page++) {
-    const url = new URL(`${GITHUB_API}/repos/${REPOSITORY}/code-scanning/alerts`)
-    url.searchParams.set('state', 'open')
-    url.searchParams.set('per_page', String(CODEQL_PAGE_SIZE))
-    url.searchParams.set('page', String(page))
     let body: unknown
     try {
       // eslint-disable-next-line no-await-in-loop -- the pages come one after another
-      body = await fetchJson(url, {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      })
+      body = await fetchJson(
+        GITHUB_API,
+        `/repos/${REPOSITORY}/code-scanning/alerts`,
+        {
+          state: 'open',
+          per_page: String(CODEQL_PAGE_SIZE),
+          page: String(page),
+        },
+        {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      )
     } catch (err) {
       if (err instanceof HttpError && (err.status === 401 || err.status === 403)) {
         console.error('codeql: the token cannot read the code-scanning alerts — skipped')

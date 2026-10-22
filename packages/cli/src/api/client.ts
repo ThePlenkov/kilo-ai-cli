@@ -106,10 +106,23 @@ async function readBody(response: Response, procedure: string): Promise<string> 
   return await response.text()
 }
 
-/** Perform the request, mapping a transport failure to a network error. */
-async function fetchResponse(url: string, init: RequestInit, procedure: string): Promise<Response> {
+/**
+ * Perform the request, mapping a transport failure to a network error.
+ *
+ * The path is built here and not handed in as a URL: a URL that reaches the
+ * HTTP client from the outside is a request injection.
+ */
+async function fetchResponse(
+  baseUrl: string,
+  path: string,
+  init: RequestInit,
+  procedure: string,
+): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    return await fetch(`${baseUrl}${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     throw new CloudTrpcError('network', undefined, procedure, detail)
@@ -233,16 +246,18 @@ async function requestQuery<T>(
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
   const baseUrl = options?.baseUrl ?? KILO_API_BASE
-  let url = `${baseUrl}/api/trpc/${procedure}`
-  if (input !== undefined) {
-    url += `?input=${encodeURIComponent(JSON.stringify(input))}`
-  }
+  const query = input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`
 
   const headers = buildAuthHeaders(token, undefined, {
     kilocodeOrganizationId: options?.organizationId,
   })
 
-  const response = await fetchResponse(url, { method: 'GET', headers }, procedure)
+  const response = await fetchResponse(
+    baseUrl,
+    `/api/trpc/${procedure}${query}`,
+    { method: 'GET', headers },
+    procedure,
+  )
   const text = await readText(response, procedure)
   const json = parseJson(text, response, procedure)
 
@@ -306,7 +321,6 @@ async function requestMutation<T>(
   options?: { baseUrl?: string; organizationId?: string },
 ): Promise<T> {
   const baseUrl = options?.baseUrl ?? KILO_API_BASE
-  const url = `${baseUrl}/api/trpc/${procedure}?batch=1`
 
   const headers = {
     ...buildAuthHeaders(token, undefined, {
@@ -316,7 +330,8 @@ async function requestMutation<T>(
   }
 
   const response = await fetchResponse(
-    url,
+    baseUrl,
+    `/api/trpc/${procedure}?batch=1`,
     { method: 'POST', headers, body: JSON.stringify({ '0': input }) },
     procedure,
   )
