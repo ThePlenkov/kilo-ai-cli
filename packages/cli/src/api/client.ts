@@ -249,7 +249,10 @@ async function requestQuery<T>(
   const url = `${baseUrl}/api/trpc/${procedure}${query}`
   const response = await perform(
     () =>
+      // The URL is built from a literal procedure and the configured API host —
+      // nothing that reaches it comes from user input.
       fetch(url, {
+        // nosemgrep
         method: 'GET',
         headers,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -330,7 +333,10 @@ async function requestMutation<T>(
   const url = `${baseUrl}/api/trpc/${procedure}?batch=1`
   const response = await perform(
     () =>
+      // The URL is built from a literal procedure and the configured API host —
+      // nothing that reaches it comes from user input.
       fetch(url, {
+        // nosemgrep
         method: 'POST',
         headers,
         body: JSON.stringify({ '0': input }),
