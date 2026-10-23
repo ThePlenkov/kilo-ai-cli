@@ -1,3 +1,4 @@
+import type { Key } from 'ink'
 import { Box, Text, useInput } from 'ink'
 import TextInput from 'ink-text-input'
 import React, { useState } from 'react'
@@ -14,7 +15,7 @@ import {
   toggleReviewAgent,
   toSaveReviewConfigInput,
 } from '../../api/code-reviews.ts'
-import type { CodeReview } from '../../api/types.ts'
+import type { CodeReview, ReviewAgentConfig } from '../../api/types.ts'
 import type { Column } from '../components.tsx'
 import { clean, DataTable, QueryListScreen, RecordView } from '../components.tsx'
 import { useQuery, useTermSize } from '../hooks.ts'
@@ -171,6 +172,124 @@ export function ReviewDetailScreen({ ctx, focused }: ScreenProps) {
 const PLATFORMS = ['github', 'gitlab'] as const
 type Platform = (typeof PLATFORMS)[number]
 
+/** The configuration of the review agent, as a record. */
+function AgentConfigView({
+  config,
+  platform,
+  scope,
+}: Readonly<{ config: ReviewAgentConfig; platform: Platform; scope: string }>) {
+  return (
+    <Box flexDirection="column">
+      <RecordView
+        data={{
+          scope,
+          platform,
+          enabled: config.isEnabled ? 'yes' : 'no',
+          model: config.modelSlug ?? '-',
+          style: config.reviewStyle ?? '-',
+          'gate threshold': config.gateThreshold ?? '-',
+          'focus areas': config.focusAreas?.length ? config.focusAreas.join(', ') : '-',
+          repositories: config.repositorySelectionMode ?? '-',
+        }}
+      />
+      {config.actionRequired ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">Needs attention: {clean(config.actionRequired.reason)}</Text>
+          {config.actionRequired.lastErrorMessage ? (
+            <Text color="yellow">{clean(config.actionRequired.lastErrorMessage)}</Text>
+          ) : null}
+        </Box>
+      ) : null}
+    </Box>
+  )
+}
+
+/** The result of the last action. */
+function NoticeLine({ notice }: Readonly<{ notice: { text: string; error: boolean } | null }>) {
+  if (!notice) return null
+  return <Text color={notice.error ? 'red' : 'green'}>{clean(notice.text)}</Text>
+}
+
+/** The model editor. */
+function ModelEditor({
+  model,
+  focused,
+  onChange,
+  onSubmit,
+}: Readonly<{
+  model: string
+  focused: boolean
+  onChange: (value: string) => void
+  onSubmit: (value: string) => void
+}>) {
+  return (
+    <Box marginTop={1}>
+      <Text>Model slug: </Text>
+      <TextInput value={model} onChange={onChange} focus={focused} onSubmit={onSubmit} />
+    </Box>
+  )
+}
+
+/** The confirmation of a toggle. */
+function TogglePrompt({
+  enabled,
+  platform,
+  scope,
+}: Readonly<{ enabled: boolean; platform: Platform; scope: string }>) {
+  return (
+    <Box marginTop={1}>
+      <Text color="yellow">
+        {enabled ? 'Disable' : 'Enable'} review agent for {platform} ({scope})? Press t to confirm,
+        Esc to cancel.
+      </Text>
+    </Box>
+  )
+}
+
+/** The keys of the screen. */
+function AgentHelpBar({ orgId }: Readonly<{ orgId?: string | null }>) {
+  return (
+    <Box marginTop={1}>
+      <Text dimColor>
+        p=platform{orgId ? ' o=scope' : ''} t=toggle m=set model r=refresh Esc=back
+      </Text>
+    </Box>
+  )
+}
+
+/** The bottom of the screen: the model editor, the toggle prompt, or the keys. */
+function AgentFooter({
+  editing,
+  confirmToggle,
+  enabled,
+  platform,
+  scope,
+  orgId,
+  model,
+  focused,
+  onChange,
+  onSubmit,
+}: Readonly<{
+  editing: boolean
+  confirmToggle: boolean
+  enabled: boolean
+  platform: Platform
+  scope: string
+  orgId?: string | null
+  model: string
+  focused: boolean
+  onChange: (value: string) => void
+  onSubmit: (value: string) => void
+}>) {
+  if (editing) {
+    return <ModelEditor model={model} focused={focused} onChange={onChange} onSubmit={onSubmit} />
+  }
+  if (confirmToggle) {
+    return <TogglePrompt enabled={enabled} platform={platform} scope={scope} />
+  }
+  return <AgentHelpBar orgId={orgId} />
+}
+
 /** Cloud → Review Agent: view config, toggle enabled, set model. */
 export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   const [platform, setPlatform] = useState<Platform>('github')
@@ -225,50 +344,59 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
     }
   }
 
+  const handleToggleKey = () => {
+    // Two presses: the first arms the confirmation, the second acts. Without
+    // a configuration there is nothing to toggle — the key is swallowed.
+    if (!confirmToggle) {
+      if (config) setConfirmToggle(true)
+      return
+    }
+    setConfirmToggle(false)
+    void doToggle()
+  }
+
+  const handleAgentKey = (input: string, key: Key) => {
+    if (key.escape) {
+      if (confirmToggle) setConfirmToggle(false)
+      else ctx.goBack()
+      return
+    }
+    if (busy) return
+    if (input === 'r') {
+      reload()
+      return
+    }
+    // While (re)loading, `config` may describe the previous platform/scope —
+    // don't let mutations act on stale state.
+    if (loading) return
+    if (input === 'p') {
+      setPlatform((p) => (p === 'github' ? 'gitlab' : 'github'))
+      setConfirmToggle(false)
+      setNotice(null)
+      return
+    }
+    if (input === 'o' && orgId) {
+      setUseOrg((v) => !v)
+      setConfirmToggle(false)
+      setNotice(null)
+      return
+    }
+    if (input === 'm') {
+      setModel(config?.modelSlug ?? '')
+      setEditing(true)
+      setConfirmToggle(false)
+      return
+    }
+    if (input === 't') handleToggleKey()
+  }
+
   useInput(
     (input, key) => {
       if (editing) {
         if (key.escape) setEditing(false)
         return
       }
-      if (key.escape) {
-        if (confirmToggle) setConfirmToggle(false)
-        else ctx.goBack()
-        return
-      }
-      if (busy) return
-      if (input === 'r') {
-        reload()
-        return
-      }
-      // While (re)loading, `config` may describe the previous platform/scope —
-      // don't let mutations act on stale state.
-      if (loading) return
-      if (input === 'p') {
-        setPlatform((p) => (p === 'github' ? 'gitlab' : 'github'))
-        setConfirmToggle(false)
-        setNotice(null)
-      }
-      if (input === 'o' && orgId) {
-        setUseOrg((v) => !v)
-        setConfirmToggle(false)
-        setNotice(null)
-      }
-      if (input === 'm') {
-        setModel(config?.modelSlug ?? '')
-        setEditing(true)
-        setConfirmToggle(false)
-      }
-      if (input === 't') {
-        if (!config || confirmToggle) {
-          if (confirmToggle) {
-            setConfirmToggle(false)
-            void doToggle()
-          }
-          return
-        }
-        setConfirmToggle(true)
-      }
+      handleAgentKey(input, key)
     },
     { isActive: focused },
   )
@@ -285,68 +413,41 @@ export function ReviewAgentScreen({ ctx, focused }: ScreenProps) {
   if (!config) return null
 
   const scope = effOrg ? `org ${effOrg}` : 'personal'
+
+  const submitModel = async (value: string) => {
+    setEditing(false)
+    const slug = value.trim()
+    if (!slug || slug === config.modelSlug) return
+    setBusy(true)
+    try {
+      const input = toSaveReviewConfigInput(platform, config, { modelSlug: slug })
+      if (effOrg) await saveOrgReviewConfig(ctx.token, effOrg, input)
+      else await savePersonalReviewConfig(ctx.token, input)
+      setNotice({ text: `Model set to ${slug} (${platform})`, error: false })
+      reload()
+    } catch (e) {
+      fail(e, 'Set model')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Box flexDirection="column">
-      <RecordView
-        data={{
-          scope,
-          platform,
-          enabled: config.isEnabled ? 'yes' : 'no',
-          model: config.modelSlug ?? '-',
-          style: config.reviewStyle ?? '-',
-          'gate threshold': config.gateThreshold ?? '-',
-          'focus areas': config.focusAreas?.length ? config.focusAreas.join(', ') : '-',
-          repositories: config.repositorySelectionMode ?? '-',
-        }}
+      <AgentConfigView config={config} platform={platform} scope={scope} />
+      <NoticeLine notice={notice} />
+      <AgentFooter
+        editing={editing}
+        confirmToggle={confirmToggle}
+        enabled={config.isEnabled}
+        platform={platform}
+        scope={scope}
+        orgId={orgId}
+        model={model}
+        focused={focused}
+        onChange={setModel}
+        onSubmit={submitModel}
       />
-      {config.actionRequired ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Needs attention: {clean(config.actionRequired.reason)}</Text>
-          {config.actionRequired.lastErrorMessage ? (
-            <Text color="yellow">{clean(config.actionRequired.lastErrorMessage)}</Text>
-          ) : null}
-        </Box>
-      ) : null}
-      {notice ? <Text color={notice.error ? 'red' : 'green'}>{clean(notice.text)}</Text> : null}
-      {editing ? (
-        <Box marginTop={1}>
-          <Text>Model slug: </Text>
-          <TextInput
-            value={model}
-            onChange={setModel}
-            focus={focused}
-            onSubmit={async (v) => {
-              setEditing(false)
-              if (!v.trim() || v.trim() === config.modelSlug) return
-              setBusy(true)
-              try {
-                const input = toSaveReviewConfigInput(platform, config, { modelSlug: v.trim() })
-                if (effOrg) await saveOrgReviewConfig(ctx.token, effOrg, input)
-                else await savePersonalReviewConfig(ctx.token, input)
-                setNotice({ text: `Model set to ${v.trim()} (${platform})`, error: false })
-                reload()
-              } catch (e) {
-                fail(e, 'Set model')
-              } finally {
-                setBusy(false)
-              }
-            }}
-          />
-        </Box>
-      ) : confirmToggle ? (
-        <Box marginTop={1}>
-          <Text color="yellow">
-            {config.isEnabled ? 'Disable' : 'Enable'} review agent for {platform} ({scope})? Press t
-            to confirm, Esc to cancel.
-          </Text>
-        </Box>
-      ) : (
-        <Box marginTop={1}>
-          <Text dimColor>
-            p=platform{orgId ? ' o=scope' : ''} t=toggle m=set model r=refresh Esc=back
-          </Text>
-        </Box>
-      )}
     </Box>
   )
 }

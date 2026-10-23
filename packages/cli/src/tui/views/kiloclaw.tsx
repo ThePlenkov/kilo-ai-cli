@@ -128,8 +128,7 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
               : '-',
           currentSubscription: yesNo(data.hasCurrentPersonalSubscription, 'unknown'),
           trialEligible: yesNo(data.trialEligible, 'unknown'),
-          kiloPass:
-            data.hasActiveKiloPass == null ? 'unknown' : data.hasActiveKiloPass ? 'active' : 'none',
+          kiloPass: kiloPassText(data.hasActiveKiloPass),
           referralRewards: data.referralTotal,
           referralPending: data.referralPending,
         }}
@@ -139,6 +138,12 @@ export function KiloclawBillingScreen({ ctx, focused }: ScreenProps) {
       </Box>
     </Box>
   )
+}
+
+/** The KiloPass state: active, none, or unknown. */
+function kiloPassText(value: boolean | null | undefined): string {
+  if (value == null) return 'unknown'
+  return value ? 'active' : 'none'
 }
 
 /** KiloClaw → Billing history for a chosen instance (route param `id`, or the first subscription). */

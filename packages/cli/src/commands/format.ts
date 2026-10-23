@@ -14,7 +14,7 @@ const BEL = String.fromCodePoint(7)
 // (SGR conceal mode `ESC[8m` is a real terminal-injection vector). Callers that
 // colorize do so via Column.format, applied after sanitization.
 const ANSI_ALL = new RegExp(
-  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)|${ESC}.?`,
+  String.raw`${ESC}\[[0-?]*[ -/]*[@-~]|${ESC}\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\)|${ESC}.?`,
   'g',
 )
 const CTRL = new RegExp(

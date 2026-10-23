@@ -54,6 +54,183 @@ const SEVERITY_COLORS: Record<string, string> = {
   info: 'gray',
 }
 
+/** The header of the finding detail. */
+function FindingHeader({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const sev = finding.severity
+  const color = SEVERITY_COLORS[sev] ?? 'white'
+  return (
+    <Box marginBottom={1}>
+      <Text bold color={color}>
+        {sev.toUpperCase()}
+      </Text>
+      <Text> </Text>
+      <Text bold>{finding.title}</Text>
+    </Box>
+  )
+}
+
+/** The identity of the finding. */
+function BasicInfo({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
+  const statusColor = FINDING_STATUS_COLORS[finding.status] ?? 'gray'
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Field label="ID" value={finding.id} />
+      <Field label="Repository" value={repo} />
+      <Field label="Status" value={finding.status} color={statusColor} />
+      {finding.source ? <Field label="Source" value={finding.source} /> : null}
+      {finding.description ? <Field label="Description" value={finding.description} /> : null}
+    </Box>
+  )
+}
+
+/** The package the finding is about. */
+function PackageSection({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const pkg = finding.packageName ?? finding.package_name
+  if (!pkg) return null
+  const ecosystem = finding.packageEcosystem ?? finding.package_ecosystem
+  const vuln = finding.vulnerableVersionRange ?? finding.vulnerable_version_range
+  const patched = finding.patchedVersion ?? finding.patched_version
+  const cve = finding.cveId ?? finding.cve_id
+  const ghsa = finding.ghsaId ?? finding.ghsa_id
+  const cvss = finding.cvssScore ?? finding.cvss_score
+  return (
+    <Box
+      flexDirection="column"
+      marginBottom={1}
+      borderStyle="single"
+      borderColor="cyan"
+      paddingX={1}
+    >
+      <Text bold color="cyan">
+        Package
+      </Text>
+      <Field label="Name" value={pkg} />
+      {ecosystem ? <Field label="Ecosystem" value={ecosystem} /> : null}
+      {vuln ? <Field label="Vulnerable" value={vuln} color="red" /> : null}
+      {patched ? <Field label="Patched" value={patched} color="green" /> : null}
+      {cve ? <Field label="CVE" value={cve} /> : null}
+      {ghsa ? <Field label="GHSA" value={ghsa} /> : null}
+      {cvss !== undefined ? <Field label="CVSS" value={String(cvss)} /> : null}
+    </Box>
+  )
+}
+
+/** The SLA deadline of the finding. */
+function SlaSection({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const sla = finding.slaDueAt ?? finding.sla_due_at
+  if (!sla) return null
+  return (
+    <Box marginBottom={1}>
+      <Text bold color="yellow">
+        ! SLA due:{' '}
+      </Text>
+      <Text>{sla}</Text>
+    </Box>
+  )
+}
+
+/** The last analysis run of the finding. */
+function AnalysisSection({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const analysisStatus = finding.analysisStatus ?? finding.analysis_status
+  const analysisError = finding.analysisError ?? finding.analysis_error
+  return (
+    <Box
+      flexDirection="column"
+      marginBottom={1}
+      borderStyle="single"
+      borderColor="magenta"
+      paddingX={1}
+    >
+      <Text bold color="magenta">
+        Analysis
+      </Text>
+      {analysisStatus ? (
+        <Field
+          label="Status"
+          value={analysisStatus}
+          color={ANALYSIS_COLORS[analysisStatus] ?? 'yellow'}
+        />
+      ) : (
+        <Text dimColor>No analysis run yet</Text>
+      )}
+      {analysisError ? <Field label="Error" value={analysisError} color="red" /> : null}
+    </Box>
+  )
+}
+
+/** The remediation of the finding: a summary, the details, or nothing yet. */
+function remediationBody(
+  remediation: string | RemediationSummaryType | null | undefined,
+): React.ReactNode {
+  if (typeof remediation === 'string') return <Field label="Summary" value={remediation} />
+  if (remediation) return <RemediationSummary summary={remediation} />
+  return <Text dimColor>No remediation yet</Text>
+}
+
+/** What has been done about the finding — and what may be done. */
+function RemediationSection({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const remediation = finding.remediationSummary ?? finding.remediation_summary
+  const remediationCap = finding.remediationCapability ?? finding.remediation_capability
+  return (
+    <Box
+      flexDirection="column"
+      marginBottom={1}
+      borderStyle="single"
+      borderColor="green"
+      paddingX={1}
+    >
+      <Text bold color="green">
+        Remediation
+      </Text>
+      {remediationBody(remediation)}
+      {remediationCap ? <RemediationCapability cap={remediationCap} /> : null}
+    </Box>
+  )
+}
+
+/** When the finding appeared and when it changed last. */
+function TimestampsSection({ finding }: Readonly<{ finding: SecurityFinding }>) {
+  const created = finding.createdAt ?? finding.created_at
+  const updated = finding.updatedAt ?? finding.updated_at
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      {created ? <Field label="Created" value={created} dim /> : null}
+      {updated ? <Field label="Updated" value={updated} dim /> : null}
+    </Box>
+  )
+}
+
+/** The result of the last action. */
+function NoticeBanner({ notice }: Readonly<{ notice: Notice }>) {
+  return (
+    <Box marginTop={1}>
+      <Text color={notice.error ? 'red' : 'green'}>{notice.text}</Text>
+    </Box>
+  )
+}
+
+/** The confirmation prompt of a pending action. */
+function ConfirmPrompt({
+  confirm,
+  dismissReason,
+}: Readonly<{ confirm: 'dismiss' | 'remediate'; dismissReason: DismissReason }>) {
+  const isDismiss = confirm === 'dismiss'
+  return (
+    <Box marginTop={1} flexDirection="column">
+      <Text color="yellow">
+        {isDismiss
+          ? `Dismiss this finding — reason: ${dismissReason}`
+          : 'Start remediation (may open a PR)'}{' '}
+        — press {isDismiss ? 'd' : 'r'} again to confirm
+      </Text>
+      {isDismiss ? (
+        <Text dimColor>reason: {DISMISS_REASONS.map((r, i) => `${i + 1}=${r}`).join('  ')}</Text>
+      ) : null}
+    </Box>
+  )
+}
+
 export function FindingDetailView({ token, findingId, onBack, focused }: FindingDetailViewProps) {
   const [finding, setFinding] = useState<SecurityFinding | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -192,148 +369,32 @@ export function FindingDetailView({ token, findingId, onBack, focused }: Finding
 
   if (!finding) return null
 
-  const sev = finding.severity
-  const color = SEVERITY_COLORS[sev] ?? 'white'
-  const repo = finding.repoFullName ?? finding.repo_full_name ?? '-'
-  const pkg = finding.packageName ?? finding.package_name
-  const ecosystem = finding.packageEcosystem ?? finding.package_ecosystem
-  const vuln = finding.vulnerableVersionRange ?? finding.vulnerable_version_range
-  const patched = finding.patchedVersion ?? finding.patched_version
-  const cve = finding.cveId ?? finding.cve_id
-  const ghsa = finding.ghsaId ?? finding.ghsa_id
-  const cvss = finding.cvssScore ?? finding.cvss_score
-  const sla = finding.slaDueAt ?? finding.sla_due_at
-  const analysisStatus = finding.analysisStatus ?? finding.analysis_status
-  const analysisError = finding.analysisError ?? finding.analysis_error
-  const remediation = finding.remediationSummary ?? finding.remediation_summary
-  const remediationCap = finding.remediationCapability ?? finding.remediation_capability
-  const created = finding.createdAt ?? finding.created_at
-  const updated = finding.updatedAt ?? finding.updated_at
-  const statusColor = FINDING_STATUS_COLORS[finding.status] ?? 'gray'
-
   return (
     <Box flexDirection="column">
       {/* Header */}
-      <Box marginBottom={1}>
-        <Text bold color={color}>
-          {sev.toUpperCase()}
-        </Text>
-        <Text> </Text>
-        <Text bold>{finding.title}</Text>
-      </Box>
+      <FindingHeader finding={finding} />
 
       {/* Basic info */}
-      <Box flexDirection="column" marginBottom={1}>
-        <Field label="ID" value={finding.id} />
-        <Field label="Repository" value={repo} />
-        <Field label="Status" value={finding.status} color={statusColor} />
-        {finding.source ? <Field label="Source" value={finding.source} /> : null}
-        {finding.description ? <Field label="Description" value={finding.description} /> : null}
-      </Box>
+      <BasicInfo finding={finding} />
 
       {/* Package info */}
-      {pkg ? (
-        <Box
-          flexDirection="column"
-          marginBottom={1}
-          borderStyle="single"
-          borderColor="cyan"
-          paddingX={1}
-        >
-          <Text bold color="cyan">
-            Package
-          </Text>
-          <Field label="Name" value={pkg} />
-          {ecosystem ? <Field label="Ecosystem" value={ecosystem} /> : null}
-          {vuln ? <Field label="Vulnerable" value={vuln} color="red" /> : null}
-          {patched ? <Field label="Patched" value={patched} color="green" /> : null}
-          {cve ? <Field label="CVE" value={cve} /> : null}
-          {ghsa ? <Field label="GHSA" value={ghsa} /> : null}
-          {cvss !== undefined ? <Field label="CVSS" value={String(cvss)} /> : null}
-        </Box>
-      ) : null}
+      <PackageSection finding={finding} />
 
       {/* SLA */}
-      {sla ? (
-        <Box marginBottom={1}>
-          <Text bold color="yellow">
-            ! SLA due:{' '}
-          </Text>
-          <Text>{sla}</Text>
-        </Box>
-      ) : null}
+      <SlaSection finding={finding} />
 
       {/* Analysis section */}
-      <Box
-        flexDirection="column"
-        marginBottom={1}
-        borderStyle="single"
-        borderColor="magenta"
-        paddingX={1}
-      >
-        <Text bold color="magenta">
-          Analysis
-        </Text>
-        {analysisStatus ? (
-          <Field
-            label="Status"
-            value={analysisStatus}
-            color={ANALYSIS_COLORS[analysisStatus] ?? 'yellow'}
-          />
-        ) : (
-          <Text dimColor>No analysis run yet</Text>
-        )}
-        {analysisError ? <Field label="Error" value={analysisError} color="red" /> : null}
-      </Box>
+      <AnalysisSection finding={finding} />
 
       {/* Remediation section */}
-      <Box
-        flexDirection="column"
-        marginBottom={1}
-        borderStyle="single"
-        borderColor="green"
-        paddingX={1}
-      >
-        <Text bold color="green">
-          Remediation
-        </Text>
-        {typeof remediation === 'string' ? (
-          <Field label="Summary" value={remediation} />
-        ) : remediation ? (
-          <RemediationSummary summary={remediation} />
-        ) : (
-          <Text dimColor>No remediation yet</Text>
-        )}
-        {remediationCap ? <RemediationCapability cap={remediationCap} /> : null}
-      </Box>
+      <RemediationSection finding={finding} />
 
       {/* Timestamps */}
-      <Box flexDirection="column" marginTop={1}>
-        {created ? <Field label="Created" value={created} dim /> : null}
-        {updated ? <Field label="Updated" value={updated} dim /> : null}
-      </Box>
+      <TimestampsSection finding={finding} />
 
-      {notice ? (
-        <Box marginTop={1}>
-          <Text color={notice.error ? 'red' : 'green'}>{notice.text}</Text>
-        </Box>
-      ) : null}
+      {notice ? <NoticeBanner notice={notice} /> : null}
 
-      {confirm ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">
-            {confirm === 'dismiss'
-              ? `Dismiss this finding — reason: ${dismissReason}`
-              : 'Start remediation (may open a PR)'}{' '}
-            — press {confirm === 'dismiss' ? 'd' : 'r'} again to confirm
-          </Text>
-          {confirm === 'dismiss' ? (
-            <Text dimColor>
-              reason: {DISMISS_REASONS.map((r, i) => `${i + 1}=${r}`).join('  ')}
-            </Text>
-          ) : null}
-        </Box>
-      ) : null}
+      {confirm ? <ConfirmPrompt confirm={confirm} dismissReason={dismissReason} /> : null}
 
       <Box marginTop={1}>
         <Text dimColor>
@@ -350,12 +411,12 @@ function Field({
   value,
   color,
   dim,
-}: {
+}: Readonly<{
   label: string
   value: string
   color?: string
   dim?: boolean
-}) {
+}>) {
   return (
     <Box>
       <Box width={14}>

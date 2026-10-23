@@ -10,6 +10,13 @@ import { yesNo } from '../../util/value.ts'
 import { QueryListScreen, QueryRecordScreen } from '../components.tsx'
 import type { ScreenProps } from '../types.ts'
 
+/** The colour of a command status. */
+function commandStatusColor(status: string | null | undefined): string {
+  if (status === 'completed') return 'green'
+  if (status === 'failed') return 'red'
+  return 'yellow'
+}
+
 /** Security → Permissions status. */
 export function SecurityStatusScreen({ ctx, focused }: ScreenProps) {
   return (
@@ -73,8 +80,7 @@ export function SecurityCommandsScreen({ ctx, focused }: ScreenProps) {
           label: 'Status',
           width: 12,
           value: (c) => c.status ?? '-',
-          color: (c) =>
-            c.status === 'completed' ? 'green' : c.status === 'failed' ? 'red' : 'yellow',
+          color: (c) => commandStatusColor(c.status),
         },
         { label: 'Started', width: 22, value: (c) => c.started_at ?? c.startedAt ?? '-' },
       ]}

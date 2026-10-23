@@ -263,6 +263,159 @@ const FINDINGS_COLUMNS: Record<
 
 const FINDINGS_COLUMN_NAMES = Object.keys(FINDINGS_COLUMNS)
 
+/** The filters and the paging of a findings list. */
+interface FindingsListInput {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  outcomeFilter?: string
+  overdue?: boolean
+  sortBy?: 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
+  limit?: number
+  offset?: number
+}
+
+/** Parse the sort order — an unknown one ends the process. */
+function parseSort(value: string | undefined): FindingsListInput['sortBy'] {
+  if (!value) return undefined
+  const valid = ['severity_desc', 'severity_asc', 'sla_due_at_asc']
+  if (!valid.includes(value)) {
+    console.error(`Invalid sort: ${value}. Valid: ${valid.join(', ')}`)
+    process.exit(1)
+  }
+  return value as 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
+}
+
+/** Parse the page size — an invalid one ends the process. */
+function parseLimit(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed) || parsed < 1) {
+    console.error(`Invalid limit: ${value}`)
+    process.exit(1)
+  }
+  return Math.min(100, parsed)
+}
+
+/** Parse the page offset — an invalid one ends the process. */
+function parseOffset(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed) || parsed < 0) {
+    console.error(`Invalid offset: ${value}`)
+    process.exit(1)
+  }
+  return parsed
+}
+
+/** The filters of a findings list, taken from the command arguments. */
+function parseFindingsInput(args: {
+  repo?: string
+  severity?: string
+  status?: string
+  outcome?: string
+  overdue?: boolean
+  sort?: string
+  limit?: string
+  offset?: string
+}): FindingsListInput {
+  const input: FindingsListInput = {}
+  if (args.repo) input.repoFullName = args.repo
+  if (args.severity) input.severity = args.severity
+  if (args.status) input.status = args.status
+  if (args.outcome) input.outcomeFilter = args.outcome
+  if (args.overdue) input.overdue = true
+  const sortBy = parseSort(args.sort)
+  if (sortBy) input.sortBy = sortBy
+  const limit = parseLimit(args.limit)
+  if (limit !== undefined) input.limit = limit
+  const offset = parseOffset(args.offset)
+  if (offset !== undefined) input.offset = offset
+  return input
+}
+
+/** The requested columns and their table definition — an unknown one ends the process. */
+function parseColumns(value: string): { requested: string[]; columns: Column[] } {
+  const requested = value === 'all' ? FINDINGS_COLUMN_NAMES : value.split(',').map((c) => c.trim())
+  const invalid = requested.filter((c) => !Object.hasOwn(FINDINGS_COLUMNS, c))
+  if (invalid.length > 0) {
+    console.error(
+      `Invalid columns: ${invalid.join(', ')}. Valid: ${FINDINGS_COLUMN_NAMES.join(', ')} or "all"`,
+    )
+    process.exit(1)
+  }
+  const columns: Column[] = requested.map((name) => ({
+    key: name,
+    label: FINDINGS_COLUMNS[name].label,
+    width: FINDINGS_COLUMNS[name].width,
+    format: FINDINGS_COLUMNS[name].format,
+  }))
+  return { requested, columns }
+}
+
+/**
+ * Walk every page of the delta window, so the cursor is only advanced once
+ * the whole window has been seen.
+ */
+async function walkFindingsWindow(
+  token: string,
+  input: FindingsListInput,
+  first: SecurityFinding[],
+  pageLimit: number,
+): Promise<{ findings: SecurityFinding[]; complete: boolean }> {
+  let findings = first
+  let complete = findings.length < pageLimit
+  for (let page = 0; !complete && page < FINDINGS_MAX_PAGES; page++) {
+    // eslint-disable-next-line no-await-in-loop -- offset pagination is sequential
+    const more = await listFindings(token, {
+      ...input,
+      limit: pageLimit,
+      offset: (input.offset ?? 0) + pageLimit * (page + 1),
+    })
+    // An empty page means the window ended exactly on a page boundary.
+    if (more.findings.length === 0) {
+      complete = true
+      break
+    }
+    findings = findings.concat(more.findings)
+    complete = more.findings.length < pageLimit
+    if (!complete && page === FINDINGS_MAX_PAGES - 1) {
+      console.log(
+        `More than ${FINDINGS_MAX_PAGES * pageLimit} findings match; the cursor was not advanced.`,
+      )
+    }
+  }
+  return { findings, complete }
+}
+
+/** Apply the delta to the findings and advance the cursor. */
+async function applyFindingsDelta(
+  findings: SecurityFinding[],
+  options: {
+    cursorName: string
+    since?: string
+    advance: boolean
+    complete: boolean
+    store: ReturnType<typeof createCursorStore>
+  },
+): Promise<SecurityFinding[]> {
+  const delta = await applyDeltaAsync(
+    findings,
+    (f) => f.updated_at ?? f.created_at ?? f.first_detected_at,
+    {
+      cursor: options.cursorName,
+      since: options.since,
+      advance: options.advance,
+      complete: options.complete,
+      store: options.store,
+    },
+  )
+  if (delta.advancedTo) {
+    console.log(`Cursor "${options.cursorName}" advanced to ${delta.advancedTo}`)
+  }
+  return delta.items
+}
+
 export const securityFindingsListCommand = defineCommand({
   meta: { name: 'list', description: 'List security findings' },
   args: {
@@ -295,61 +448,8 @@ export const securityFindingsListCommand = defineCommand({
   },
   async run({ args }) {
     const { token } = await getToken()
-    const input: {
-      repoFullName?: string
-      severity?: string
-      status?: string
-      outcomeFilter?: string
-      overdue?: boolean
-      sortBy?: 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
-      limit?: number
-      offset?: number
-    } = {}
-    if (args.repo) input.repoFullName = args.repo
-    if (args.severity) input.severity = args.severity
-    if (args.status) input.status = args.status
-    if (args.outcome) input.outcomeFilter = args.outcome
-    if (args.overdue) input.overdue = true
-    if (args.sort) {
-      const valid = ['severity_desc', 'severity_asc', 'sla_due_at_asc']
-      if (!valid.includes(args.sort)) {
-        console.error(`Invalid sort: ${args.sort}. Valid: ${valid.join(', ')}`)
-        process.exit(1)
-      }
-      input.sortBy = args.sort as 'severity_desc' | 'severity_asc' | 'sla_due_at_asc'
-    }
-    if (args.limit) {
-      const parsed = Number.parseInt(args.limit, 10)
-      if (Number.isNaN(parsed) || parsed < 1) {
-        console.error(`Invalid limit: ${args.limit}`)
-        process.exit(1)
-      }
-      input.limit = Math.min(100, parsed)
-    }
-    if (args.offset) {
-      const parsed = Number.parseInt(args.offset, 10)
-      if (Number.isNaN(parsed) || parsed < 0) {
-        console.error(`Invalid offset: ${args.offset}`)
-        process.exit(1)
-      }
-      input.offset = parsed
-    }
-    // Parse --columns
-    const requested =
-      args.columns === 'all' ? FINDINGS_COLUMN_NAMES : args.columns.split(',').map((c) => c.trim())
-    const invalid = requested.filter((c) => !Object.hasOwn(FINDINGS_COLUMNS, c))
-    if (invalid.length > 0) {
-      console.error(
-        `Invalid columns: ${invalid.join(', ')}. Valid: ${FINDINGS_COLUMN_NAMES.join(', ')} or "all"`,
-      )
-      process.exit(1)
-    }
-    const columns: Column[] = requested.map((name) => ({
-      key: name,
-      label: FINDINGS_COLUMNS[name].label,
-      width: FINDINGS_COLUMNS[name].width,
-      format: FINDINGS_COLUMNS[name].format,
-    }))
+    const input = parseFindingsInput(args)
+    const { requested, columns } = parseColumns(args.columns)
 
     const result = await listFindings(token, input)
     printSummary([
@@ -373,45 +473,14 @@ export const securityFindingsListCommand = defineCommand({
       // the same one, or "was the page full?" compares the wrong numbers.
       const pageLimit = input.limit ?? 100
 
-      // Walk every page of the window, so the cursor is only advanced once
-      // the whole window has been seen.
-      let complete = findings.length < pageLimit
-      for (let page = 0; !complete && page < FINDINGS_MAX_PAGES; page++) {
-        // eslint-disable-next-line no-await-in-loop -- offset pagination is sequential
-        const more = await listFindings(token, {
-          ...input,
-          limit: pageLimit,
-          offset: (input.offset ?? 0) + pageLimit * (page + 1),
-        })
-        // An empty page means the window ended exactly on a page boundary.
-        if (more.findings.length === 0) {
-          complete = true
-          break
-        }
-        findings = findings.concat(more.findings)
-        complete = more.findings.length < pageLimit
-        if (!complete && page === FINDINGS_MAX_PAGES - 1) {
-          console.log(
-            `More than ${FINDINGS_MAX_PAGES * pageLimit} findings match; the cursor was not advanced.`,
-          )
-        }
-      }
-
-      const delta = await applyDeltaAsync(
-        findings,
-        (f) => f.updated_at ?? f.created_at ?? f.first_detected_at,
-        {
-          cursor: cursorName,
-          since: args.since,
-          advance: !args['no-advance'],
-          complete,
-          store,
-        },
-      )
-      findings = delta.items
-      if (delta.advancedTo) {
-        console.log(`Cursor "${cursorName}" advanced to ${delta.advancedTo}`)
-      }
+      const window = await walkFindingsWindow(token, input, findings, pageLimit)
+      findings = await applyFindingsDelta(window.findings, {
+        cursorName,
+        since: args.since,
+        advance: !args['no-advance'],
+        complete: window.complete,
+        store,
+      })
     }
 
     if (findings.length === 0) {
@@ -482,6 +551,31 @@ export const securityStatsCommand = defineCommand({
   },
 })
 
+/** Print one dashboard value: a table, a list, an object, or a scalar. */
+function printDashboardValue(key: string, value: unknown): void {
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+    console.log(`\n  ${key}:`)
+    const cols = Object.keys(value[0] as Record<string, unknown>)
+    printTable(
+      value as Record<string, unknown>[],
+      cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
+    )
+    return
+  }
+  if (Array.isArray(value)) {
+    console.log(`  ${key}: ${value.join(', ')}`)
+    return
+  }
+  if (typeof value === 'object' && value !== null) {
+    console.log(`  ${key}:`)
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      console.log(`    ${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
+    }
+    return
+  }
+  console.log(`  ${key.padEnd(16)} ${value}`)
+}
+
 export const securityDashboardCommand = defineCommand({
   meta: { name: 'dashboard', description: 'Show security agent dashboard stats' },
   args: {
@@ -496,23 +590,7 @@ export const securityDashboardCommand = defineCommand({
     const stats = await getDashboardStats(token, input)
     console.log('Dashboard stats:\n')
     for (const [key, value] of Object.entries(stats)) {
-      if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-        console.log(`\n  ${key}:`)
-        const cols = Object.keys(value[0] as Record<string, unknown>)
-        printTable(
-          value as Record<string, unknown>[],
-          cols.slice(0, 8).map((c) => ({ key: c, label: c, width: 18 })),
-        )
-      } else if (Array.isArray(value)) {
-        console.log(`  ${key}: ${value.join(', ')}`)
-      } else if (typeof value === 'object' && value !== null) {
-        console.log(`  ${key}:`)
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          console.log(`    ${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
-        }
-      } else {
-        console.log(`  ${key.padEnd(16)} ${value}`)
-      }
+      printDashboardValue(key, value)
     }
   },
 })
@@ -706,6 +784,107 @@ export const securityLastSyncCommand = defineCommand({
   },
 })
 
+/** The filters of the close command, as they go to the API. */
+interface CloseFilters {
+  repoFullName?: string
+  severity?: string
+  status?: string
+  outcomeFilter?: string
+  overdue?: boolean
+  createdAfter?: string
+  createdBefore?: string
+}
+
+/** The filters as a human-readable description. */
+function describeFilters(filters: CloseFilters): string {
+  return [
+    filters.repoFullName && `repo=${filters.repoFullName}`,
+    filters.severity && `severity=${filters.severity}`,
+    filters.status && `status=${filters.status}`,
+    filters.outcomeFilter && `outcome=${filters.outcomeFilter}`,
+    filters.overdue && 'overdue',
+    filters.createdAfter && `from=${filters.createdAfter}`,
+    filters.createdBefore && `to=${filters.createdBefore}`,
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+/** The dry run: what would be closed, without closing anything. */
+async function printCloseDryRun(
+  token: string,
+  filters: CloseFilters,
+  filterDesc: string,
+): Promise<void> {
+  const result = await listFindings(token, {
+    repoFullName: filters.repoFullName,
+    severity: filters.severity,
+    status: filters.status,
+    outcomeFilter: filters.outcomeFilter,
+    overdue: filters.overdue,
+    limit: 100,
+  })
+  // The same filter the dismissal uses — the preview must not show a
+  // finding that would not be queued.
+  const findings = result.findings.filter((f) => matchesDateFilters(f, filters))
+  const total = result.totalCount ?? result.total_count ?? findings.length
+  console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
+  if (filterDesc) console.log(`  filters: ${filterDesc}`)
+  if (findings.length === 0) return
+
+  console.log('')
+  const previewNames = ['severity', 'title', 'repo', 'status', 'package']
+  printTable(
+    findings.slice(0, 20).map((f) => {
+      const row: Record<string, string> = {}
+      for (const name of previewNames) row[name] = FINDINGS_COLUMNS[name].get(f)
+      return row
+    }),
+    previewNames.map((name) => ({
+      key: name,
+      label: FINDINGS_COLUMNS[name].label,
+      width: FINDINGS_COLUMNS[name].width,
+      format: FINDINGS_COLUMNS[name].format,
+    })),
+  )
+  if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
+}
+
+/** Report what the first queued command did. */
+function reportProbe(result: {
+  probe?: string
+  probeError?: string
+  failureDetail?: string
+}): void {
+  if (result.probe === 'failed') {
+    console.error(`\n  First queued command failed: ${result.failureDetail ?? 'unknown error'}`)
+    console.error(
+      '  The other queued commands are unverified — re-check with `security findings list`.',
+    )
+    return
+  }
+  if (result.probe === 'pending') {
+    console.error('\n  First queued command is still in flight — outcome unverified.')
+    return
+  }
+  if (result.probeError) {
+    console.error(`\n  Could not check the first queued command: ${result.probeError}`)
+    console.error('  Outcomes are unverified — re-check with `security findings list`.')
+    return
+  }
+  if (result.probe === 'succeeded') {
+    console.log('\n  First queued command completed; the rest may still be running.')
+  }
+}
+
+/** Print the errors of a bulk dismissal. */
+function printBulkErrors(errors: string[]): void {
+  if (errors.length === 0) return
+  console.log('\nErrors:')
+  for (const e of errors.slice(0, 10)) console.log(`  ${e}`)
+  if (errors.length > 10) console.log(`  ... and ${errors.length - 10} more`)
+}
+
 export const securityFindingsCloseCommand = defineCommand({
   meta: { name: 'close', description: 'Dismiss (close/ignore) findings matching filters' },
   args: {
@@ -736,7 +915,7 @@ export const securityFindingsCloseCommand = defineCommand({
     }
     const { token } = await getToken()
 
-    const filters = {
+    const filters: CloseFilters = {
       repoFullName: args.repo,
       severity: args.severity,
       status: args.status,
@@ -745,56 +924,15 @@ export const securityFindingsCloseCommand = defineCommand({
       createdAfter: args.from,
       createdBefore: args.to,
     }
-    const filterDesc = [
-      filters.repoFullName && `repo=${filters.repoFullName}`,
-      filters.severity && `severity=${filters.severity}`,
-      filters.status && `status=${filters.status}`,
-      filters.outcomeFilter && `outcome=${filters.outcomeFilter}`,
-      filters.overdue && 'overdue',
-      filters.createdAfter && `from=${filters.createdAfter}`,
-      filters.createdBefore && `to=${filters.createdBefore}`,
-    ]
-      .filter(Boolean)
-      .join(', ')
+    const filterDesc = describeFilters(filters)
 
     if (args['dry-run']) {
-      const result = await listFindings(token, {
-        repoFullName: filters.repoFullName,
-        severity: filters.severity,
-        status: filters.status,
-        outcomeFilter: filters.outcomeFilter,
-        overdue: filters.overdue,
-        limit: 100,
-      })
-      // The same filter the dismissal uses — the preview must not show a
-      // finding that would not be queued.
-      const findings = result.findings.filter((f) => matchesDateFilters(f, filters))
-      const total = result.totalCount ?? result.total_count ?? findings.length
-      console.log(`Dry run — would close ${findings.length} findings (total matching: ${total})`)
-      if (filterDesc) console.log(`  filters: ${filterDesc}`)
-      if (findings.length > 0) {
-        console.log('')
-        const previewNames = ['severity', 'title', 'repo', 'status', 'package']
-        printTable(
-          findings.slice(0, 20).map((f) => {
-            const row: Record<string, string> = {}
-            for (const name of previewNames) row[name] = FINDINGS_COLUMNS[name].get(f)
-            return row
-          }),
-          previewNames.map((name) => ({
-            key: name,
-            label: FINDINGS_COLUMNS[name].label,
-            width: FINDINGS_COLUMNS[name].width,
-            format: FINDINGS_COLUMNS[name].format,
-          })),
-        )
-        if (findings.length > 20) console.log(`  ... and ${findings.length - 20} more`)
-      }
+      await printCloseDryRun(token, filters, filterDesc)
       return
     }
 
     if (!args.yes) {
-      const ok = await confirm(`Close all findings matching: ${filterDesc || '(no filters)'}?`)
+      const ok = await confirm(`Close all findings matching: ${filterDesc || '(no filters)'}`)
       if (!ok) {
         console.log('Cancelled.')
         return
@@ -814,24 +952,8 @@ export const securityFindingsCloseCommand = defineCommand({
       { label: 'Total matched', value: result.totalMatched },
       { label: 'Errors', value: result.errors.length },
     ])
-    if (result.probe === 'failed') {
-      console.error(`\n  First queued command failed: ${result.failureDetail ?? 'unknown error'}`)
-      console.error(
-        '  The other queued commands are unverified — re-check with `security findings list`.',
-      )
-    } else if (result.probe === 'pending') {
-      console.error('\n  First queued command is still in flight — outcome unverified.')
-    } else if (result.probeError) {
-      console.error(`\n  Could not check the first queued command: ${result.probeError}`)
-      console.error('  Outcomes are unverified — re-check with `security findings list`.')
-    } else if (result.probe === 'succeeded') {
-      console.log('\n  First queued command completed; the rest may still be running.')
-    }
-    if (result.errors.length > 0) {
-      console.log('\nErrors:')
-      for (const e of result.errors.slice(0, 10)) console.log(`  ${e}`)
-      if (result.errors.length > 10) console.log(`  ... and ${result.errors.length - 10} more`)
-    }
+    reportProbe(result)
+    printBulkErrors(result.errors)
     if (result.rejected > 0 || result.errors.length > 0) process.exit(1)
     if (result.probe === 'pending') process.exit(EXIT_UNVERIFIED)
     if (result.probe === 'failed' || result.probeError) process.exit(1)

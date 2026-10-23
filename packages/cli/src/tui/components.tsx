@@ -131,13 +131,13 @@ export interface QueryListScreenProps<T> {
   /** Extra hint appended to the help line, e.g. "f=filter". */
   readonly help?: string
   /** Custom key handler; return true if the key was consumed. */
-  onKey?: (
+  readonly onKey?: (
     input: string,
     key: { return?: boolean; escape?: boolean },
     selected: T | undefined,
   ) => boolean
   /** Optional summary line rendered above the table. */
-  banner?: React.ReactNode
+  readonly banner?: React.ReactNode
 }
 
 export function QueryListScreen<T>(props: QueryListScreenProps<T>) {
@@ -298,11 +298,11 @@ export function TextScreen({
   focused,
   fetch,
   onBack,
-}: {
+}: Readonly<{
   focused: boolean
   fetch: () => Promise<string>
   onBack: () => void
-}) {
+}>) {
   const { rows: termRows } = useTermSize()
   const maxVisible = Math.max(3, termRows - RESERVED_LINES)
   const { data, error, loading } = useQuery(fetch, [])

@@ -3,7 +3,7 @@
  */
 
 import { defineCommand } from 'citty'
-
+import type { UnifiedSessionsOptions } from '../api/sessions.ts'
 import {
   deleteSession,
   getSessionDiff,
@@ -17,6 +17,8 @@ import {
   unshareSession,
 } from '../api/sessions.ts'
 import { fetchCloudSession, fetchCloudSessions, renameCloudSession } from '../api/trpc.ts'
+import type { UnifiedSession, UnifiedSessionsResult } from '../api/types.ts'
+import type { CursorStore } from '../state/cursor-store.ts'
 import { createCursorStore } from '../state/cursor-store.ts'
 import { applyDeltaAsync, resolveSince } from '../state/delta.ts'
 import { printTable, sanitize, sanitizeLines, stringifyValue } from './format.ts'
@@ -27,6 +29,74 @@ export const SESSIONS_CURSOR = 'sessions'
 
 /** Upper bound on the number of pages a delta read walks. */
 const SESSIONS_MAX_PAGES = 10
+
+/** Everything a delta read needs besides the request itself. */
+interface DeltaReadOptions {
+  /** The effective lower bound — `undefined` when there is no window yet. */
+  since: string | undefined
+  /** The bound the user asked for, as written. */
+  explicitSince: string | undefined
+  /** Whether the stored cursor may move. */
+  advance: boolean
+  /** The page size — only used in the "too many sessions" notice. */
+  limit: number
+  /** Where the cursor lives. */
+  store: CursorStore
+}
+
+/**
+ * The delta read: every page of the window, the watermark, and the cursor
+ * advance.
+ *
+ * With a bound the server filters the window, so every page of it has to be
+ * read before the cursor may move. Without a bound there is no window yet —
+ * the first page establishes the watermark, and everything older than it is
+ * not part of any later delta.
+ */
+async function readDelta(
+  token: string,
+  request: UnifiedSessionsOptions,
+  first: UnifiedSessionsResult,
+  options: DeltaReadOptions,
+): Promise<{ sessions: UnifiedSession[]; nextCursor: string | null | undefined }> {
+  let sessions = first.cliSessions
+  let nextCursor = first.nextCursor
+  let complete = true
+
+  if (options.since) {
+    let cursor = nextCursor
+    for (let page = 0; page < SESSIONS_MAX_PAGES && cursor; page++) {
+      // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
+      const more = await listUnifiedSessions(token, { ...request, cursor })
+      sessions = sessions.concat(more.cliSessions)
+      cursor = more.nextCursor
+    }
+    // A cursor left over means the page budget ran out before the window was
+    // read completely. The API reports the end of the pagination as a
+    // missing cursor — `undefined` or `null`, not a fixed null.
+    complete = !cursor
+    nextCursor = cursor
+  }
+
+  if (!complete) {
+    console.log(
+      `More than ${SESSIONS_MAX_PAGES * options.limit} sessions match; the cursor was not advanced.`,
+    )
+  }
+
+  const delta = await applyDeltaAsync(sessions, (s) => s.updated_at, {
+    cursor: SESSIONS_CURSOR,
+    since: options.explicitSince,
+    advance: options.advance,
+    complete,
+    store: options.store,
+  })
+  if (delta.advancedTo) {
+    console.log(`Cursor "${SESSIONS_CURSOR}" advanced to ${delta.advancedTo}`)
+  }
+
+  return { sessions: delta.items, nextCursor }
+}
 
 export const sessionsListCommand = defineCommand({
   meta: { name: 'list', description: 'List cloud CLI sessions' },
@@ -152,41 +222,15 @@ export const sessionsUnifiedCommand = defineCommand({
     let sessions = result.cliSessions
     let nextCursor = result.nextCursor
     if (isDeltaRead) {
-      // With a bound the server filters the window, so every page of it has
-      // to be read before the cursor may move. Without a bound there is no
-      // window yet — the first page establishes the watermark, and everything
-      // older than it is not part of any later delta.
-      let complete = true
-      if (since) {
-        let cursor = nextCursor
-        for (let page = 0; page < SESSIONS_MAX_PAGES && cursor; page++) {
-          // eslint-disable-next-line no-await-in-loop -- cursor pagination is sequential
-          const more = await listUnifiedSessions(token, { ...request, cursor })
-          sessions = sessions.concat(more.cliSessions)
-          cursor = more.nextCursor
-        }
-        // A cursor left over means the page budget ran out before the window
-        // was read completely. The API reports the end of the pagination as a
-        // missing cursor — `undefined` or `null`, not a fixed null.
-        complete = !cursor
-        nextCursor = cursor
-      }
-      if (!complete) {
-        console.log(
-          `More than ${SESSIONS_MAX_PAGES * limit} sessions match; the cursor was not advanced.`,
-        )
-      }
-      const delta = await applyDeltaAsync(sessions, (s) => s.updated_at, {
-        cursor: SESSIONS_CURSOR,
-        since: explicitSince,
+      const delta = await readDelta(token, request, result, {
+        since,
+        explicitSince,
         advance: !args['no-advance'],
-        complete,
+        limit,
         store,
       })
-      sessions = delta.items
-      if (delta.advancedTo) {
-        console.log(`Cursor "${SESSIONS_CURSOR}" advanced to ${delta.advancedTo}`)
-      }
+      sessions = delta.sessions
+      nextCursor = delta.nextCursor
     }
 
     if (sessions.length === 0) {

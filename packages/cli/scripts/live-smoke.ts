@@ -56,7 +56,7 @@ interface Cmd {
   cmd: string
   cls: Cls
   /** Resolve extra argv; return null to mark SKIP with the returned reason via `skipReason`. */
-  args?: (ctx: Ctx) => Promise<string[] | null>
+  args?: (ctx: Ctx) => string[] | null | Promise<string[] | null>
   /** Runs after the command — used by idempotent mutations to restore state. Receives the child output. */
   post?: (ctx: Ctx, output: string) => Promise<void>
   /** If the failure output matches, the command is reported SKIP (account-state limitation), not FAIL. */
@@ -283,7 +283,7 @@ const COMMANDS: Cmd[] = [
     cls: 'manual',
     // No delete-org procedure exists — each run leaves one test org behind;
     // the timestamp keeps names distinct for manual cleanup.
-    args: async () => [`live-smoke-${Date.now()}`],
+    args: () => [`live-smoke-${Date.now()}`],
     note: 'creates a real org (no delete API — cannot restore)',
   },
   {
@@ -339,7 +339,7 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'kiloclaw run-start',
     cls: 'manual',
-    args: async () => ['live smoke test prompt'],
+    args: () => ['live smoke test prompt'],
     note: 'spins up a paid run',
     expectError: /requires an active subscription/i,
   },
@@ -368,7 +368,7 @@ const COMMANDS: Cmd[] = [
   {
     cmd: 'reviews config',
     cls: 'read',
-    args: async () => ['github'],
+    args: () => ['github'],
     note: 'personal scope',
   },
   {
@@ -427,10 +427,10 @@ const COMMANDS: Cmd[] = [
   },
 
   { cmd: 'analytics summary', cls: 'read' },
-  { cmd: 'analytics summary', cls: 'read', args: async () => dates, note: 'with date range' },
-  { cmd: 'analytics timeseries', cls: 'read', args: async () => dates },
-  { cmd: 'analytics breakdown', cls: 'read', args: async () => dates },
-  { cmd: 'analytics table', cls: 'read', args: async () => dates },
+  { cmd: 'analytics summary', cls: 'read', args: () => dates, note: 'with date range' },
+  { cmd: 'analytics timeseries', cls: 'read', args: () => dates },
+  { cmd: 'analytics breakdown', cls: 'read', args: () => dates },
+  { cmd: 'analytics table', cls: 'read', args: () => dates },
 
   { cmd: 'app-builder list', cls: 'read' },
   { cmd: 'app-builder eligibility', cls: 'read' },
@@ -532,10 +532,10 @@ const COMMANDS: Cmd[] = [
 
 // Intentionally strips ANSI escapes from child output (built via char codes so
 // no control-character literals appear in a regex — Sonar S6324).
-const ESC = String.fromCharCode(27)
-const BEL = String.fromCharCode(7)
+const ESC = String.fromCodePoint(27)
+const BEL = String.fromCodePoint(7)
 const ANSI = new RegExp(
-  `${ESC}\\[[0-9;]*[a-zA-Z]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`,
+  String.raw`${ESC}\[[0-9;]*[a-zA-Z]|${ESC}\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\)`,
   'g',
 )
 
@@ -565,145 +565,217 @@ interface Row {
   detail: string
 }
 
-async function main() {
-  // dist/index.mjs is the executable under test — build it if missing (fresh checkout).
-  if (!existsSync(DIST)) {
-    console.log('dist/index.mjs not found — building first…')
-    const b = spawnSync(NODE, [TSDOWN], { cwd: PKG, stdio: 'inherit' })
-    if (b.status !== 0 || !existsSync(DIST)) {
-      console.error('Build failed — run `npm run build` in packages/cli first.')
-      process.exit(1)
-    }
-  }
+/** The result of a command: its exit code, its output, and the restore error. */
+interface CommandRun {
+  code: number
+  output: string
+  postError: string | null
+}
 
+/** Build the CLI if it is missing (fresh checkout). */
+function ensureBuilt(): void {
+  if (existsSync(DIST)) return
+  console.log('dist/index.mjs not found — building first…')
+  const b = spawnSync(NODE, [TSDOWN], { cwd: PKG, stdio: 'inherit' })
+  if (b.status !== 0 || !existsSync(DIST)) {
+    console.error('Build failed — run `npm run build` in packages/cli first.')
+    process.exit(1)
+  }
+}
+
+/** The stored credentials — without them the matrix would be empty. */
+async function requireAuth(): Promise<KiloAuth> {
   const store = createTokenStore()
   const auth = await store.get()
   if (!auth) {
     console.error('Not authenticated — run `kilo-ai-cli auth login` first.')
     process.exit(1)
   }
-  savedAuth = auth
-  // With a listener installed, Ctrl-C doesn't hard-kill the process — the flag
-  // lets the loop finish the current command's restore hook before stopping.
-  // A second Ctrl-C force-exits so a hung restore can't trap the runner.
+  return auth
+}
+
+/** The access token of the stored credentials. */
+function authToken(auth: KiloAuth): string {
+  if (auth.type === 'oauth') return auth.access
+  if (auth.type === 'api') return auth.key
+  return auth.token
+}
+
+/** The context of the run. */
+function contextOf(auth: KiloAuth): Ctx {
+  return {
+    token: authToken(auth),
+    organizationId: auth.type === 'oauth' ? auth.accountId : undefined,
+  }
+}
+
+/**
+ * The Ctrl-C handler. With a listener installed, Ctrl-C doesn't hard-kill the
+ * process — the flag lets the loop finish the current command's restore hook
+ * before stopping. A second Ctrl-C force-exits so a hung restore can't trap
+ * the runner.
+ */
+function installSigintHandler(): () => boolean {
   let interrupted = false
   process.on('SIGINT', () => {
     if (interrupted) process.exit(130)
     interrupted = true
   })
-  const ctx: Ctx = {
-    token: auth.type === 'oauth' ? auth.access : auth.type === 'api' ? auth.key : auth.token,
-    organizationId: auth.type === 'oauth' ? auth.accountId : undefined,
-  }
+  return () => interrupted
+}
 
-  const rows: Row[] = []
-  for (const c of COMMANDS) {
-    if (c.cls === 'never') {
-      rows.push({ cmd: c.cmd, cls: c.cls, status: 'MANUAL', detail: c.note ?? 'not run' })
-      continue
-    }
-    if (c.cls === 'manual' && !INCLUDE_MANUAL) {
-      rows.push({ cmd: c.cmd, cls: c.cls, status: 'MANUAL', detail: c.note ?? 'side-effecting' })
-      continue
-    }
-
-    let extra: string[] = []
-    if (c.args) {
+/** Run the command and its restore hook. */
+async function runWithRestore(c: Cmd, ctx: Ctx, extra: string[]): Promise<CommandRun> {
+  let code = 1
+  let output = ''
+  let postError: string | null = null
+  try {
+    ;({ code, output } = run(c.cmd, extra))
+  } finally {
+    if (c.post) {
       try {
-        // eslint-disable-next-line no-await-in-loop -- the commands run one after another on purpose
-        const resolved = await c.args(ctx)
-        if (!resolved) {
-          rows.push({
-            cmd: c.cmd,
-            cls: c.cls,
-            status: 'SKIP',
-            detail: c.skipReason ?? 'no fixture',
-          })
-          continue
-        }
-        extra = resolved
+        // eslint-disable-next-line no-await-in-loop -- the restore hook must run before the next command
+        await c.post(ctx, output)
       } catch (e) {
-        // A resolver hitting the live API and throwing is a real failure —
-        // the matrix must not stay green on it.
-        rows.push({ cmd: c.cmd, cls: c.cls, status: 'FAIL', detail: `resolver failed: ${msg(e)}` })
-        continue
+        // Restore failure leaves real state mutated — surface it as FAIL.
+        postError = msg(e)
       }
     }
+  }
+  return { code, output, postError }
+}
 
-    // Ctrl-C during arg resolution must not launch a (possibly side-effecting)
-    // command — check again right before spawning.
-    if (interrupted) break
+/** The error lines of a command output. */
+function errorLines(output: string): string[] {
+  return output
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
+}
 
-    // Restore hooks run in `finally` — a throw or a Ctrl-C mid-command must not
-    // leave live state (credentials, toggles, names) mutated.
-    let code = 1
-    let output = ''
-    let postError: string | null = null
+/** The status of a finished command. */
+function statusOf(facts: {
+  ok: boolean
+  expected: boolean
+  entitlement: boolean
+  restoreBroke: boolean
+}): Status {
+  if (facts.restoreBroke) return 'FAIL'
+  if (facts.ok) return 'PASS'
+  if (facts.expected || facts.entitlement) return 'SKIP'
+  return 'FAIL'
+}
+
+/** The detail of a finished command — why it ended the way it did. */
+function detailOf(
+  c: Cmd,
+  facts: {
+    ok: boolean
+    expected: boolean
+    entitlement: boolean
+    errLine?: string
+    code: number
+    postError: string | null
+  },
+): string {
+  if (facts.ok && facts.postError) return `restore failed: ${truncate(facts.postError, 160)}`
+  if (facts.ok) return c.note ?? ''
+  const restoreNote = facts.postError
+    ? ` (restore also failed: ${truncate(facts.postError, 80)})`
+    : ''
+  const exitNote = truncate(facts.errLine ?? `exit ${facts.code}`, 140)
+  if (facts.expected)
+    return `expected failure: ${truncate(facts.errLine ?? 'matched expectError', 160)}`
+  if (facts.entitlement) return `entitlement: ${exitNote}${restoreNote}`
+  return `${exitNote}${restoreNote}`
+}
+
+/** The status and the detail of a finished command. */
+function classify(c: Cmd, result: CommandRun): { status: Status; detail: string } {
+  const { code, output, postError } = result
+  const ok = code === 0 && !/\bERROR\b/.test(output)
+  // The last error line is the command's own failure (stderr comes last);
+  // the first one is the most likely explanation for the reader.
+  const errLine = errorLines(output).at(-1)
+  const expected = !ok && !!c.expectError?.test(output)
+  // The command's own error is the last error line: the runner appends
+  // stderr after stdout, and the CLI writes its failure there. A remote
+  // string that merely mentions an entitlement word earlier in the output
+  // must not turn a real failure into a skip.
+  const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
+  // A restore failure matters when the command applied a change, or when it
+  // failed for a different reason than the restore — that means the state
+  // may be half-mutated. When both failed on the same entitlement error,
+  // the command never got past the API and nothing was mutated.
+  const restoreBroke = !!postError && (ok || !entitlement || !ENTITLEMENT.test(postError))
+
+  const facts = { ok, expected, entitlement, restoreBroke, errLine, code, postError }
+  return { status: statusOf(facts), detail: detailOf(c, facts) }
+}
+
+/**
+ * Run one command of the matrix. Returns `null` when the run was interrupted
+ * before the command could start.
+ */
+async function runCommand(c: Cmd, ctx: Ctx, interrupted: () => boolean): Promise<Row | null> {
+  if (c.cls === 'never') {
+    return { cmd: c.cmd, cls: c.cls, status: 'MANUAL', detail: c.note ?? 'not run' }
+  }
+  if (c.cls === 'manual' && !INCLUDE_MANUAL) {
+    return { cmd: c.cmd, cls: c.cls, status: 'MANUAL', detail: c.note ?? 'side-effecting' }
+  }
+
+  let extra: string[] = []
+  if (c.args) {
     try {
-      ;({ code, output } = run(c.cmd, extra))
-    } finally {
-      if (c.post) {
-        try {
-          // eslint-disable-next-line no-await-in-loop -- the restore hook must run before the next command
-          await c.post(ctx, output)
-        } catch (e) {
-          // Restore failure leaves real state mutated — surface it as FAIL.
-          postError = msg(e)
+      // eslint-disable-next-line no-await-in-loop -- the commands run one after another on purpose
+      const resolved = await c.args(ctx)
+      if (!resolved) {
+        return {
+          cmd: c.cmd,
+          cls: c.cls,
+          status: 'SKIP',
+          detail: c.skipReason ?? 'no fixture',
         }
       }
-    }
-    const errLines = output
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 3 && /ERROR|Error:|error/i.test(l))
-    // The last error line is the command's own failure (stderr comes last);
-    // the first one is the most likely explanation for the reader.
-    const errLine = errLines.at(-1)
-    const ok = code === 0 && !/\bERROR\b/.test(output)
-    const expected = !ok && c.expectError && c.expectError.test(output)
-    // The command's own error is the last error line: the runner appends
-    // stderr after stdout, and the CLI writes its failure there. A remote
-    // string that merely mentions an entitlement word earlier in the output
-    // must not turn a real failure into a skip.
-    const entitlement = !ok && !!errLine && ENTITLEMENT.test(errLine)
-    // A restore failure matters when the command applied a change, or when it
-    // failed for a different reason than the restore — that means the state
-    // may be half-mutated. When both failed on the same entitlement error,
-    // the command never got past the API and nothing was mutated.
-    const restoreBroke = !!postError && (ok || !entitlement || !ENTITLEMENT.test(postError))
-    const restoreNote = postError ? ` (restore also failed: ${truncate(postError, 80)})` : ''
-    const exitNote = truncate(errLine ?? `exit ${code}`, 140)
-
-    let status: Status = 'FAIL'
-    if (!restoreBroke) {
-      if (ok) status = 'PASS'
-      else if (expected || entitlement) status = 'SKIP'
-    }
-
-    let detail: string
-    if (postError && ok) detail = `restore failed: ${truncate(postError, 160)}`
-    else if (ok) detail = c.note ?? ''
-    else if (expected)
-      detail = `expected failure: ${truncate(errLine ?? 'matched expectError', 160)}`
-    else if (entitlement) detail = `entitlement: ${exitNote}${restoreNote}`
-    else detail = `${exitNote}${restoreNote}`
-
-    rows.push({
-      cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
-      cls: c.cls,
-      status,
-      detail,
-    })
-    console.log(
-      `${status === 'PASS' ? '✓' : status === 'SKIP' ? '-' : '✗'} ${status} ${c.cmd}${extra.length ? ' ' + extra.map(maskArg).join(' ') : ''}`,
-    )
-    if (interrupted) {
-      console.log('\nInterrupted — restore hooks ran; stopping early.')
-      break
+      extra = resolved
+    } catch (e) {
+      // A resolver hitting the live API and throwing is a real failure —
+      // the matrix must not stay green on it.
+      return {
+        cmd: c.cmd,
+        cls: c.cls,
+        status: 'FAIL',
+        detail: `resolver failed: ${msg(e)}`,
+      }
     }
   }
 
-  // Markdown matrix
+  // Ctrl-C during arg resolution must not launch a (possibly side-effecting)
+  // command — check again right before spawning.
+  if (interrupted()) return null
+
+  // Restore hooks run in `finally` — a throw or a Ctrl-C mid-command must not
+  // leave live state (credentials, toggles, names) mutated.
+  const result = await runWithRestore(c, ctx, extra)
+  const { status, detail } = classify(c, result)
+  return {
+    cmd: c.cmd + (extra.length ? ` ${extra.map(maskArg).join(' ')}` : ''),
+    cls: c.cls,
+    status,
+    detail,
+  }
+}
+
+/** The mark of a status in the console output. */
+function mark(status: Status): string {
+  if (status === 'PASS') return '✓'
+  if (status === 'SKIP') return '-'
+  return '✗'
+}
+
+/** The Markdown matrix of the run. */
+function writeMatrix(rows: Row[]): void {
   const lines = [
     '# Live API smoke matrix',
     '',
@@ -721,6 +793,31 @@ async function main() {
   if (rows.some((r) => r.status === 'FAIL')) process.exitCode = 1
 }
 
+async function main() {
+  // dist/index.mjs is the executable under test — build it if missing (fresh checkout).
+  ensureBuilt()
+
+  const auth = await requireAuth()
+  savedAuth = auth
+  const interrupted = installSigintHandler()
+  const ctx = contextOf(auth)
+
+  const rows: Row[] = []
+  for (const c of COMMANDS) {
+    // eslint-disable-next-line no-await-in-loop -- the commands run one after another on purpose
+    const row = await runCommand(c, ctx, interrupted)
+    if (!row) break
+    rows.push(row)
+    console.log(`${mark(row.status)} ${row.status} ${row.cmd}`)
+    if (interrupted()) {
+      console.log('\nInterrupted — restore hooks ran; stopping early.')
+      break
+    }
+  }
+
+  writeMatrix(rows)
+}
+
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
@@ -736,7 +833,10 @@ function maskArg(s: string): string {
 
 /** Escape a value for embedding in a Markdown table cell (backslashes first). */
 function escapeMdCell(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' <br> ')
+  return s
+    .replaceAll('\\', String.raw`\\`)
+    .replaceAll('|', String.raw`\|`)
+    .replaceAll(/\r?\n/g, ' <br> ')
 }
 
 function truncate(s: string, n: number): string {
