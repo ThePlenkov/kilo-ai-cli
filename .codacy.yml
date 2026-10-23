@@ -1,0 +1,7 @@
+---
+# CI plumbing lives in packages/cli/scripts — dev tooling, not shipped code.
+# Excluding it stops the codacy/sonar ping-pong on helper scripts
+# (e.g. ANSI parsing in findings.ts: literal regex trips no-control-regex,
+# dynamic RegExp trips detect-non-literal-regexp — there is no winning form).
+exclude_paths:
+  - '**/scripts/**'
